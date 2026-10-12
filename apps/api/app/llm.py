@@ -51,6 +51,13 @@ class Answerer(Protocol):
     def answer(self, question: str, chunks: list[CodeChunk]) -> LLMAnswer: ...
 
 
+def _reason(error: anthropic.APIStatusError) -> str:
+    """Anthropic's own explanation of an error, without the SDK's wrapping."""
+    body = error.body
+    message = body.get("error", {}).get("message") if isinstance(body, dict) else None
+    return str(message or error.message)[:300]
+
+
 def build_prompt(question: str, chunks: list[CodeChunk]) -> str:
     excerpts = []
     for chunk in chunks:
@@ -90,6 +97,10 @@ class ClaudeAnswerer:
             raise AnswerError(503, "The Anthropic credentials were rejected.") from error
         except anthropic.RateLimitError as error:
             raise AnswerError(503, "The Anthropic API rate limit was reached.") from error
+        except anthropic.BadRequestError as error:
+            # Anthropic uses 400 for account problems such as an empty credit balance,
+            # and its message says what to do, so pass it on.
+            raise AnswerError(502, f"Anthropic rejected the request: {_reason(error)}") from error
         except anthropic.APIStatusError as error:
             raise AnswerError(502, f"The Anthropic API returned {error.status_code}.") from error
         except anthropic.APIConnectionError as error:

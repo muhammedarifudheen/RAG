@@ -211,6 +211,23 @@ def test_missing_credentials_are_a_503_before_any_request(monkeypatch, credentia
         assert "ANTHROPIC_API_KEY" in missing.value.detail
 
 
+def test_claude_bad_request_passes_on_anthropics_reason():
+    # Anthropic answers 400 when the account has no credit; the user needs to see why.
+    request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
+    reason = "Your credit balance is too low to access the Anthropic API."
+    error = anthropic.BadRequestError(
+        "Error code: 400",
+        response=httpx2.Response(400, request=request),
+        body={"type": "error", "error": {"type": "invalid_request_error", "message": reason}},
+    )
+
+    with pytest.raises(AnswerError) as failure:
+        make_answerer(StubClient(error=error)).answer("q", [CHUNK])
+
+    assert failure.value.status_code == 502
+    assert failure.value.detail == f"Anthropic rejected the request: {reason}"
+
+
 def test_claude_connection_failure_becomes_a_502():
     request = httpx2.Request("POST", "https://api.anthropic.com/v1/messages")
     stub = StubClient(error=anthropic.APIConnectionError(request=request))
