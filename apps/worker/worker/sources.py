@@ -31,6 +31,9 @@ UPLOAD_TYPES = (".pdf", ".epub", ".txt", ".md", ".markdown", ".html", ".htm")
 
 _WIKIPEDIA_HOST = re.compile(r"^([a-z]{2,3}(?:-[a-z0-9-]+)?)\.(?:m\.)?wikipedia\.org$")
 _WIKI_HEADING = re.compile(r"^(={2,6})\s*(.+?)\s*\1\s*$", re.MULTILINE)
+# A run of blank or indented lines; ordinary paragraphs are never indented.
+_WIKI_FORMULA = re.compile(r"(?:^[ \t]*\n|^[ \t]{2,}\S.*\n)+", re.MULTILINE)
+_LATEX = re.compile(r"\{\\displaystyle (.*)\}$")
 _NOT_PAGES = re.compile(
     r"\.(?:png|jpe?g|gif|svg|webp|ico|css|js|json|xml|zip|gz|tar|pdf|mp[34]|avi|mov|woff2?|ttf|exe|dmg)$",
     re.IGNORECASE,
@@ -119,9 +122,22 @@ def parse_wikipedia_url(url: str) -> tuple[str, str]:
     return match[1], unquote(parts.path[len("/wiki/") :]).replace("_", " ")
 
 
+def _formula(match: re.Match[str]) -> str:
+    tokens = match[0].split()
+    if not tokens:
+        return match[0]  # only blank lines: an ordinary paragraph break
+    joined = " ".join(tokens)
+    # The run usually ends with the formula's LaTeX source, which reads better
+    # than the symbols that precede it.
+    latex = _LATEX.search(joined)
+    return f"\n{'$' + latex[1].strip() + '$' if latex else joined}\n\n"
+
+
 def wikipedia_to_markdown(extract: str) -> str:
-    """Wikipedia's plain-text extract marks headings as `== Title ==`."""
-    return _WIKI_HEADING.sub(lambda m: f"{'#' * len(m[1])} {m[2]}", extract)
+    """Tidies Wikipedia's plain-text extract: headings are marked `== Title ==`, and
+    each formula arrives as one symbol per indented line."""
+    text = _WIKI_FORMULA.sub(_formula, extract)
+    return _WIKI_HEADING.sub(lambda m: f"{'#' * len(m[1])} {m[2]}", text)
 
 
 def load_wikipedia(url: str) -> Loaded:

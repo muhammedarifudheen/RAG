@@ -130,6 +130,31 @@ def test_wikipedia_headings_become_markdown():
     )
 
 
+def test_wikipedia_formulas_are_collapsed_to_one_line():
+    # The API renders a formula as one symbol per indented line, followed by its LaTeX.
+    extract = (
+        "This definition is taken from RFC 2104:\n\n"
+        "  \n    \n      \n        HMAC\n        (\n        K\n        ,\n        m\n        )\n"
+        "      \n    \n    {\\displaystyle \\operatorname {HMAC} (K,m)}\n  \n\n"
+        "where H is a hash function and\n\n  \n    \n      K\n    \n  \n is the secret key.\n"
+    )
+
+    assert wikipedia_to_markdown(extract) == (
+        "This definition is taken from RFC 2104:\n\n"
+        "$\\operatorname {HMAC} (K,m)$\n\n"
+        "where H is a hash function and\n\n"
+        "K\n\n"
+        " is the secret key.\n"
+    )
+
+
+def test_wikipedia_paragraph_breaks_are_left_alone():
+    extract = "First paragraph.\n\n\nSecond paragraph.\n\n\n== Heading ==\nThird.\n"
+    assert wikipedia_to_markdown(extract) == (
+        "First paragraph.\n\n\nSecond paragraph.\n\n\n## Heading\nThird.\n"
+    )
+
+
 def test_wikipedia_article_is_loaded_through_the_api(monkeypatch):
     requested = []
 
