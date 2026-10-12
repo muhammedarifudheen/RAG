@@ -31,10 +31,26 @@ def test_results_are_ordered_by_descending_similarity(client):
 
 
 def test_returns_at_most_20_by_default_and_honours_limit(client):
-    # The fixture graph has 18 symbols, so the default limit of 20 returns them all.
-    assert SYMBOL_COUNT == 18
-    assert len(client.get("/search", params={"q": "user"}).json()["results"]) == 18
+    # The fixture holds 21 symbols, one more than the default limit.
+    assert SYMBOL_COUNT == 21
+    assert len(client.get("/search", params={"q": "user"}).json()["results"]) == 20
     assert len(client.get("/search", params={"q": "user", "limit": 3}).json()["results"]) == 3
+    assert len(client.get("/search", params={"q": "user", "limit": 50}).json()["results"]) == 21
+
+
+def test_document_passages_are_searched_alongside_code(client):
+    results = client.get("/search", params={"q": "turing codebreaking"}).json()["results"]
+
+    top = results[0]
+    assert top["kind"] == "section"
+    assert top["name"] == "Alan Turing › Codebreaking"
+    assert top["file"] == "wikipedia/en/Alan_Turing"
+    assert top["language"] == "text"
+    assert (top["start_line"], top["end_line"]) == (5, 7)
+    assert top["snippet"] == (
+        "## Codebreaking\n\nTuring worked at Bletchley Park on the Enigma cipher."
+    )
+    assert top["citation"] == "[wikipedia/en/Alan_Turing:5-7]"
 
 
 def test_long_symbols_are_truncated_to_the_snippet_limit(client, monkeypatch):

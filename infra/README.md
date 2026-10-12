@@ -25,9 +25,9 @@ images and deploys the Cloud Run services and jobs on every merge to `main`.
 ## Before you deploy: this app has no login
 
 Both Cloud Run services are public. Anyone who finds the web URL can ask
-questions (each one is billed to your Anthropic key) and can start an ingest,
-which **replaces the whole database**. Rate limits slow this down and nothing
-else stops it. For anything beyond a private staging URL, put the web service
+questions (each one is billed to your model provider's key), add sources, make
+the server fetch web pages of their choosing, and **remove any source**. Rate
+limits slow this down and nothing else stops it. For anything beyond a private staging URL, put the web service
 behind Identity-Aware Proxy or add authentication first.
 
 ## One-time setup

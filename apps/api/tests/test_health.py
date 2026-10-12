@@ -11,9 +11,10 @@ def test_report_on_the_fixture_graph(client):
     assert response.status_code == 200
     body = response.json()
 
+    # Files and symbols count the article too; every other measure is about code.
     assert body["summary"] == {
-        "files": 5,
-        "symbols": 18,
+        "files": 6,
+        "symbols": 21,
         "edges": 12,
         "dead_symbols": 4,
         "file_cycles": 1,

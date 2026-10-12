@@ -41,11 +41,59 @@ docker compose up -d postgres          # repo root
 alembic upgrade head                   # apps/api, with its venv active
 ```
 
+## Adding sources
+
+```sh
+python -m worker.ingest https://github.com/owner/repo            # a repository
+python -m worker.ingest https://en.wikipedia.org/wiki/HMAC       # a Wikipedia article
+python -m worker.ingest https://docs.python.org/3/library/hmac.html   # a web page
+python -m worker.ingest https://example.org/docs/ --crawl 20     # up to 20 pages of one site
+python -m worker.ingest --file book.pdf                          # PDF, EPUB, .txt, .md, .html
+```
+
+Sources accumulate. Adding a source that is already present replaces that
+source only; the others are untouched. The kind of a link is worked out from
+its host (`github.com`, `*.wikipedia.org`, anything else is a web page).
+
+### Documents
+
+Web pages, articles and files are not parsed as code. Their readable text is
+extracted, re-flowed to lines of at most 100 characters and cut into passages
+of about 1,000 characters under their headings. Each passage is stored as a
+symbol of kind `section`, so search, answers and `[path:start-end]` citations
+work on documents exactly as they do on code.
+
+| Source | How the text is obtained | Stored under |
+| ------ | ------------------------ | ------------ |
+| Web page | The page's article text, without navigation or ads (trafilatura) | `web/<host>/<path>` |
+| Wikipedia | The official API's plain-text extract, with section headings | `wikipedia/<lang>/<title>` |
+| Crawl | Breadth-first from the start page, same host only, at most 100 pages and 3 links deep | `web/<host>/<path>` |
+| File | PDF text layer (one heading per page), EPUB chapters in reading order, or the file's text | `uploads/<name>` |
+
+Limits worth knowing:
+
+- **Only public web addresses are fetched.** Private, loopback and link-local
+  addresses are refused, on the first request and on every redirect, as are
+  ports other than 80 and 443. The check resolves the name before the request
+  is made; a host that changes its DNS answer between the two could slip
+  through, so do not expose ingestion to untrusted users on a network with
+  sensitive internal services.
+- **The crawler obeys `robots.txt`** and waits half a second between pages.
+- **Scanned PDFs are not read**: there is no OCR, so a PDF needs a text layer.
+- **Pages that build their content with JavaScript** come back empty, because
+  nothing runs the scripts.
+- Pages over 5 MB and files over 30 MB are refused.
+
+Only add material you have the right to copy.
+
 ## Ingesting a repository
 
 ```sh
 python -m worker.ingest https://github.com/owner/repo
 ```
+
+Repository files are stored under `owner/repo/`, so two repositories can hold
+a file with the same relative path.
 
 ```
 [1/5] Cloning https://github.com/owner/repo
@@ -56,10 +104,9 @@ python -m worker.ingest https://github.com/owner/repo
 Done in 21.4s: 15 files, 159 symbols, 180 edges.
 ```
 
-**Each run replaces the previous one.** The database holds one repository at a
-time: the tables have no repo column, so the write step truncates `files`,
-`symbols` and `edges` and reloads them in a single transaction. If a run fails
-at any step, the previous data is left untouched.
+Each run writes its source in a single transaction. If it fails at any step,
+nothing changes: an earlier copy of the same source, and every other source,
+stay as they were.
 
 `--keep-clone` leaves the clone on disk instead of deleting it.
 
@@ -137,8 +184,11 @@ worker/
     types.py       Symbol, Import, Call, FileExtraction
     base.py        Tree walker shared by the language extractors
   resolve.py       Imports, calls and inheritance -> edges
+  documents.py     Text documents -> passages with line ranges
+  sources.py       Loaders: web page, Wikipedia, crawl, uploaded file
+  fetch.py         HTTP fetching restricted to public addresses; robots.txt
   embed.py         sentence-transformers wrapper
-  store.py         Writes files, symbols and edges
+  store.py         Writes a source with its files, symbols and edges
   config.py        Settings, loaded from the environment and .env
 tests/
   fixtures/sample_repo/   Small Python, TypeScript and Go project

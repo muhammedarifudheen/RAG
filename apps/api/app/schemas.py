@@ -1,3 +1,4 @@
+from datetime import datetime
 from typing import Literal
 
 from pydantic import BaseModel, Field
@@ -8,7 +9,7 @@ class CodeChunk(BaseModel):
 
     symbol_id: int
     name: str = Field(examples=["User.label"])
-    kind: Literal["module", "function", "class", "method"]
+    kind: Literal["module", "function", "class", "method", "section"]
     signature: str | None = Field(examples=["def label(self) -> str"])
     file: str = Field(examples=["pkg/models.py"])
     language: str = Field(examples=["python"])
@@ -121,7 +122,28 @@ class FileDetail(BaseModel):
 
 
 class IngestRequest(BaseModel):
-    repo_url: str = Field(examples=["https://github.com/pallets/itsdangerous"])
+    url: str | None = Field(
+        default=None,
+        description="A GitHub repository, a Wikipedia article or any public web page.",
+        examples=["https://en.wikipedia.org/wiki/Alan_Turing"],
+    )
+    repo_url: str | None = Field(default=None, description="Older name for `url`; still accepted.")
+    kind: Literal["auto", "repo", "web", "wikipedia", "crawl"] = Field(
+        default="auto",
+        description="`auto` picks repo, wikipedia or web from the address. `crawl` follows "
+        "links on the same site.",
+    )
+    max_pages: int = Field(default=20, ge=1, le=100, description="Page limit for `crawl`.")
+
+
+class SourceItem(BaseModel):
+    id: int
+    kind: Literal["repo", "web", "wikipedia", "crawl", "upload"]
+    title: str
+    url: str | None
+    created_at: datetime
+    files: int
+    symbols: int = Field(description="Symbols and passages that can be searched.")
 
 
 class LongFunction(SymbolRef):

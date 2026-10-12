@@ -57,7 +57,10 @@ Interactive docs are at http://localhost:8000/docs (ReDoc at `/redoc`, schema at
 
 | Endpoint        | Does |
 | --------------- | ---- |
-| `POST /ingest`  | Ingests a GitHub repository, replacing the current one; progress is streamed as Server-Sent Events |
+| `POST /ingest`  | Adds a source from a link: a GitHub repository, Wikipedia article, web page, or a crawl of one site. Progress is streamed as Server-Sent Events |
+| `POST /ingest/upload` | Adds a source from an uploaded PDF, EPUB, text, Markdown or HTML file |
+| `GET /sources`  | Lists what is in the knowledge base |
+| `DELETE /sources/{id}` | Removes one source and everything ingested from it |
 | `GET /search`   | Embeds `q` and returns the `limit` (default 20, max 50) most similar symbols, each with file path, line range and a code snippet |
 | `POST /ask`     | Runs the same search, sends the top results and the question to Claude, returns the answer with inline citations plus the code chunks |
 | `GET /graph`    | Call graph around `file`, up to `hops` calls away (default 1, max 5) |
@@ -78,8 +81,19 @@ curl "http://localhost:8000/health?max_function_loc=50&min_fan_out=10"
 
 ```sh
 curl -N -X POST http://localhost:8000/ingest -H "Content-Type: application/json" \
-     -d '{"repo_url": "https://github.com/pallets/itsdangerous"}'
+     -d '{"url": "https://github.com/pallets/itsdangerous"}'
+
+# A crawl has to be asked for; everything else is recognised from the link.
+curl -N -X POST http://localhost:8000/ingest -H "Content-Type: application/json" \
+     -d '{"url": "https://example.org/docs/", "kind": "crawl", "max_pages": 20}'
+
+curl -N -X POST http://localhost:8000/ingest/upload -F "file=@book.pdf"
 ```
+
+`kind` is `auto` by default: `github.com` links are repositories,
+`*.wikipedia.org/wiki/...` links are articles, and anything else is a single
+web page. What each kind does with the content is described in
+[apps/worker/README.md](../worker/README.md).
 
 ```
 event: progress
@@ -99,15 +113,18 @@ silence.
 
 The pipeline is the worker's, run in a background thread of the API process:
 
-- **It replaces everything previously ingested**, in one transaction. If it
-  fails, the old data stays.
+- **Sources accumulate.** Adding a source again replaces that source only, in
+  one transaction; if it fails, nothing changes.
 - **One ingest at a time.** A second request while one is running gets `409`.
+- **Only public web addresses are fetched.** A link to a private or internal
+  address ends the stream with an `error` event.
 - **It keeps running if the client disconnects**, and it cannot be cancelled.
 - **It is heavy.** While it runs, the API process also clones, parses and
   embeds, and it loads a second copy of the embedding model. Restarting the API
   aborts a running ingest.
-- Only `https://github.com/owner/repo` URLs are accepted (`422` otherwise).
-  Private repositories need `GITHUB_TOKEN` in the environment.
+- A link that cannot be the requested kind of source is rejected with `422`
+  before anything runs. Private repositories need `GITHUB_TOKEN` in the
+  environment.
 
 The stream is a `POST` response, so browsers must read it with `fetch`;
 `EventSource` only issues `GET` requests.
@@ -277,11 +294,18 @@ enables the `vector` extension; `0002` adds `files.content`.
 
 | Table     | Columns                                                                  |
 | --------- | ------------------------------------------------------------------------ |
-| `files`   | `id`, `path` (unique), `language`, `hash`, `loc`, `content`              |
+| `sources` | `id`, `kind`, `key` (unique), `title`, `url`, `created_at`               |
+| `files`   | `id`, `source_id`, `path` (unique), `language`, `hash`, `loc`, `content` |
 | `symbols` | `id`, `file_id`, `name`, `kind`, `start_line`, `end_line`, `signature`, `embedding vector(384)` |
 | `edges`   | `id`, `from_symbol_id`, `to_symbol_id`, `kind`; unique per (from, to, kind) |
 
-`symbols.kind` is one of `module`, `function`, `class`, `method`; `edges.kind`
+Migration `0003` adds `sources`. Deleting a source deletes its files, their
+symbols and their edges. `sources.kind` is one of `repo`, `web`, `wikipedia`,
+`crawl`, `upload`. A document is a file with `language = 'text'`, and its
+passages are symbols of kind `section`. `files.path` is unique across all
+sources, because a citation names a file by its path alone.
+
+`symbols.kind` is one of `module`, `function`, `class`, `method`, `section`; `edges.kind`
 is one of `calls`, `imports`, `inherits`. Both are enforced by CHECK
 constraints. `symbols.embedding` has an HNSW index for cosine distance.
 `files.content` holds each file's full source, which is where snippets come

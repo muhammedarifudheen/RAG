@@ -7,11 +7,12 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import settings
 from app.middleware import log_requests
-from app.routers import files, graph, health, ingest, search
+from app.routers import files, graph, health, ingest, search, sources
 
 DESCRIPTION = """\
-Query a repository ingested by the Atlas worker: semantic search over its symbols,
-question answering with cited code, call graphs and a code-health report.
+Build a knowledge base from GitHub repositories, web pages, Wikipedia articles and
+uploaded documents, then query it: semantic search, question answering with cited
+sources, and for code, call graphs and a health report.
 
 All endpoints except `/healthz` are rate limited per client IP and answer `429` with a
 `Retry-After` header when the limit is exceeded. Every response carries an
@@ -19,7 +20,7 @@ All endpoints except `/healthz` are rate limited per client IP and answer `429` 
 """
 
 TAGS = [
-    {"name": "ingest", "description": "Load a repository into the database."},
+    {"name": "ingest", "description": "Add, list and remove the sources in the knowledge base."},
     {"name": "files", "description": "Source text and symbols of ingested files."},
     {"name": "search", "description": "Vector search and retrieval-augmented answers."},
     {"name": "graph", "description": "Call graph traversal."},
@@ -57,6 +58,7 @@ def create_app() -> FastAPI:
         return JSONResponse({"detail": "The database is unavailable."}, status_code=503)
 
     app.include_router(ingest.router)
+    app.include_router(sources.router)
     app.include_router(search.router)
     app.include_router(graph.router)
     app.include_router(files.router)

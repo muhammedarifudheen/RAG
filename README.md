@@ -1,7 +1,12 @@
 # atlas
 
-Ingests a GitHub repository into a code graph with embeddings, and serves
-search, question answering and code-health queries over it.
+Builds a knowledge base from GitHub repositories, web pages, Wikipedia articles
+and your own documents (PDF, EPUB, text, Markdown), and answers questions from
+it with citations down to the line. For code it also builds a graph of
+functions, classes and calls, with code-health queries over it.
+
+Sources accumulate: adding one leaves the others in place, and each can be
+removed on its own.
 
 | Path               | What it is                                    |
 | ------------------ | --------------------------------------------- |

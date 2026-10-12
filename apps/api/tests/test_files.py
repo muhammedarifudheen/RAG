@@ -73,6 +73,23 @@ def test_file_returns_source_and_symbols_in_line_order(client):
     assert body["symbols"][-1]["signature"] == "def format_name(name: str) -> str"
 
 
+def test_documents_are_left_out_of_the_dependency_graph(client):
+    paths = {n["path"] for n in client.get("/graph/files").json()["nodes"]}
+    assert "wikipedia/en/Alan_Turing" not in paths
+    assert len(paths) == 5
+
+
+def test_a_document_is_served_with_its_passages(client):
+    body = client.get("/file", params={"path": "wikipedia/en/Alan_Turing"}).json()
+
+    assert (body["language"], body["loc"]) == ("text", 7)
+    assert body["content"].startswith("# Alan Turing\n\nAlan Turing was an English mathematician.")
+    assert [(s["name"], s["kind"], s["start_line"], s["end_line"]) for s in body["symbols"]] == [
+        ("Alan Turing", "section", 1, 3),
+        ("Alan Turing › Codebreaking", "section", 5, 7),
+    ]
+
+
 def test_unknown_file_is_a_404(client):
     assert client.get("/file", params={"path": "pkg/missing.py"}).status_code == 404
     assert client.get("/file").status_code == 422

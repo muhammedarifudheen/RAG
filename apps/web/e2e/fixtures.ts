@@ -8,6 +8,7 @@ import type {
   IngestFailure,
   IngestProgress,
   IngestResult,
+  SourceItem,
 } from "@atlas/shared";
 import type { Locator, Page, Route } from "@playwright/test";
 
@@ -187,6 +188,46 @@ type IngestStreamEvent =
 export function eventStream(events: IngestStreamEvent[]): string {
   const blocks = events.map(({ event, data }) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
   return `: keep-alive\n\n${blocks.join("")}`;
+}
+
+export const SOURCES: SourceItem[] = [
+  {
+    id: 2,
+    kind: "wikipedia",
+    title: "Alan Turing (Wikipedia)",
+    url: "https://en.wikipedia.org/wiki/Alan_Turing",
+    created_at: "2026-10-12T10:00:00Z",
+    files: 1,
+    symbols: 42,
+  },
+  {
+    id: 1,
+    kind: "repo",
+    title: "pallets/itsdangerous",
+    url: "https://github.com/pallets/itsdangerous",
+    created_at: "2026-10-12T09:00:00Z",
+    files: 15,
+    symbols: 159,
+  },
+];
+
+/**
+ * Answers GET /api/sources and DELETE /api/sources/{id} from a list the test can
+ * also change, and returns that list.
+ */
+export async function mockSources(page: Page, initial: SourceItem[] = []): Promise<SourceItem[]> {
+  const sources = [...initial];
+  await page.route("**/api/sources", (route) => route.fulfill({ json: sources }));
+  await page.route("**/api/sources/*", (route) => {
+    const id = Number(new URL(route.request().url()).pathname.split("/").pop());
+    const index = sources.findIndex((source) => source.id === id);
+    if (route.request().method() !== "DELETE" || index === -1) {
+      return apiError(route, 404, "No such source.");
+    }
+    sources.splice(index, 1);
+    return route.fulfill({ status: 204 });
+  });
+  return sources;
 }
 
 /** The app's own alerts. Next.js adds a hidden route announcer that also has role="alert". */

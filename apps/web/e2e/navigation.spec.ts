@@ -1,10 +1,11 @@
 import { expect, test } from "@playwright/test";
 
-import { EMPTY_HEALTH, FILE_GRAPH, mockHealth } from "./fixtures";
+import { EMPTY_HEALTH, FILE_GRAPH, mockHealth, mockSources } from "./fixtures";
 
 test("the navigation reaches every page and marks the current one", async ({ page }) => {
   await page.route("**/api/graph/files", (route) => route.fulfill({ json: FILE_GRAPH }));
   await mockHealth(page, EMPTY_HEALTH, EMPTY_HEALTH);
+  await mockSources(page);
 
   await page.goto("/");
   const nav = page.getByRole("navigation", { name: "Main" });

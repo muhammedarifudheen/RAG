@@ -19,6 +19,8 @@ dependencies = [
     "anthropic>=1.0",
     # Also the HTTP client for the Gemini provider.
     "httpx2>=2.0",
+    # Parses file uploads.
+    "python-multipart>=0.0.9",
 ]
 
 [project.optional-dependencies]

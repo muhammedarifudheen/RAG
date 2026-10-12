@@ -19,6 +19,9 @@ dependencies = [
     "tree-sitter-typescript>=0.23",
     "tree-sitter-go>=0.23",
     "sentence-transformers>=3.0",
+    # Readable-text extraction from HTML, and text from PDFs.
+    "trafilatura>=1.12",
+    "pypdf>=4.0",
 ]
 
 [project.optional-dependencies]

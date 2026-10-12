@@ -25,9 +25,11 @@ def file_graph(db: Session) -> FileGraph:
     cycles = sorted(sorted(component) for component in strongly_connected(counts))
     cycle_of = {file_id: index for index, cycle in enumerate(cycles) for file_id in cycle}
 
+    # Documents have no dependencies; in a dependency graph they would only be clutter.
     files = db.execute(
         select(File.id, File.path, File.language, File.loc, func.count(Symbol.id))
         .outerjoin(Symbol, Symbol.file_id == File.id)
+        .where(File.language != "text")
         .group_by(File.id)
         .order_by(File.path)
     ).all()

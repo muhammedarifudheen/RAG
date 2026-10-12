@@ -1,7 +1,8 @@
 """A small, hand-built code graph for the endpoint tests.
 
-Five files, 18 symbols, 12 edges. Chosen so that each measure in /health has a
-known answer:
+Two sources. The first is a repository of five files with 18 symbols and 12
+edges; the second is one Wikipedia article with two passages (3 more symbols).
+The repository is chosen so that each measure in /health has a known answer:
 
 - dead symbols: Base.describe, User.label, create_user, unused_helper
   (User.__init__ and main are unreferenced too, but are entry points)
@@ -17,7 +18,7 @@ import zlib
 from sqlalchemy import insert, text
 from sqlalchemy.orm import Session
 
-from app.models import EMBEDDING_DIM, Edge, File, Symbol
+from app.models import EMBEDDING_DIM, Edge, File, Source, Symbol
 
 MODELS = '''"""Domain models."""
 
@@ -122,7 +123,22 @@ EDGES = [
     ("calls", "pkg/big.py:main", "pkg/big.py:long_job"),
 ]
 
-SYMBOL_COUNT = sum(len(symbols) + 1 for _, symbols in FILES.values())
+# A second source: one document, stored the way the worker stores a Wikipedia article.
+ARTICLE_PATH = "wikipedia/en/Alan_Turing"
+ARTICLE = """# Alan Turing
+
+Alan Turing was an English mathematician.
+
+## Codebreaking
+
+Turing worked at Bletchley Park on the Enigma cipher.
+"""
+ARTICLE_SECTIONS = [
+    ("Alan Turing", "section", 1, 3, None),
+    ("Alan Turing › Codebreaking", "section", 5, 7, "Alan Turing › Codebreaking"),
+]
+
+SYMBOL_COUNT = sum(len(symbols) + 1 for _, symbols in FILES.values()) + len(ARTICLE_SECTIONS) + 1
 
 
 class FakeEmbedder:
@@ -140,12 +156,27 @@ class FakeEmbedder:
 
 def seed(session: Session) -> None:
     embedder = FakeEmbedder()
-    session.execute(text("TRUNCATE TABLE edges, symbols, files RESTART IDENTITY CASCADE"))
+    session.execute(text("TRUNCATE TABLE edges, symbols, files, sources RESTART IDENTITY CASCADE"))
+
+    repo = Source(kind="repo", key="repo:acme/pkg", title="acme/pkg", url="https://github.com/acme/pkg")
+    article = Source(
+        kind="wikipedia",
+        key="wikipedia:en:alan turing",
+        title="Alan Turing (Wikipedia)",
+        url="https://en.wikipedia.org/wiki/Alan_Turing",
+    )
+    session.add_all([repo, article])
+    session.flush()
+
+    documents = [(repo.id, path, "python", content, symbols) for path, (content, symbols) in FILES.items()]
+    documents.append((article.id, ARTICLE_PATH, "text", ARTICLE, ARTICLE_SECTIONS))
 
     ids: dict[str, int] = {}
-    for path, (content, symbols) in FILES.items():
+    for source_id, path, language, content, symbols in documents:
         loc = len(content.splitlines())
-        file = File(path=path, language="python", hash="0" * 64, loc=loc, content=content)
+        file = File(
+            source_id=source_id, path=path, language=language, hash="0" * 64, loc=loc, content=content
+        )
         session.add(file)
         session.flush()
         for name, kind, start, end, signature in [(path, "module", 1, loc, None), *symbols]:

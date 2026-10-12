@@ -4,7 +4,7 @@ The Atlas UI: Next.js 14 (App Router), TypeScript and Tailwind CSS 3.
 
 | Page      | Does |
 | --------- | ---- |
-| `/`       | Paste a GitHub repo URL; ingestion progress streams in step by step |
+| `/`       | Add a source: paste a GitHub repo URL, a Wikipedia article or a web page (optionally following links on the site), or upload a file. Progress streams in step by step, and the page lists what is in the knowledge base, with a Remove button for each source |
 | `/chat`   | Ask questions; answers render as Markdown, and each citation opens the cited code in a side panel |
 | `/graph`  | Files as nodes, dependencies as edges, cycles in red; click a file to list its symbols |
 | `/health` | Dead code, circular dependencies, and charts of function length and file fan-out |

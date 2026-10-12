@@ -11,6 +11,7 @@ import type {
   IngestProgress,
   IngestRequest,
   IngestResult,
+  SourceItem,
 } from "@atlas/shared";
 
 import { readServerSentEvents } from "./sse";
@@ -72,15 +73,44 @@ export function getHealth(params: HealthParams = {}): Promise<HealthReport> {
   return request<HealthReport>(`/health${query(params)}`);
 }
 
-/** Starts an ingest and yields its progress until a `done` or `error` event ends the stream. */
-export async function* ingest(repoUrl: string, signal?: AbortSignal): AsyncGenerator<IngestEvent> {
-  const body: IngestRequest = { repo_url: repoUrl };
-  const response = await fetch("/api/ingest", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
-    body: JSON.stringify(body),
-    signal,
-  });
+export function getSources(): Promise<SourceItem[]> {
+  return request<SourceItem[]>("/sources");
+}
+
+export async function deleteSource(id: number): Promise<void> {
+  const response = await fetch(`/api/sources/${id}`, { method: "DELETE" });
+  if (!response.ok) throw await errorFrom(response);
+}
+
+/** Adds a source from a link and yields progress until a `done` or `error` event. */
+export function ingest(body: IngestRequest, signal?: AbortSignal): AsyncGenerator<IngestEvent> {
+  return ingestEvents(
+    fetch("/api/ingest", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
+      body: JSON.stringify(body),
+      signal,
+    }),
+  );
+}
+
+/** Adds a source from a file and yields progress the same way. */
+export function ingestFile(file: File, signal?: AbortSignal): AsyncGenerator<IngestEvent> {
+  const form = new FormData();
+  form.append("file", file);
+  // No Content-Type header: the browser sets the multipart boundary itself.
+  return ingestEvents(
+    fetch("/api/ingest/upload", {
+      method: "POST",
+      headers: { Accept: "text/event-stream" },
+      body: form,
+      signal,
+    }),
+  );
+}
+
+async function* ingestEvents(pending: Promise<Response>): AsyncGenerator<IngestEvent> {
+  const response = await pending;
   if (!response.ok) throw await errorFrom(response);
 
   for await (const { event, data } of readServerSentEvents(response)) {

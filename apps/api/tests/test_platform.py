@@ -104,6 +104,9 @@ def test_openapi_documents_every_endpoint(plain_client):
     assert spec["info"]["title"] == "Atlas API"
     assert set(spec["paths"]) == {
         "/ingest",
+        "/ingest/upload",
+        "/sources",
+        "/sources/{source_id}",
         "/search",
         "/ask",
         "/graph",

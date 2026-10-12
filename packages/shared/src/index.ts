@@ -1,7 +1,8 @@
 // Shapes of the Atlas API's requests and responses.
 // Mirrors apps/api/app/schemas.py; change both together.
 
-export type SymbolKind = "module" | "function" | "class" | "method";
+/** "section" is a passage of a document; the others are code. */
+export type SymbolKind = "module" | "function" | "class" | "method" | "section";
 export type EdgeKind = "calls" | "imports" | "inherits";
 export type Language = "python" | "typescript" | "go";
 
@@ -179,8 +180,27 @@ export interface HealthParams {
 
 // --- /ingest (Server-Sent Events) -------------------------------------------
 
+export type SourceKind = "repo" | "web" | "wikipedia" | "crawl" | "upload";
+
 export interface IngestRequest {
-  repo_url: string;
+  /** A GitHub repository, a Wikipedia article or any public web page. */
+  url: string;
+  /** "auto" (the default) picks repo, wikipedia or web from the address. */
+  kind?: "auto" | "repo" | "web" | "wikipedia" | "crawl";
+  /** Page limit for a crawl, 1 to 100. */
+  max_pages?: number;
+}
+
+/** One entry of GET /sources. */
+export interface SourceItem {
+  id: number;
+  kind: SourceKind;
+  title: string;
+  url: string | null;
+  created_at: string;
+  files: number;
+  /** Symbols and passages that can be searched. */
+  symbols: number;
 }
 
 /** `step` is set when a pipeline step starts and null for detail within the current step. */

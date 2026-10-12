@@ -1,7 +1,10 @@
+from datetime import datetime
+
 from pgvector.sqlalchemy import Vector
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     Identity,
     Index,
@@ -9,6 +12,7 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -17,19 +21,44 @@ from app.models.base import Base
 # Output size of sentence-transformers/all-MiniLM-L6-v2.
 EMBEDDING_DIM = 384
 
-SYMBOL_KINDS = ("module", "function", "class", "method")
+# "section" is a passage of a document; the others are code.
+SYMBOL_KINDS = ("module", "function", "class", "method", "section")
 EDGE_KINDS = ("calls", "imports", "inherits")
+SOURCE_KINDS = ("repo", "web", "wikipedia", "crawl", "upload")
 
 
 def _in(column: str, values: tuple[str, ...]) -> str:
     return f"{column} IN ({', '.join(repr(v) for v in values)})"
 
 
-class File(Base):
-    __tablename__ = "files"
-    __table_args__ = (UniqueConstraint("path", name="uq_files_path"),)
+class Source(Base):
+    """Something that was ingested: a repository, a page, an article, a crawl or a file."""
+
+    __tablename__ = "sources"
+    __table_args__ = (
+        CheckConstraint(_in("kind", SOURCE_KINDS), name="ck_sources_kind"),
+        UniqueConstraint("key", name="uq_sources_key"),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    kind: Mapped[str] = mapped_column(String(16))
+    # Identifies the source across ingests, so adding it again replaces it.
+    key: Mapped[str] = mapped_column(Text)
+    title: Mapped[str] = mapped_column(Text)
+    url: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class File(Base):
+    __tablename__ = "files"
+    __table_args__ = (
+        # Unique across sources: a citation names a file by its path alone.
+        UniqueConstraint("path", name="uq_files_path"),
+        Index("ix_files_source_id", "source_id"),
+    )
+
+    id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
+    source_id: Mapped[int] = mapped_column(ForeignKey("sources.id", ondelete="CASCADE"))
     path: Mapped[str] = mapped_column(Text)
     language: Mapped[str] = mapped_column(String(32))
     hash: Mapped[str] = mapped_column(String(64))
