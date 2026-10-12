@@ -1,0 +1,213 @@
+// Shapes of the Atlas API's requests and responses.
+// Mirrors apps/api/app/schemas.py; change both together.
+
+export type SymbolKind = "module" | "function" | "class" | "method";
+export type EdgeKind = "calls" | "imports" | "inherits";
+export type Language = "python" | "typescript" | "go";
+
+// --- /search and /ask -------------------------------------------------------
+
+export interface CodeChunk {
+  symbol_id: number;
+  name: string;
+  kind: SymbolKind;
+  signature: string | null;
+  file: string;
+  language: string;
+  /** First line of the symbol, 1-based. */
+  start_line: number;
+  /** Last line of the symbol, inclusive. */
+  end_line: number;
+  /** Cosine similarity to the query; higher is closer. */
+  score: number;
+  snippet: string;
+  snippet_end_line: number;
+  truncated: boolean;
+  citation: string;
+}
+
+export interface SearchResponse {
+  query: string;
+  results: CodeChunk[];
+}
+
+export interface AskRequest {
+  question: string;
+  top_k?: number;
+}
+
+export interface Citation {
+  /** The citation as written in the answer, e.g. "[pkg/models.py:20-21]". */
+  ref: string;
+  file: string;
+  start_line: number;
+  end_line: number;
+  /** False if the cited lines were not in the code sent to the model. */
+  verified: boolean;
+}
+
+export interface AskResponse {
+  question: string;
+  answer: string;
+  citations: Citation[];
+  chunks: CodeChunk[];
+  model: string;
+  /** False if the answer was cut off at the token limit. */
+  complete: boolean;
+}
+
+// --- /graph, /graph/files and /file -----------------------------------------
+
+export interface SymbolRef {
+  id: number;
+  name: string;
+  kind: SymbolKind;
+  file: string;
+  start_line: number;
+  end_line: number;
+}
+
+export interface GraphNode extends SymbolRef {
+  depth: number;
+}
+
+export interface GraphEdge {
+  source: number;
+  target: number;
+}
+
+export type GraphDirection = "both" | "callers" | "callees";
+
+export interface GraphResponse {
+  file: string;
+  hops: number;
+  direction: GraphDirection;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  truncated: boolean;
+}
+
+export interface FileNode {
+  id: number;
+  path: string;
+  language: string;
+  loc: number;
+  symbols: number;
+  in_cycle: boolean;
+}
+
+export interface FileEdge {
+  source: number;
+  target: number;
+  imports: number;
+  calls: number;
+  inherits: number;
+  in_cycle: boolean;
+}
+
+export interface FileGraph {
+  nodes: FileNode[];
+  edges: FileEdge[];
+  /** Groups of file ids that depend on each other. */
+  cycles: number[][];
+}
+
+export interface FileSymbol {
+  id: number;
+  name: string;
+  kind: SymbolKind;
+  start_line: number;
+  end_line: number;
+  signature: string | null;
+}
+
+export interface FileDetail {
+  path: string;
+  language: string;
+  loc: number;
+  content: string;
+  symbols: FileSymbol[];
+}
+
+// --- /health ----------------------------------------------------------------
+
+export interface LongFunction extends SymbolRef {
+  loc: number;
+}
+
+export interface FanOut {
+  file: string;
+  fan_out: number;
+  depends_on: string[];
+}
+
+export interface Cycles {
+  files: string[][];
+  calls: SymbolRef[][];
+}
+
+export interface HealthSummary {
+  files: number;
+  symbols: number;
+  edges: number;
+  dead_symbols: number;
+  file_cycles: number;
+  call_cycles: number;
+  long_functions: number;
+  high_fan_out_files: number;
+}
+
+export interface HealthThresholds {
+  max_function_loc: number;
+  min_fan_out: number;
+}
+
+export interface HealthReport {
+  summary: HealthSummary;
+  thresholds: HealthThresholds;
+  dead_symbols: SymbolRef[];
+  circular_dependencies: Cycles;
+  long_functions: LongFunction[];
+  high_fan_out_files: FanOut[];
+}
+
+export interface HealthParams {
+  max_function_loc?: number;
+  min_fan_out?: number;
+  limit?: number;
+}
+
+// --- /ingest (Server-Sent Events) -------------------------------------------
+
+export interface IngestRequest {
+  repo_url: string;
+}
+
+/** `step` is set when a pipeline step starts and null for detail within the current step. */
+export interface IngestProgress {
+  step: number | null;
+  total: number | null;
+  message: string;
+}
+
+export interface IngestResult {
+  files: number;
+  symbols: number;
+  edges: number;
+}
+
+export interface IngestFailure {
+  message: string;
+}
+
+export type IngestEvent =
+  | ({ type: "progress" } & IngestProgress)
+  | ({ type: "done" } & IngestResult)
+  | ({ type: "error" } & IngestFailure);
+
+// --- errors -----------------------------------------------------------------
+
+/** Body of every non-2xx response. Validation errors carry a list. */
+export interface ApiErrorBody {
+  detail: string | { msg: string }[];
+}

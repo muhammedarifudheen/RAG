@@ -1,0 +1,91 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Rendered Markdown in chat answers. */
+.markdown > * + * {
+  margin-top: 0.75rem;
+}
+.markdown ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+}
+.markdown ol {
+  list-style: decimal;
+  padding-left: 1.25rem;
+}
+.markdown h1,
+.markdown h2,
+.markdown h3 {
+  font-weight: 600;
+}
+.markdown code {
+  border-radius: 0.25rem;
+  background: #f1f5f9;
+  padding: 0.1rem 0.3rem;
+  font-size: 0.85em;
+}
+.markdown pre {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+  padding: 0.75rem;
+}
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+.markdown a {
+  color: #4338ca;
+  text-decoration: underline;
+}
+
+/* Shiki output in the code panel: one .line span per source line. */
+.code-view pre {
+  margin: 0;
+  min-width: max-content;
+  padding: 0.5rem 0;
+  font-size: 12.5px;
+  line-height: 1.6;
+}
+.code-view code {
+  /* Grid drops the newline text nodes between lines, so each .line is one row. */
+  display: grid;
+  counter-reset: line;
+}
+.code-view .line {
+  padding-right: 1rem;
+}
+.code-view .line::before {
+  display: inline-block;
+  width: 3rem;
+  margin-right: 1rem;
+  color: #94a3b8;
+  content: counter(line);
+  counter-increment: line;
+  text-align: right;
+  user-select: none;
+}
+.code-view .line.cited {
+  background: #fef3c7;
+  box-shadow: inset 3px 0 0 #f59e0b;
+}
+
+/* File nodes and dependency edges on the graph page. */
+.react-flow__node.file-node {
+  width: auto;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.5rem;
+  background: #fff;
+  padding: 0.4rem 0.7rem;
+  color: #0f172a;
+  font-size: 12px;
+}
+.react-flow__node.file-node.in-cycle {
+  border: 2px solid #dc2626;
+  background: #fef2f2;
+  color: #991b1b;
+}
+.react-flow__node.file-node.selected {
+  box-shadow: 0 0 0 3px #c7d2fe;
+}

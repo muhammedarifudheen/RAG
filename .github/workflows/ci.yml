@@ -1,0 +1,117 @@
+name: CI
+
+on:
+  pull_request:
+  # Lets the deploy workflow run exactly these checks before deploying.
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  PYTHON_VERSION: "3.12"
+  NODE_VERSION: "22"
+  # CPU-only PyTorch: far smaller than the default wheel, and CI has no GPU.
+  TORCH_INDEX: https://download.pytorch.org/whl/cpu
+
+jobs:
+  worker:
+    name: Worker tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/*/pyproject.toml
+      - name: Install
+        run: |
+          pip install --index-url "$TORCH_INDEX" torch
+          pip install -e packages/shared -e apps/api -e "apps/worker[dev]"
+      - name: Lint
+        working-directory: apps/worker
+        run: ruff check .
+      - name: Test
+        working-directory: apps/worker
+        run: pytest
+
+  api:
+    name: API tests
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # Same image as docker-compose.yml.
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: atlas
+          POSTGRES_PASSWORD: atlas
+          POSTGRES_DB: atlas_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U atlas -d atlas_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      TEST_DATABASE_URL: postgresql+psycopg://atlas:atlas@localhost:5432/atlas_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: apps/*/pyproject.toml
+      - name: Install
+        run: |
+          pip install --index-url "$TORCH_INDEX" torch
+          pip install -e packages/shared -e apps/worker -e "apps/api[dev]"
+      - name: Lint
+        working-directory: apps/api
+        run: ruff check .
+      - name: Test
+        working-directory: apps/api
+        # The suite skips its database tests when Postgres is unreachable. That is
+        # convenient locally, but here it would hide most of the suite, so a skip
+        # fails the job.
+        run: |
+          set -o pipefail
+          pytest -rs | tee pytest.log
+          if grep -q "SKIPPED" pytest.log; then
+            echo "::error::Tests were skipped; the test database was not reachable."
+            exit 1
+          fi
+
+  web:
+    name: Web tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Reads the pnpm version from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Lint
+        run: pnpm lint
+      - name: Type-check
+        run: pnpm typecheck
+      - name: Install browser
+        run: pnpm --filter @atlas/web exec playwright install --with-deps chromium
+      - name: End-to-end tests
+        run: pnpm --filter @atlas/web test:e2e
+      - name: Upload traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-traces
+          path: apps/web/test-results
+          retention-days: 7

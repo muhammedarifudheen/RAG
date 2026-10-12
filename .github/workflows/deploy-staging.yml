@@ -1,0 +1,166 @@
+name: Deploy staging
+
+on:
+  push:
+    branches: [main]
+
+# One deploy at a time, and never cancel one halfway through.
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to Cloud Run
+    needs: test
+    # Off until the Google Cloud side exists: set the repository variable
+    # DEPLOY_STAGING to "true" once infra/README.md's setup is done.
+    if: ${{ vars.DEPLOY_STAGING == 'true' }}
+    runs-on: ubuntu-latest
+    # Holds the variables printed by `terraform output`; see infra/README.md.
+    environment: staging
+    permissions:
+      contents: read
+      id-token: write # exchanged for Google credentials; no key is stored
+    env:
+      PREFIX: atlas-staging
+      REGION: ${{ vars.GCP_REGION }}
+      RUNTIME_SA: ${{ vars.GCP_RUNTIME_SERVICE_ACCOUNT }}
+      CLOUD_SQL: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
+      BACKEND_IMAGE: ${{ vars.GCP_ARTIFACT_REPOSITORY }}/backend:${{ github.sha }}
+      WEB_IMAGE: ${{ vars.GCP_ARTIFACT_REPOSITORY }}/web:${{ github.sha }}
+      DATABASE_SECRET: DATABASE_URL=atlas-staging-database-url:latest
+      ANTHROPIC_SECRET: ANTHROPIC_API_KEY=atlas-staging-anthropic-api-key:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ vars.GCP_PROJECT_ID }}
+          workload_identity_provider: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+
+      - name: Log Docker in to Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build and push the backend image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          push: true
+          tags: ${{ env.BACKEND_IMAGE }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,scope=backend,mode=max
+
+      # Migrations run to completion before any new code serves traffic. If they
+      # fail, the job fails here and the running service is left untouched.
+      - name: Run database migrations
+        run: |
+          gcloud run jobs deploy "${PREFIX}-migrate" \
+            --region "$REGION" \
+            --image "$BACKEND_IMAGE" \
+            --service-account "$RUNTIME_SA" \
+            --set-cloudsql-instances "$CLOUD_SQL" \
+            --set-secrets "$DATABASE_SECRET" \
+            --command alembic \
+            --args upgrade,head \
+            --max-retries 0 \
+            --task-timeout 10m \
+            --execute-now \
+            --wait
+
+      - name: Deploy the API
+        # --no-cpu-throttling: an ingest runs in a background thread and must keep
+        #   its CPU after the browser that started it disconnects.
+        # --max-instances 1: the ingest lock and the rate limiter live in process
+        #   memory, so a second instance would not see them.
+        # --timeout 60m: the ingest progress stream stays open for the whole run.
+        run: |
+          gcloud run deploy "${PREFIX}-api" \
+            --region "$REGION" \
+            --image "$BACKEND_IMAGE" \
+            --service-account "$RUNTIME_SA" \
+            --set-cloudsql-instances "$CLOUD_SQL" \
+            --set-secrets "${DATABASE_SECRET},${ANTHROPIC_SECRET}" \
+            --port 8080 \
+            --cpu 2 \
+            --memory 4Gi \
+            --min-instances 1 \
+            --max-instances 1 \
+            --no-cpu-throttling \
+            --cpu-boost \
+            --concurrency 40 \
+            --timeout 60m \
+            --allow-unauthenticated
+
+      # Not executed here: run it on demand with a repository URL (infra/README.md).
+      - name: Update the ingest job
+        run: |
+          gcloud run jobs deploy "${PREFIX}-ingest" \
+            --region "$REGION" \
+            --image "$BACKEND_IMAGE" \
+            --service-account "$RUNTIME_SA" \
+            --set-cloudsql-instances "$CLOUD_SQL" \
+            --set-secrets "$DATABASE_SECRET" \
+            --command python \
+            --args=-m,worker.ingest \
+            --cpu 2 \
+            --memory 4Gi \
+            --max-retries 0 \
+            --task-timeout 60m
+
+      - name: Look up the API URL
+        id: api
+        run: |
+          url="$(gcloud run services describe "${PREFIX}-api" --region "$REGION" --format 'value(status.url)')"
+          test -n "$url"
+          echo "url=$url" >> "$GITHUB_OUTPUT"
+
+      # Next.js fixes the /api proxy target at build time, so the web image is
+      # built after the API exists and is specific to this environment.
+      - name: Build and push the web image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: apps/web/Dockerfile
+          push: true
+          tags: ${{ env.WEB_IMAGE }}
+          build-args: |
+            API_URL=${{ steps.api.outputs.url }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+      - name: Deploy the web app
+        run: |
+          gcloud run deploy "${PREFIX}-web" \
+            --region "$REGION" \
+            --image "$WEB_IMAGE" \
+            --service-account "${{ vars.GCP_WEB_SERVICE_ACCOUNT }}" \
+            --port 8080 \
+            --cpu 1 \
+            --memory 1Gi \
+            --min-instances 0 \
+            --max-instances 3 \
+            --timeout 60m \
+            --allow-unauthenticated
+
+      - name: Check the deployment
+        # Goes through the web app's /api proxy, so it exercises both services
+        # and the link between them.
+        run: |
+          web="$(gcloud run services describe "${PREFIX}-web" --region "$REGION" --format 'value(status.url)')"
+          curl --fail --silent --show-error --retry 5 --retry-delay 5 --retry-all-errors "$web/api/healthz"
+          echo
+          echo "Deployed: $web" >> "$GITHUB_STEP_SUMMARY"

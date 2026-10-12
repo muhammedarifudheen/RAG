@@ -1,0 +1,4 @@
+# Copy to terraform.tfvars and fill in.
+project_id        = "my-gcp-project"
+region            = "asia-south1"
+github_repository = "my-org/atlas"

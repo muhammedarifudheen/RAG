@@ -1,0 +1,88 @@
+name: atlas
+
+# Two ways to use this file:
+#
+#   docker compose up -d postgres     Only the database; run the API and web app
+#                                     on your machine (see the READMEs).
+#   docker compose up --build         Everything in containers:
+#                                     web on http://localhost:3000,
+#                                     API on http://localhost:8000.
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-atlas}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-atlas}
+      POSTGRES_DB: ${POSTGRES_DB:-atlas}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # Runs only when the data volume is first initialised.
+      - ./docker/postgres/init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  # Applies database migrations, then exits. The API waits for it.
+  migrate:
+    image: atlas-backend
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    command: ["alembic", "upgrade", "head"]
+    environment: &backend-env
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-atlas}:${POSTGRES_PASSWORD:-atlas}@postgres:5432/${POSTGRES_DB:-atlas}
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  api:
+    image: atlas-backend
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    restart: unless-stopped
+    environment:
+      <<: *backend-env
+      # Needed only for the chat page. Set it in .env next to this file.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Only for ingesting private repositories.
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+    ports:
+      - "${API_PORT:-8000}:8080"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  web:
+    image: atlas-web
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        # Fixed into the build: the web server proxies /api/* to this address.
+        API_URL: http://api:8080
+    restart: unless-stopped
+    ports:
+      - "${WEB_PORT:-3000}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  pgdata:
