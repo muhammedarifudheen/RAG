@@ -57,8 +57,11 @@ $script:tunnel = $null
 function Say([string]$message) { Write-Host ("{0}  {1}" -f (Get-Date -Format "HH:mm:ss"), $message) }
 
 function SshOptions([string]$hostKeyMode) {
+    # The keep-alive settings make ssh exit within a minute of the tunnel dying,
+    # instead of waiting on it for as long as the machine stays up.
     @("-i", $key, "-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=$hostKeyMode",
-      "-o", "UserKnownHostsFile=$knownHosts", "-o", "ConnectTimeout=30", "-o", "ServerAliveInterval=30")
+      "-o", "UserKnownHostsFile=$knownHosts", "-o", "ConnectTimeout=30",
+      "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=3")
 }
 
 # --- Tunnel ---------------------------------------------------------------------
@@ -245,8 +248,10 @@ function Start-Forward {
 }
 
 function Test-Local {
-    try { (Invoke-WebRequest "http://127.0.0.1:3000/api/healthz" -UseBasicParsing -TimeoutSec 15).StatusCode -eq 200 }
-    catch { $false }
+    # curl with a hard time limit. Invoke-WebRequest can wait indefinitely when the
+    # forwarded port accepts the connection but the tunnel behind it has died.
+    $status = & curl.exe -s -o NUL -m 10 -w "%{http_code}" "http://127.0.0.1:3000/api/healthz" 2>$null
+    return ($status -eq "200")
 }
 
 # --- Main loop -------------------------------------------------------------------
