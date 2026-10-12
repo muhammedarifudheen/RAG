@@ -1,3 +1,5 @@
+from typing import Literal
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -12,6 +14,14 @@ class Settings(BaseSettings):
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
     # Longest snippet returned for one symbol, and sent to Claude, in lines.
     snippet_max_lines: int = 80
+
+    # Which model provider answers /ask.
+    llm_provider: Literal["anthropic", "gemini"] = "anthropic"
+
+    gemini_api_key: str | None = None
+    # Tried in order; the next is used when one is overloaded or over quota.
+    gemini_models: str = "gemini-flash-latest,gemini-3.5-flash,gemini-flash-lite-latest"
+    gemini_max_tokens: int = 16000
 
     # Unset means the Anthropic SDK resolves credentials itself (environment or profile).
     anthropic_api_key: str | None = None

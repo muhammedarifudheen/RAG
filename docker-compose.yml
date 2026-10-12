@@ -49,8 +49,12 @@ services:
     restart: unless-stopped
     environment:
       <<: *backend-env
-      # Needed only for the chat page. Set it in .env next to this file.
+      # The chat page needs one model provider. Set these in .env next to this file:
+      # either ANTHROPIC_API_KEY, or LLM_PROVIDER=gemini with GEMINI_API_KEY.
+      LLM_PROVIDER: ${LLM_PROVIDER:-anthropic}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      GEMINI_MODELS: ${GEMINI_MODELS:-}
       # Only for ingesting private repositories.
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports:

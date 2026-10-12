@@ -33,8 +33,19 @@ The worker package is required: `POST /ingest` runs its pipeline inside the API
 process. The install is large, because both ingestion and query embedding use a
 sentence-transformers model, which pulls in PyTorch.
 
-`/ask` needs Anthropic credentials. Set `ANTHROPIC_API_KEY` in `.env` or in the
-environment; without it `/ask` answers `503` and every other endpoint works.
+`/ask` needs a model provider; without one it answers `503` and every other
+endpoint works. Two are supported, chosen with `LLM_PROVIDER`:
+
+- **`anthropic`** (the default): Claude, through the Anthropic SDK. Set
+  `ANTHROPIC_API_KEY`. The Anthropic account needs credit, or every request is
+  refused with "Your credit balance is too low".
+- **`gemini`**: Google Gemini, which has a free tier. Set `LLM_PROVIDER=gemini`
+  and `GEMINI_API_KEY` (from https://aistudio.google.com/apikey). The models in
+  `GEMINI_MODELS` are tried in order, because free-tier models are often briefly
+  overloaded; `model` in the response names the one that answered. Check
+  Google's terms before sending private code through the free tier.
+
+Both get the same prompt and the same citation checking.
 
 The query endpoints return nothing useful until a repository has been ingested,
 through `POST /ingest` or the worker's CLI.
@@ -131,8 +142,8 @@ names whichever one answered.
 | ------ | ------- |
 | 409    | Nothing has been ingested |
 | 422    | Invalid request, or the model declined to answer |
-| 502    | The Anthropic API failed or was unreachable |
-| 503    | Anthropic credentials missing or rejected, or Anthropic's rate limit hit |
+| 502    | The model provider refused the request or was unreachable; `detail` carries its reason |
+| 503    | Credentials missing or rejected, the provider's rate limit hit, or every Gemini model overloaded |
 
 ### `/graph`
 
@@ -291,7 +302,10 @@ storage code too. See
 | `LOG_LEVEL`                 | `INFO`                                                  |         |
 | `EMBEDDING_MODEL`           | `sentence-transformers/all-MiniLM-L6-v2`                | Must match the worker's |
 | `SNIPPET_MAX_LINES`         | `80`                                                    | Longest snippet returned or sent to Claude |
-| `ANTHROPIC_API_KEY`         | unset                                                   | Required for `/ask` |
+| `LLM_PROVIDER`              | `anthropic`                                             | `anthropic` or `gemini` |
+| `GEMINI_API_KEY`            | unset                                                   | Required for `/ask` when the provider is `gemini` |
+| `GEMINI_MODELS`             | `gemini-flash-latest,gemini-3.5-flash,gemini-flash-lite-latest` | Comma-separated, tried in order |
+| `ANTHROPIC_API_KEY`         | unset                                                   | Required for `/ask` when the provider is `anthropic` |
 | `ANTHROPIC_MODEL`           | `claude-opus-5-5`                                       |         |
 | `ANTHROPIC_EFFORT`          | `medium`                                                | `low` to `max`; higher is slower and costs more |
 | `ANTHROPIC_MAX_TOKENS`      | `16000`                                                 | Cap on the answer, including the model's reasoning |

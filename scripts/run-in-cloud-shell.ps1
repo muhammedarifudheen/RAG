@@ -16,10 +16,11 @@
   with it the containers and the ingested data. The script then rebuilds the
   stack (about eight minutes) and you ingest again.
 
-  To use the chat page, put ANTHROPIC_API_KEY=... in a file named .env in the
-  repo folder on this machine. The script copies that one setting to the stack on
-  the VM, at startup and whenever the file changes, and restarts the API. Nothing
-  else from .env is uploaded.
+  To use the chat page, put a model key in a file named .env in the repo folder
+  on this machine (see .env.example): ANTHROPIC_API_KEY, or LLM_PROVIDER=gemini
+  with GEMINI_API_KEY. The script copies those settings to the stack on the VM,
+  at startup and whenever the file changes, and restarts the API. Nothing else
+  from .env is uploaded.
 
   Requires the gcloud CLI, signed in (`gcloud auth login`), and Windows' OpenSSH
   client.
@@ -159,11 +160,15 @@ function Send-Source {
     return ($LASTEXITCODE -eq 0)
 }
 
+# The only settings copied from the local .env to the VM.
+$syncedSettings = "LLM_PROVIDER", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GEMINI_MODELS", "GITHUB_TOKEN"
+
 $keyScript = @'
 set -euo pipefail
+mkdir -p ~/atlas
 cd ~/atlas
 touch .env
-grep -v '^ANTHROPIC_API_KEY=' .env > .env.new || true
+grep -v -E '^(LLM_PROVIDER|ANTHROPIC_API_KEY|GEMINI_API_KEY|GEMINI_MODELS|GITHUB_TOKEN)=' .env > .env.new || true
 cat ~/.atlas-key.env >> .env.new
 rm -f ~/.atlas-key.env
 if cmp -s .env .env.new; then
@@ -172,34 +177,47 @@ if cmp -s .env .env.new; then
 else
   mv .env.new .env
   chmod 600 .env
-  docker compose up -d > /dev/null 2>&1
+  # Compose reads .env when it starts, so a build that is about to be started
+  # picks the change up by itself; a running stack has to be told.
+  if [ "${1:-}" != "norestart" ]; then docker compose up -d > /dev/null 2>&1; fi
   echo APPLIED
 fi
 '@
 
-function Get-LocalKeyLine {
+function Get-LocalSettings {
+    # The model-provider settings present in the local .env, as NAME=value lines.
     $file = Join-Path $repo ".env"
-    if (-not (Test-Path -LiteralPath $file)) { return $null }
-    Get-Content -LiteralPath $file | Where-Object { $_ -match "^\s*ANTHROPIC_API_KEY\s*=\s*\S" } | Select-Object -Last 1
+    if (-not (Test-Path -LiteralPath $file)) { return @() }
+    $found = [ordered]@{}
+    foreach ($line in Get-Content -LiteralPath $file) {
+        if ($line -match "^\s*([A-Z_]+)\s*=\s*(\S.*)$" -and $syncedSettings -contains $Matches[1]) {
+            $found[$Matches[1]] = $Matches[2].Trim().Trim('"').Trim("'")
+        }
+    }
+    @($found.GetEnumerator() | ForEach-Object { "$($_.Key)=$($_.Value)" })
 }
 
-function Sync-ApiKey {
-    # Copies ANTHROPIC_API_KEY from the repo's local .env to the stack on the VM,
-    # leaving every other line of the remote .env alone. Returns $true if the API
-    # was restarted with a new key.
-    $line = Get-LocalKeyLine
-    if (-not $line) { return $false }
-    $value = ($line -replace "^\s*ANTHROPIC_API_KEY\s*=\s*", "").Trim().Trim('"').Trim("'")
+function Test-ChatConfigured {
+    @(Get-LocalSettings | Where-Object { $_ -match "^(ANTHROPIC_API_KEY|GEMINI_API_KEY)=" }).Count -gt 0
+}
+
+function Sync-ApiKey([switch]$NoRestart) {
+    # Copies the model-provider settings from the repo's local .env to the stack on
+    # the VM, leaving every other line of the remote .env alone. Returns $true if
+    # the settings changed (and, unless -NoRestart, the API was restarted).
+    $lines = Get-LocalSettings
+    if ($lines.Count -eq 0) { return $false }
     $temp = "$work\key.env"
-    [IO.File]::WriteAllText($temp, "ANTHROPIC_API_KEY=$value`n", (New-Object Text.UTF8Encoding $false))
+    [IO.File]::WriteAllText($temp, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
     try {
         $options = SshOptions "yes"
         & scp.exe -q -P $script:port @options $temp "${remote}:.atlas-key.env" 2>$null
         if ($LASTEXITCODE -ne 0) { return $false }
     }
     finally { [IO.File]::Delete($temp) }
+    if ($NoRestart) { return ((Invoke-Remote "key" $keyScript "norestart") -eq "APPLIED") }
     $result = Invoke-Remote "key" $keyScript
-    if ($result -eq "APPLIED") { Say "Applied the Anthropic key from .env; the API is restarting."; return $true }
+    if ($result -eq "APPLIED") { Say "Applied the model settings from .env; the API is restarting."; return $true }
     return $false
 }
 
@@ -246,12 +264,14 @@ try {
         if ($state -eq "MISSING" -or $uploadPending) {
             Say "Uploading the source..."
             if (-not (Send-Source)) { Say "Upload failed; reconnecting."; continue }
+            [void](Sync-ApiKey -NoRestart)
             if ($null -eq (Invoke-Remote "start" $startScript "extract")) { Say "Connection dropped; reconnecting."; continue }
             $uploadPending = $false
             Say "Building and starting the containers. The first build takes about eight minutes."
         }
         elseif ($state -eq "DOWN") {
             Say "The VM was recycled. Rebuilding the containers (about eight minutes); ingested data was lost."
+            [void](Sync-ApiKey -NoRestart)
             if ($null -eq (Invoke-Remote "start" $startScript)) { Say "Connection dropped; reconnecting."; continue }
         }
 
@@ -281,7 +301,7 @@ try {
         Start-Sleep -Seconds 4
         if (-not (Test-Local)) { Say "Port forward failed; reconnecting."; continue }
         Say "Atlas is running:  http://127.0.0.1:3000   (API: http://127.0.0.1:8000/docs)"
-        if (-not (Get-LocalKeyLine)) { Say "Chat is off: add ANTHROPIC_API_KEY=... to .env in the repo folder to turn it on." }
+        if (-not (Test-ChatConfigured)) { Say "Chat is off: add a model key to .env in the repo folder (see .env.example)." }
         Say "Leave this window open. Press Ctrl+C to stop."
 
         $failures = 0

@@ -1,8 +1,11 @@
+import time
+from collections.abc import Sequence
 from dataclasses import dataclass
 from functools import cache
 from typing import Protocol
 
 import anthropic
+import httpx2
 from fastapi import HTTPException
 
 from app.config import settings
@@ -117,6 +120,114 @@ class ClaudeAnswerer:
         )
 
 
+GEMINI_URL = "https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent"
+DEFAULT_GEMINI_MODELS = ("gemini-flash-latest", "gemini-3.5-flash", "gemini-flash-lite-latest")
+# Finish reasons that mean the model would not answer, as opposed to could not.
+_GEMINI_DECLINED = {"SAFETY", "RECITATION", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII"}
+# Overloaded, over quota or failing: worth trying the next model.
+_GEMINI_TRY_NEXT = {429, 500, 502, 503, 504}
+
+
+class GeminiAnswerer:
+    """Answers through Google's Gemini API, called over REST.
+
+    Models are tried in order. Free-tier models are often briefly overloaded, so a
+    failure of that kind moves on to the next one instead of failing the request.
+    """
+
+    def __init__(
+        self,
+        client: httpx2.Client,
+        api_key: str,
+        models: Sequence[str],
+        max_tokens: int,
+        passes: int = 2,
+        pause: float = 2.0,
+    ) -> None:
+        self.client = client
+        self.api_key = api_key
+        self.models = list(models)
+        self.max_tokens = max_tokens
+        self.passes = passes
+        self.pause = pause
+
+    def answer(self, question: str, chunks: list[CodeChunk]) -> LLMAnswer:
+        payload = {
+            "system_instruction": {"parts": [{"text": SYSTEM_PROMPT}]},
+            "contents": [{"role": "user", "parts": [{"text": build_prompt(question, chunks)}]}],
+            "generationConfig": {"maxOutputTokens": self.max_tokens},
+        }
+        failure = AnswerError(503, "Gemini is unavailable.")
+        for attempt in range(self.passes):
+            if attempt:
+                time.sleep(self.pause)
+            for model in self.models:
+                try:
+                    return self._ask(model, payload)
+                except _TryNextModel as skipped:
+                    failure = skipped.error
+        raise failure
+
+    def _ask(self, model: str, payload: dict) -> LLMAnswer:
+        try:
+            response = self.client.post(
+                GEMINI_URL.format(model=model),
+                headers={"x-goog-api-key": self.api_key},
+                json=payload,
+            )
+        except httpx2.HTTPError as error:
+            raise _TryNextModel(AnswerError(502, "The Gemini API could not be reached.")) from error
+
+        if response.status_code >= 400:
+            reason = _gemini_reason(response)
+            if response.status_code in _GEMINI_TRY_NEXT:
+                raise _TryNextModel(AnswerError(503, f"Gemini is unavailable: {reason}"))
+            if response.status_code in (401, 403):
+                raise AnswerError(503, f"The Gemini API key was rejected: {reason}")
+            raise AnswerError(502, f"Gemini rejected the request: {reason}")
+
+        data = response.json()
+        if (data.get("promptFeedback") or {}).get("blockReason"):
+            raise AnswerError(422, "The model declined to answer this question.")
+        candidate = (data.get("candidates") or [{}])[0]
+        finish = candidate.get("finishReason")
+        if finish in _GEMINI_DECLINED:
+            raise AnswerError(422, "The model declined to answer this question.")
+
+        parts = (candidate.get("content") or {}).get("parts") or []
+        text = "".join(part.get("text", "") for part in parts if not part.get("thought")).strip()
+        if not text:
+            raise _TryNextModel(AnswerError(502, f"Gemini ({model}) returned an empty answer."))
+        return LLMAnswer(
+            text=text, model=data.get("modelVersion") or model, complete=finish != "MAX_TOKENS"
+        )
+
+
+class _TryNextModel(Exception):
+    def __init__(self, error: AnswerError) -> None:
+        super().__init__(error.detail)
+        self.error = error
+
+
+def _gemini_reason(response: httpx2.Response) -> str:
+    try:
+        message = response.json()["error"]["message"]
+    except (ValueError, KeyError, TypeError):
+        message = f"HTTP {response.status_code}"
+    return str(message)[:300]
+
+
+@cache
+def _gemini() -> GeminiAnswerer:
+    models = [m.strip() for m in settings.gemini_models.split(",") if m.strip()]
+    return GeminiAnswerer(
+        httpx2.Client(timeout=120.0),
+        settings.gemini_api_key or "",
+        models or DEFAULT_GEMINI_MODELS,
+        settings.gemini_max_tokens,
+    )
+
+
 @cache
 def _claude() -> ClaudeAnswerer:
     client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
@@ -126,6 +237,11 @@ def _claude() -> ClaudeAnswerer:
 
 
 def get_answerer() -> Answerer:
+    if settings.llm_provider == "gemini":
+        if not settings.gemini_api_key:
+            raise HTTPException(503, "Gemini credentials are not configured; set GEMINI_API_KEY.")
+        return _gemini()
+
     missing = HTTPException(503, "Anthropic credentials are not configured; set ANTHROPIC_API_KEY.")
     try:
         answerer = _claude()

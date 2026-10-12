@@ -34,6 +34,10 @@ cross-origin request and the API's address never reaches client code.
 `API_URL` is read when the app is **built** (`next build`) or when `next dev`
 starts. Changing it for a production deployment means rebuilding.
 
+The proxy's timeout is raised to ten minutes in `next.config.mjs`
+(`experimental.proxyTimeout`). Its default of 30 seconds is shorter than many
+chat answers take, and the browser would get a bare 500.
+
 Every request and response type comes from `@atlas/shared`; the app defines no
 API shapes of its own. `any` is rejected by ESLint
 (`@typescript-eslint/no-explicit-any`).
