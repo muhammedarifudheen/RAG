@@ -53,6 +53,8 @@ $key = "$work\key"
 $knownHosts = "$work\known_hosts"
 $script:port = $null
 $script:tunnel = $null
+$script:attempt = 0
+$script:fatal = $false
 
 function Say([string]$message) { Write-Host ("{0}  {1}" -f (Get-Date -Format "HH:mm:ss"), $message) }
 
@@ -79,8 +81,14 @@ function Stop-Tunnel {
 
 function Start-Tunnel {
     Stop-Tunnel
-    $out = "$work\tunnel.out"; $err = "$work\tunnel.err"
-    foreach ($file in $out, $err, $knownHosts) { if (Test-Path -LiteralPath $file) { [IO.File]::Delete($file) } }
+    # A new log file per attempt: the previous tunnel's process can hold its files
+    # open for a moment after it is stopped, and deleting them then fails.
+    $script:attempt++
+    $out = "$work\tunnel-$($script:attempt).out"; $err = "$work\tunnel-$($script:attempt).err"
+    Get-ChildItem -LiteralPath $work -Filter "tunnel*" -ErrorAction SilentlyContinue |
+        Where-Object { $_.FullName -ne $out -and $_.FullName -ne $err } |
+        Remove-Item -Force -ErrorAction SilentlyContinue
+    Remove-Item -LiteralPath $knownHosts -Force -ErrorAction SilentlyContinue
 
     $script:tunnel = Start-Process -FilePath $gcloud -PassThru -WindowStyle Hidden `
         -ArgumentList "cloud-shell", "ssh", "--authorize-session", "--quiet", "--command", '"sleep 43200"' `
@@ -260,6 +268,7 @@ $uploadPending = [bool]$Upload
 $forward = $null
 try {
     while ($true) {
+        try {
         Say "Connecting to Cloud Shell (starting the VM can take a minute)..."
         if (-not (Start-Tunnel)) { Say "Could not connect; retrying in 20 seconds."; Start-Sleep -Seconds 20; continue }
 
@@ -292,6 +301,7 @@ try {
                 if ($downChecks -ge 6) {
                     Say "The stack did not come up. Last build output:"
                     Write-Host (Invoke-Remote "log" $logScript)
+                    $script:fatal = $true  # a broken build will not fix itself by retrying
                     throw "docker compose failed on Cloud Shell."
                 }
             }
@@ -322,6 +332,16 @@ try {
         }
         Say "Connection lost; reconnecting."
         if (-not $forward.HasExited) { Stop-Process -Id $forward.Id -Force -ErrorAction SilentlyContinue }
+        }
+        catch {
+            # Anything unexpected (a locked file, a failed process start) must not end
+            # the runner: report it and start the cycle again.
+            if ($script:fatal) { throw }
+            Say "Unexpected error: $($_.Exception.Message)"
+            Say "Retrying in 20 seconds."
+            if ($forward -and -not $forward.HasExited) { Stop-Process -Id $forward.Id -Force -ErrorAction SilentlyContinue }
+            Start-Sleep -Seconds 20
+        }
     }
 }
 finally {
