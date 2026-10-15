@@ -60,6 +60,14 @@ def search_symbols(
 
 def extract_citations(answer: str, chunks: list[CodeChunk]) -> list[Citation]:
     """Citations written in an answer, each checked against the chunks the model was given."""
+    # The lines the model was shown, per file. A citation is verified when every line
+    # it names was shown, even if the range runs across two neighbouring excerpts.
+    shown: dict[str, set[int]] = {}
+    for chunk in chunks:
+        shown.setdefault(chunk.file, set()).update(
+            range(chunk.start_line, chunk.snippet_end_line + 1)
+        )
+
     citations: dict[str, Citation] = {}
     for match in _CITATION.finditer(answer):
         path = match[1].strip()
@@ -75,11 +83,8 @@ def extract_citations(answer: str, chunks: list[CodeChunk]) -> list[Citation]:
                     file=path,
                     start_line=start,
                     end_line=end,
-                    verified=any(
-                        chunk.file == path
-                        and chunk.start_line <= start <= end <= chunk.snippet_end_line
-                        for chunk in chunks
-                    ),
+                    verified=start <= end
+                    and set(range(start, end + 1)) <= shown.get(path, set()),
                 ),
             )
     return list(citations.values())
