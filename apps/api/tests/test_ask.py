@@ -94,6 +94,23 @@ def test_a_citation_with_several_ranges_is_checked_range_by_range(client, answer
     ]
 
 
+def test_every_way_of_listing_several_places_is_understood(client, answerer):
+    answerer.reply = (
+        "Repeated path [pkg/models.py:20-20, pkg/models.py:21-21]; "
+        "semicolons and spaces [pkg/models.py:20 - 21 ; 21]; "
+        "not citations: [1, 2, 3], [see the docs](https://example.com), [pkg/models.py:x]."
+    )
+
+    citations = client.post("/ask", json={"question": QUESTION, "top_k": 1}).json()["citations"]
+
+    assert [(c["ref"], c["start_line"], c["end_line"], c["verified"]) for c in citations] == [
+        ("[pkg/models.py:20-20]", 20, 20, True),
+        ("[pkg/models.py:21-21]", 21, 21, True),
+        ("[pkg/models.py:20-21]", 20, 21, True),
+        ("[pkg/models.py:21]", 21, 21, True),
+    ]
+
+
 def test_a_range_across_two_shown_excerpts_is_verified(client, answerer):
     # With top_k=8, models.py is shown as several excerpts: User.label (16-17) and
     # format_name (20-21) among them, but not lines 18-19 in between.

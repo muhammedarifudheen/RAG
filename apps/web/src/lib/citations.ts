@@ -9,9 +9,31 @@ export interface ParsedCitation extends CodeRange {
   ref: string;
 }
 
-// `[path:42-58]`, `[path:42]`, and `[path:5-7, 10-12]` for several places in one file.
-const CITATION = /\[([^\[\]:\n]+):(\d+(?:-\d+)?(?:\s*,\s*\d+(?:-\d+)?)*)\]/g;
-const RANGE = /(\d+)(?:-(\d+))?/g;
+// A citation is `[path:42-58]` or `[path:42]`. Models also put several in one
+// bracket, as `[path:5-7, 10-12]` or `[path:5-7, other/path:10-12]`; a range with
+// no path belongs to the path before it. Keep in step with apps/api/app/services/search.py.
+const BRACKET = /\[([^\[\]\n]+)\]/g;
+const ITEM = /^\s*(?:([^\[\]:\n]+?)\s*:\s*)?(\d+)(?:\s*-\s*(\d+))?\s*$/;
+
+interface CitationItem {
+  file: string;
+  start: string;
+  end: string | undefined;
+}
+
+/** The items of a bracket, or null when it is not entirely citations (`[1, 2]`, link text). */
+function parseBracket(content: string): CitationItem[] | null {
+  const items: CitationItem[] = [];
+  let file: string | null = null;
+  for (const raw of content.split(/[,;]/)) {
+    const match = ITEM.exec(raw);
+    if (!match) return null;
+    file = match[1] ? match[1].trim() : file;
+    if (file === null) return null;
+    items.push({ file, start: match[2], end: match[3] });
+  }
+  return items;
+}
 // Fenced blocks and inline code spans, which must be left untouched.
 const CODE = /(```[\s\S]*?```|`[^`\n]*`)/g;
 const HREF_PREFIX = "#cite:";
@@ -46,13 +68,14 @@ export function linkifyCitations(markdown: string): string {
     .split(CODE)
     .map((part, index) => {
       if (index % 2 === 1) return part; // a code span or block
-      return part.replace(CITATION, (_match, path: string, ranges: string) => {
-        const file = encodePath(path.trim());
-        // One link per range, so each place can be opened (and checked) on its own.
-        return [...ranges.matchAll(RANGE)]
-          .map(([, start, end]) => {
+      return part.replace(BRACKET, (whole: string, content: string) => {
+        const items = parseBracket(content);
+        if (!items) return whole;
+        // One link per item, so each place can be opened (and checked) on its own.
+        return items
+          .map(({ file, start, end }) => {
             const form = end ? "range" : "line";
-            return `[source](${HREF_PREFIX}${file}:${start}:${end ?? start}:${form})`;
+            return `[source](${HREF_PREFIX}${encodePath(file)}:${start}:${end ?? start}:${form})`;
           })
           .join(" ");
       });

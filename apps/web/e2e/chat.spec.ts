@@ -118,7 +118,13 @@ test("a citation naming several places in a file becomes one button per place", 
     route.fulfill({
       json: {
         ...ANSWER,
-        answer: "Names are formatted in one place [pkg/models.py:20-21, 4-9].",
+        answer: [
+          "Names are formatted in one place [pkg/models.py:20-21, 4-9].",
+          "",
+          "The same, with the path repeated [pkg/models.py:20-21, pkg/models.py:4-9].",
+          "",
+          "Not citations: [1, 2, 3] and [the docs](https://example.com).",
+        ].join("\n"),
         citations: [
           { ref: "[pkg/models.py:20-21]", file: "pkg/models.py", start_line: 20, end_line: 21, verified: true },
           { ref: "[pkg/models.py:4-9]", file: "pkg/models.py", start_line: 4, end_line: 9, verified: false },
@@ -131,15 +137,24 @@ test("a citation naming several places in a file becomes one button per place", 
   await askQuestion(page, ANSWER.question);
   const answer = page.getByRole("article", { name: "Answer" });
 
-  await expect(answer.getByRole("button", { name: "pkg/models.py:20-21" })).toHaveAttribute(
-    "data-verified",
-    "true",
-  );
+  // Both ways of writing it become two buttons each.
+  const first = answer.getByRole("button", { name: "pkg/models.py:20-21" });
   const second = answer.getByRole("button", { name: /pkg\/models\.py:4-9/ });
-  await expect(second).toHaveAttribute("data-verified", "false");
+  await expect(first).toHaveCount(2);
+  await expect(second).toHaveCount(2);
+  await expect(first.first()).toHaveAttribute("data-verified", "true");
+  await expect(second.first()).toHaveAttribute("data-verified", "false");
   await expect(answer).not.toContainText("20-21, 4-9");
+  await expect(answer).not.toContainText("pkg/models.py:20-21, pkg");
 
-  await second.click();
+  // Brackets that are not citations are left as they were.
+  await expect(answer).toContainText("Not citations: [1, 2, 3] and the docs.");
+  await expect(answer.getByRole("link", { name: "the docs" })).toHaveAttribute(
+    "href",
+    "https://example.com",
+  );
+
+  await second.first().click();
   const panel = page.getByRole("complementary", { name: "Cited code" });
   await expect(panel.locator(".code-view .line.cited")).toHaveCount(6);
 });

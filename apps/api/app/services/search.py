@@ -7,10 +7,29 @@ from app.embedding import Embedder
 from app.models import File, Symbol
 from app.schemas import Citation, CodeChunk
 
-# `[path:42-58]`, `[path:42]`, and the form models sometimes use for several
-# places in one file: `[path:5-7, 10-12]`.
-_CITATION = re.compile(r"\[([^\[\]:\n]+):(\d+(?:-\d+)?(?:\s*,\s*\d+(?:-\d+)?)*)\]")
-_RANGE = re.compile(r"(\d+)(?:-(\d+))?")
+# A citation is `[path:42-58]` or `[path:42]`. Models also put several in one
+# bracket, as `[path:5-7, 10-12]` or `[path:5-7, other/path:10-12]`; a range with
+# no path belongs to the path before it.
+_BRACKET = re.compile(r"\[([^\[\]\n]+)\]")
+_ITEM = re.compile(r"^\s*(?:([^\[\]:\n]+?)\s*:\s*)?(\d+)(?:\s*-\s*(\d+))?\s*$")
+
+
+def parse_citation(content: str) -> list[tuple[str, int, int, str]] | None:
+    """The (path, start, end, as written) of each item in a bracket, or None when
+    the bracket is not entirely citations, such as `[1, 2, 3]` or a link's text."""
+    items: list[tuple[str, int, int, str]] = []
+    path: str | None = None
+    for raw in re.split(r"[,;]", content):
+        match = _ITEM.match(raw)
+        if match is None:
+            return None
+        path = match[1].strip() if match[1] else path
+        if path is None:
+            return None
+        start = int(match[2])
+        end = int(match[3]) if match[3] else start
+        items.append((path, start, end, f"{match[2]}-{match[3]}" if match[3] else match[2]))
+    return items
 
 
 def snippet(content: str, start_line: int, end_line: int, max_lines: int) -> tuple[str, int]:
@@ -69,13 +88,10 @@ def extract_citations(answer: str, chunks: list[CodeChunk]) -> list[Citation]:
         )
 
     citations: dict[str, Citation] = {}
-    for match in _CITATION.finditer(answer):
-        path = match[1].strip()
-        # Each range of a multi-range citation is checked, and reported, on its own.
-        for part in _RANGE.finditer(match[2]):
-            start = int(part[1])
-            end = int(part[2]) if part[2] else start
-            ref = f"[{path}:{part[0]}]"
+    for bracket in _BRACKET.finditer(answer):
+        # Each item of a bracket holding several is checked, and reported, on its own.
+        for path, start, end, written in parse_citation(bracket[1]) or []:
+            ref = f"[{path}:{written}]"
             citations.setdefault(
                 ref,
                 Citation(
