@@ -15,7 +15,7 @@ const KIND_LABELS: Record<SourceKind, string> = {
 };
 
 /** What the knowledge base currently holds, with a way to remove each source. */
-export function SourceList({ revision }: { revision: number }) {
+export function SourceList({ revision, canManage }: { revision: number; canManage: boolean }) {
   const [removals, setRemovals] = useState(0);
   const [removing, setRemoving] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -48,7 +48,9 @@ export function SourceList({ revision }: { revision: number }) {
         </p>
       )}
       {sources.data.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-500">Nothing yet. Add a link or a file above.</p>
+        <p className="mt-2 text-sm text-slate-500">
+          {canManage ? "Nothing yet. Add a link or a file above." : "Nothing has been added yet."}
+        </p>
       ) : (
         <ul className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
           {sources.data.map((source) => (
@@ -74,15 +76,17 @@ export function SourceList({ revision }: { revision: number }) {
                   searchable items
                 </span>
               </div>
-              <button
-                type="button"
-                onClick={() => void remove(source)}
-                disabled={removing !== null}
-                aria-label={`Remove ${source.title}`}
-                className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:text-slate-300"
-              >
-                {removing === source.id ? "Removing…" : "Remove"}
-              </button>
+              {canManage && (
+                <button
+                  type="button"
+                  onClick={() => void remove(source)}
+                  disabled={removing !== null}
+                  aria-label={`Remove ${source.title}`}
+                  className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                >
+                  {removing === source.id ? "Removing…" : "Remove"}
+                </button>
+              )}
             </li>
           ))}
         </ul>

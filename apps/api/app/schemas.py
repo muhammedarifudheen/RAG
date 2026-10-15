@@ -136,6 +136,11 @@ class IngestRequest(BaseModel):
     max_pages: int = Field(default=20, ge=1, le=100, description="Page limit for `crawl`.")
 
 
+class SiteConfig(BaseModel):
+    admin_required: bool = Field(description="Adding and removing sources needs the admin password.")
+    chat_configured: bool = Field(description="A model provider key is set, so /ask can answer.")
+
+
 class SourceItem(BaseModel):
     id: int
     kind: Literal["repo", "web", "wikipedia", "crawl", "upload"]

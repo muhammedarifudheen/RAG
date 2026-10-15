@@ -191,6 +191,14 @@ export interface IngestRequest {
   max_pages?: number;
 }
 
+/** GET /config: what this deployment allows. */
+export interface SiteConfig {
+  /** Adding and removing sources needs the admin password. */
+  admin_required: boolean;
+  /** A model provider key is set, so questions can be answered. */
+  chat_configured: boolean;
+}
+
 /** One entry of GET /sources. */
 export interface SourceItem {
   id: number;

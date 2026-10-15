@@ -1,0 +1,55 @@
+name: Publish website
+
+# Builds the web app as static files and publishes them on GitHub Pages. The
+# pages call the API at the repository variable PUBLIC_API_URL (the Hugging Face
+# Space, see deploy/huggingface/README.md); nothing is published until it is set.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: ${{ vars.PUBLIC_API_URL != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+      - name: Install
+        run: pnpm install --frozen-lockfile
+      - name: Build static site
+        env:
+          STATIC_EXPORT: "1"
+          # Pages serves a project site from /<repository name>.
+          BASE_PATH: /${{ github.event.repository.name }}
+          NEXT_PUBLIC_API_URL: ${{ vars.PUBLIC_API_URL }}
+          NEXT_TELEMETRY_DISABLED: "1"
+        run: pnpm --filter @atlas/web build
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: apps/web/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -8,6 +8,7 @@ import type {
   IngestFailure,
   IngestProgress,
   IngestResult,
+  SiteConfig,
   SourceItem,
 } from "@atlas/shared";
 import type { Locator, Page, Route } from "@playwright/test";
@@ -217,6 +218,8 @@ export const SOURCES: SourceItem[] = [
  */
 export async function mockSources(page: Page, initial: SourceItem[] = []): Promise<SourceItem[]> {
   const sources = [...initial];
+  // The home page also asks what the deployment allows; by default, everything.
+  await mockConfig(page);
   await page.route("**/api/sources", (route) => route.fulfill({ json: sources }));
   await page.route("**/api/sources/*", (route) => {
     const id = Number(new URL(route.request().url()).pathname.split("/").pop());
@@ -228,6 +231,21 @@ export async function mockSources(page: Page, initial: SourceItem[] = []): Promi
     return route.fulfill({ status: 204 });
   });
   return sources;
+}
+
+/**
+ * Answers GET /api/config and POST /api/admin/check. With a password, the site
+ * behaves as a public deployment that requires it to manage sources.
+ */
+export async function mockConfig(page: Page, password: string | null = null): Promise<void> {
+  const config: SiteConfig = { admin_required: password !== null, chat_configured: true };
+  await page.route("**/api/config", (route) => route.fulfill({ json: config }));
+  await page.route("**/api/admin/check", (route) => {
+    const supplied = route.request().headers()["authorization"];
+    return password === null || supplied === `Bearer ${password}`
+      ? route.fulfill({ status: 204 })
+      : apiError(route, 401, "Adding or removing sources needs the admin password.");
+  });
 }
 
 /** The app's own alerts. Next.js adds a hidden route announcer that also has role="alert". */

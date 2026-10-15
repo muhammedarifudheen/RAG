@@ -106,6 +106,32 @@ Staging runs on Google Cloud (Cloud Run and Cloud SQL), deployed by GitHub
 Actions on every merge to `main`; pull requests run all three test suites. See
 [infra/README.md](infra/README.md).
 
+### Public website (free): GitHub Pages + Hugging Face
+
+Anyone can search and ask questions; only you can add or remove sources, with
+an admin password.
+
+1. Deploy the server to a Hugging Face Space. You need a Hugging Face
+   [token with write access](https://huggingface.co/settings/tokens):
+
+   ```powershell
+   .\scripts\deploy-huggingface.ps1 -Space <hf-user>/atlas-api -Token <hf_token> `
+       -SiteOrigin https://<github-user>.github.io
+   ```
+
+   The script prints the admin password once. It reads the model key
+   (`GEMINI_API_KEY` or `ANTHROPIC_API_KEY`) from `.env` and stores it as a
+   Space secret. See [deploy/huggingface/README.md](deploy/huggingface/README.md).
+2. In the GitHub repository's settings:
+   - Under Pages, set the source to **GitHub Actions**.
+   - Under Secrets and variables → Actions → Variables, add `PUBLIC_API_URL` =
+     `https://<hf-user>-atlas-api.hf.space`.
+3. Re-run the **Pages** workflow. The site is published at
+   `https://<github-user>.github.io/<repo>/`.
+
+A free Space sleeps when idle and loses its data when it restarts. On every
+start, it re-adds the sources listed in its `SEED_SOURCES` variable.
+
 ## Root scripts
 
 | Command          | Does                                  |

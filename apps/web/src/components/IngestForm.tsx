@@ -2,10 +2,20 @@
 
 import type { IngestEvent, IngestResult } from "@atlas/shared";
 import Link from "next/link";
-import { useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 
-import { ingest, ingestFile } from "@/lib/api";
+import {
+  ApiError,
+  checkAdmin,
+  getAdminToken,
+  getConfig,
+  ingest,
+  ingestFile,
+  setAdminToken,
+} from "@/lib/api";
+import { useApi } from "@/lib/useApi";
 
+import { AdminUnlock } from "./AdminUnlock";
 import { SourceList } from "./SourceList";
 
 interface Step {
@@ -34,6 +44,26 @@ export function IngestForm() {
   const [revision, setRevision] = useState(0);
   const running = useRef(false);
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // A public deployment requires the admin password to manage sources.
+  const config = useApi(getConfig);
+  const [unlocked, setUnlocked] = useState(false);
+  useEffect(() => {
+    const token = getAdminToken();
+    if (!token) return;
+    // A remembered password may have been changed on the server since.
+    checkAdmin(token).then(
+      (valid) => (valid ? setUnlocked(true) : setAdminToken(null)),
+      () => undefined,
+    );
+  }, []);
+  const adminRequired = config.status === "ready" && config.data.admin_required;
+  const canManage = !adminRequired || unlocked;
+
+  function lock() {
+    setAdminToken(null);
+    setUnlocked(false);
+  }
 
   async function run(events: AsyncGenerator<IngestEvent>) {
     if (running.current) return;
@@ -67,6 +97,7 @@ export function IngestForm() {
         setPhase({ name: "error", message: "The connection closed before ingestion finished." });
       }
     } catch (error) {
+      if (error instanceof ApiError && error.status === 401) lock();
       const message = error instanceof Error ? error.message : "Ingestion failed.";
       setPhase({ name: "error", message });
     } finally {
@@ -89,8 +120,25 @@ export function IngestForm() {
 
   const busy = phase.name === "running";
 
+  if (!canManage) {
+    return (
+      <>
+        <AdminUnlock onUnlock={() => setUnlocked(true)} />
+        <SourceList revision={revision} canManage={false} />
+      </>
+    );
+  }
+
   return (
     <section className="mt-8">
+      {adminRequired && (
+        <p className="mb-3 text-xs text-slate-500">
+          Signed in as admin.{" "}
+          <button type="button" onClick={lock} className="text-indigo-700 underline">
+            Lock
+          </button>
+        </p>
+      )}
       <form onSubmit={onSubmit}>
         <div className="flex flex-col gap-2 sm:flex-row">
           <label htmlFor="source-url" className="sr-only">
@@ -239,7 +287,7 @@ export function IngestForm() {
         </div>
       )}
 
-      <SourceList revision={revision} />
+      <SourceList revision={revision} canManage />
     </section>
   );
 }

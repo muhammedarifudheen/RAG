@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     anthropic_effort: str = "medium"
     anthropic_max_tokens: int = 16000
 
+    # When set, adding and removing sources needs `Authorization: Bearer <token>`;
+    # searching and asking stay open. Unset, everything is open (local use).
+    admin_token: str | None = None
+
     # Requests per client IP per minute; 0 disables. /ask has its own, lower limit
     # because every call is billed.
     rate_limit_per_minute: int = 60

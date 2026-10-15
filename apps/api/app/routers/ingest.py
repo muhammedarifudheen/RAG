@@ -22,6 +22,7 @@ from worker.sources import (
     parse_wikipedia_url,
 )
 
+from app.admin import ADMIN_REQUIRED, require_admin
 from app.config import settings
 from app.ratelimit import rate_limit
 from app.schemas import IngestRequest
@@ -151,8 +152,15 @@ def _checked_kind(url: str, kind: str) -> str:
     "/ingest",
     summary="Add a source from a link",
     response_class=StreamingResponse,
-    responses={**SSE_RESPONSES, 422: {"description": "The link is not a usable source."}},
-    dependencies=[Depends(rate_limit("ingest", lambda: settings.ingest_rate_limit_per_minute))],
+    responses={
+        **SSE_RESPONSES,
+        **ADMIN_REQUIRED,
+        422: {"description": "The link is not a usable source."},
+    },
+    dependencies=[
+        Depends(require_admin),
+        Depends(rate_limit("ingest", lambda: settings.ingest_rate_limit_per_minute)),
+    ],
 )
 def ingest(body: IngestRequest) -> StreamingResponse:
     """Adds a source to the knowledge base: a GitHub repository, a Wikipedia article, a
@@ -181,10 +189,14 @@ def ingest(body: IngestRequest) -> StreamingResponse:
     response_class=StreamingResponse,
     responses={
         **SSE_RESPONSES,
+        **ADMIN_REQUIRED,
         413: {"description": "The file is too large."},
         422: {"description": "The file type is not supported."},
     },
-    dependencies=[Depends(rate_limit("ingest", lambda: settings.ingest_rate_limit_per_minute))],
+    dependencies=[
+        Depends(require_admin),
+        Depends(rate_limit("ingest", lambda: settings.ingest_rate_limit_per_minute)),
+    ],
 )
 def ingest_file(file: UploadFile) -> StreamingResponse:
     """Adds a PDF, EPUB, text, Markdown or HTML file to the knowledge base. Uploading a

@@ -107,6 +107,8 @@ def test_openapi_documents_every_endpoint(plain_client):
         "/ingest/upload",
         "/sources",
         "/sources/{source_id}",
+        "/config",
+        "/admin/check",
         "/search",
         "/ask",
         "/graph",

@@ -4,11 +4,12 @@ from fastapi import APIRouter, Depends, HTTPException, Response
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
+from app.admin import ADMIN_REQUIRED, require_admin
 from app.config import settings
 from app.db import get_db
 from app.models import File, Source, Symbol
 from app.ratelimit import rate_limit
-from app.schemas import SourceItem
+from app.schemas import SiteConfig, SourceItem
 
 router = APIRouter(
     tags=["ingest"],
@@ -51,11 +52,32 @@ def list_sources(db: Annotated[Session, Depends(get_db)]) -> list[SourceItem]:
     ]
 
 
+@router.get("/config", response_model=SiteConfig, summary="What this deployment allows")
+def config() -> SiteConfig:
+    """Tells the web app whether managing sources needs the admin password, and whether
+    a model provider is configured for answering questions."""
+    key = settings.gemini_api_key if settings.llm_provider == "gemini" else settings.anthropic_api_key
+    return SiteConfig(admin_required=bool(settings.admin_token), chat_configured=bool(key))
+
+
+@router.post(
+    "/admin/check",
+    status_code=204,
+    summary="Check the admin password",
+    responses=ADMIN_REQUIRED,
+    dependencies=[Depends(require_admin)],
+)
+def check_admin() -> Response:
+    """Answers 204 if the request carries the admin password (or none is configured)."""
+    return Response(status_code=204)
+
+
 @router.delete(
     "/sources/{source_id}",
     status_code=204,
     summary="Remove a source",
-    responses={404: {"description": "No such source."}},
+    responses={**ADMIN_REQUIRED, 404: {"description": "No such source."}},
+    dependencies=[Depends(require_admin)],
 )
 def delete_source(source_id: int, db: Annotated[Session, Depends(get_db)]) -> Response:
     """Removes a source and everything ingested from it. Other sources are unaffected."""
