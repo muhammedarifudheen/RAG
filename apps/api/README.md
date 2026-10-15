@@ -30,8 +30,8 @@ alembic upgrade head
 ```
 
 The worker package is required: `POST /ingest` runs its pipeline inside the API
-process. The install is large, because both ingestion and query embedding use a
-sentence-transformers model, which pulls in PyTorch.
+process. Ingestion and query embedding share one copy of the embedding model,
+run with ONNX Runtime.
 
 `/ask` needs a model provider; without one it answers `503` and every other
 endpoint works. Two are supported, chosen with `LLM_PROVIDER`:
@@ -248,7 +248,7 @@ Most tests run against a real Postgres with pgvector, because the search query
 uses pgvector's distance operator. They apply the Alembic migrations to a
 dedicated database, then load a small hand-built graph from `tests/seed.py`.
 The embedding model and Claude are replaced by fakes, so the tests need neither
-PyTorch inference nor an API key.
+the model nor an API key.
 
 The database defaults to `atlas_test` on the docker-compose Postgres, which
 `docker/postgres/init/02-test-database.sql` creates on a fresh volume. On a
@@ -271,7 +271,7 @@ app/
   config.py        Settings, loaded from the environment and .env
   db.py            Engine, session factory, get_db dependency
   schemas.py       Request and response models
-  embedding.py     Query embedder (sentence-transformers), loaded on first use
+  embedding.py     Query embedder (the worker's ONNX model), loaded on first use
   llm.py           Prompt construction and the Claude call
   ratelimit.py     In-memory sliding-window limiter
   middleware.py    Request logging and X-Request-ID

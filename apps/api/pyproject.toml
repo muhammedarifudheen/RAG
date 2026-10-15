@@ -15,7 +15,6 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "pgvector>=0.3",
     "pydantic-settings>=2.3",
-    "sentence-transformers>=3.0",
     "anthropic>=1.0",
     # Also the HTTP client for the Gemini provider.
     "httpx2>=2.0",

@@ -28,6 +28,7 @@ repository; this Space is assembled from them by
 | `CORS_ORIGINS` | JSON list of sites allowed to call the API, e.g. `["https://owner.github.io"]` |
 | `SEED_SOURCES` | Links added automatically at every start, separated by spaces |
 
-A free Space keeps nothing across restarts and sleeps after two days without
+Docker Spaces need a Hugging Face PRO subscription; the free route is Render
+(`scripts/deploy-render.ps1`). A Space keeps nothing across restarts and sleeps after two days without
 visitors. `SEED_SOURCES` rebuilds the starter content each time it starts;
 anything else an admin adds has to be added again after a restart.

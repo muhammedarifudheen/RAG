@@ -15,8 +15,6 @@ concurrency:
 env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION: "22"
-  # CPU-only PyTorch: far smaller than the default wheel, and CI has no GPU.
-  TORCH_INDEX: https://download.pytorch.org/whl/cpu
 
 jobs:
   worker:
@@ -31,7 +29,6 @@ jobs:
           cache-dependency-path: apps/*/pyproject.toml
       - name: Install
         run: |
-          pip install --index-url "$TORCH_INDEX" torch
           pip install -e packages/shared -e apps/api -e "apps/worker[dev]"
       - name: Lint
         working-directory: apps/worker
@@ -69,7 +66,6 @@ jobs:
           cache-dependency-path: apps/*/pyproject.toml
       - name: Install
         run: |
-          pip install --index-url "$TORCH_INDEX" torch
           pip install -e packages/shared -e apps/worker -e "apps/api[dev]"
       - name: Lint
         working-directory: apps/api

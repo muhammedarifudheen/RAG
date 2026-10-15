@@ -106,32 +106,35 @@ Staging runs on Google Cloud (Cloud Run and Cloud SQL), deployed by GitHub
 Actions on every merge to `main`; pull requests run all three test suites. See
 [infra/README.md](infra/README.md).
 
-### Public website (free): GitHub Pages + Hugging Face
+### Public website (free): GitHub Pages + Render
 
 Anyone can search and ask questions; only you can add or remove sources, with
-an admin password.
+an admin password. The site is static files on GitHub Pages. The server, from
+[deploy/server/Dockerfile](deploy/server/Dockerfile), runs on Render's free plan:
+Postgres, the API and the embedding model in one container that fits in 512 MB.
 
-1. Deploy the server to a Hugging Face Space. You need a Hugging Face
-   [token with write access](https://huggingface.co/settings/tokens):
+1. Deploy the server. You need a Render account and an
+   [API key](https://dashboard.render.com/u/settings#api-keys):
 
    ```powershell
-   .\scripts\deploy-huggingface.ps1 -Space <hf-user>/atlas-api -Token <hf_token> `
-       -SiteOrigin https://<github-user>.github.io
+   .\scripts\deploy-render.ps1 -ApiKey <render_api_key> -SiteOrigin https://<github-user>.github.io
    ```
 
-   The script prints the admin password once. It reads the model key
-   (`GEMINI_API_KEY` or `ANTHROPIC_API_KEY`) from `.env` and stores it as a
-   Space secret. See [deploy/huggingface/README.md](deploy/huggingface/README.md).
+   The script prints the admin password and the server's address. It reads
+   the model key (`GEMINI_API_KEY` or `ANTHROPIC_API_KEY`) from `.env`.
+   Alternatively, in Render's dashboard choose New → Blueprint and select this
+   repository; [render.yaml](render.yaml) describes the same service.
 2. In the GitHub repository's settings:
    - Under Pages, set the source to **GitHub Actions**.
    - Under Secrets and variables → Actions → Variables, add `PUBLIC_API_URL` =
-     `https://<hf-user>-atlas-api.hf.space`.
-3. Re-run the **Pages** workflow. The site is published at
+     the server's address (`https://atlas-api-….onrender.com`).
+3. Re-run the **Publish website** workflow. The site is published at
    `https://<github-user>.github.io/<repo>/`.
 
-A free Space sleeps when idle and loses its data when it restarts. On every
-start, it re-adds the sources listed in its `SEED_SOURCES` variable.
-
+The free server sleeps after 15 idle minutes; the first visit afterwards waits
+about a minute while it starts. It keeps no data across restarts. On every
+start, it re-adds the sources listed in its `SEED_SOURCES` setting, so those
+are ready a few minutes later.
 ## Root scripts
 
 | Command          | Does                                  |

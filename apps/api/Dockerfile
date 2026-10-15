@@ -12,10 +12,6 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1 \
     HF_HOME=/opt/huggingface
 
-# CPU-only PyTorch. The default wheel bundles CUDA libraries: gigabytes that
-# cannot be used on Cloud Run.
-RUN pip install --index-url https://download.pytorch.org/whl/cpu torch
-
 WORKDIR /build
 COPY packages/shared packages/shared
 COPY apps/worker apps/worker
@@ -23,7 +19,7 @@ COPY apps/api apps/api
 RUN pip install ./packages/shared ./apps/worker ./apps/api
 
 # Bake the embedding model in, so no instance downloads it at startup.
-RUN python -c "from sentence_transformers import SentenceTransformer; SentenceTransformer('sentence-transformers/all-MiniLM-L6-v2')"
+RUN python -c "from worker.embed import load_model; load_model('sentence-transformers/all-MiniLM-L6-v2')"
 
 # Alembic needs its config and migration scripts next to the working directory.
 WORKDIR /srv/api

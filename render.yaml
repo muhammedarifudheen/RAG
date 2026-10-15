@@ -1,0 +1,31 @@
+# Render Blueprint for the public website's server (the site itself is on GitHub
+# Pages). It runs deploy/server's image on Render's free plan: 512 MB of memory,
+# asleep after 15 idle minutes, and no data kept across restarts, which is why
+# SEED_SOURCES re-adds the starter content on every start.
+services:
+  - type: web
+    name: atlas-api
+    runtime: docker
+    plan: free
+    dockerfilePath: ./deploy/server/Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    # The website's changes do not need a new server.
+    buildFilter:
+      paths:
+        - apps/api/**
+        - apps/worker/**
+        - packages/shared/**
+        - deploy/server/**
+    envVars:
+      # The password for adding and removing sources: Environment tab in Render.
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: LLM_PROVIDER
+        value: gemini
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: CORS_ORIGINS
+        value: '["https://muhammedarifudheen.github.io"]'
+      - key: SEED_SOURCES
+        value: https://en.wikipedia.org/wiki/HMAC https://docs.python.org/3/library/hmac.html https://github.com/pallets/itsdangerous

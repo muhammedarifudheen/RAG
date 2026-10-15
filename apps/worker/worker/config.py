@@ -15,7 +15,8 @@ class Settings(BaseSettings):
     github_token: str | None = None
 
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
-    embedding_batch_size: int = 64
+    # Memory while embedding grows with this: about 18 MB per text in a batch.
+    embedding_batch_size: int = 16
     # Larger files are almost always generated or minified.
     max_file_bytes: int = 1_000_000
 

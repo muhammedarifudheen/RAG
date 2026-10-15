@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from worker.clone import clone_repo, parse_github_url, remove_clone
 from worker.config import Settings
 from worker.documents import build_extraction
-from worker.embed import Embedder, SentenceTransformerEmbedder, symbol_text
+from worker.embed import Embedder, LocalEmbedder, symbol_text
 from worker.extract import FileExtraction, extract_source, language_for
 from worker.resolve import Edge, resolve
 from worker.sources import (
@@ -147,7 +147,7 @@ def _open_database(settings: Settings) -> Engine:
 
 def _load_embedder(settings: Settings, progress: Progress) -> Embedder:
     progress(f"      loading {settings.embedding_model}")
-    return SentenceTransformerEmbedder(settings.embedding_model, settings.embedding_batch_size)
+    return LocalEmbedder(settings.embedding_model, settings.embedding_batch_size)
 
 
 def _under_prefix(files: list[FileExtraction], prefix: str) -> None:

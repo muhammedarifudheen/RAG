@@ -31,8 +31,9 @@ pip install -e ../../packages/shared -e ../api -e ".[dev]"
 cp .env.example .env
 ```
 
-The install pulls in PyTorch (via sentence-transformers), so it is large. The
-embedding model itself (about 90 MB) is downloaded on first run.
+Embeddings run the all-MiniLM-L6-v2 model with ONNX Runtime rather than
+PyTorch, which keeps the install and its memory small. The model's ONNX export
+(about 90 MB) is downloaded on first run.
 
 Before the first ingest, start Postgres and create the tables:
 
@@ -187,7 +188,7 @@ worker/
   documents.py     Text documents -> passages with line ranges
   sources.py       Loaders: web page, Wikipedia, crawl, uploaded file
   fetch.py         HTTP fetching restricted to public addresses; robots.txt
-  embed.py         sentence-transformers wrapper
+  embed.py         all-MiniLM-L6-v2 on ONNX Runtime (shared per process)
   store.py         Writes a source with its files, symbols and edges
   config.py        Settings, loaded from the environment and .env
 tests/
@@ -202,6 +203,6 @@ tests/
 | `CLONE_DIR`            | OS temp directory (`/tmp` on Linux)                     | Where repositories are cloned |
 | `GITHUB_TOKEN`         | unset                                                   | Needed only for private repositories |
 | `EMBEDDING_MODEL`      | `sentence-transformers/all-MiniLM-L6-v2`                | Changing it requires a matching vector size in the schema |
-| `EMBEDDING_BATCH_SIZE` | `64`                                                    |         |
+| `EMBEDDING_BATCH_SIZE` | `16`                                                    | Peak memory grows about 18 MB per text in a batch |
 | `MAX_FILE_BYTES`       | `1000000`                                               | Larger files are skipped |
 | `LOG_LEVEL`            | `INFO`                                                  |         |

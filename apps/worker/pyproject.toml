@@ -18,7 +18,11 @@ dependencies = [
     "tree-sitter-python>=0.23",
     "tree-sitter-typescript>=0.23",
     "tree-sitter-go>=0.23",
-    "sentence-transformers>=3.0",
+    # all-MiniLM-L6-v2 run with ONNX Runtime; see worker/embed.py.
+    "onnxruntime>=1.18",
+    "tokenizers>=0.19",
+    "huggingface-hub>=0.23",
+    "numpy>=1.26",
     # Readable-text extraction from HTML, and text from PDFs.
     "trafilatura>=1.12",
     "pypdf>=4.0",

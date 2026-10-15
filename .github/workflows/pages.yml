@@ -1,8 +1,8 @@
 name: Publish website
 
 # Builds the web app as static files and publishes them on GitHub Pages. The
-# pages call the API at the repository variable PUBLIC_API_URL (the Hugging Face
-# Space, see deploy/huggingface/README.md); nothing is published until it is set.
+# pages call the API at the repository variable PUBLIC_API_URL (the server from
+# deploy/server, on Render; see the README); nothing is published until it is set.
 
 on:
   push:

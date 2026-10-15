@@ -3,7 +3,7 @@
   Deploys Atlas's server to a Hugging Face Space, for the public website on GitHub Pages.
 
 .DESCRIPTION
-  Assembles the Space's files (deploy/huggingface plus the API, worker and shared
+  Assembles the Space's files (deploy/server's image plus the API, worker and shared
   packages), creates the Space if it does not exist, sets its secrets and variables,
   and pushes. Hugging Face then builds and starts it, which takes about ten minutes.
 
@@ -52,16 +52,19 @@ $archive = Join-Path ([IO.Path]::GetTempPath()) "atlas-space.tar"
 $excluded = ".venv", "node_modules", "__pycache__", "*.egg-info", "build", ".pytest_cache",
     ".ruff_cache", ".env", "tests"
 $tarArguments = @("-cf", $archive, "-C", $repo) + ($excluded | ForEach-Object { "--exclude=$_" }) +
-    @("packages/shared", "apps/api", "apps/worker")
+    @("packages/shared", "apps/api", "apps/worker", "deploy/server")
 & tar.exe @tarArguments
 if ($LASTEXITCODE -ne 0) { throw "Could not package the source." }
 & tar.exe -xf $archive -C $StageDir
 Remove-Item -LiteralPath $archive -Force
 
-foreach ($name in "Dockerfile", "README.md", "start.sh") {
+# A Space builds the Dockerfile at its root, with its root as the build context.
+$files = @{ "Dockerfile" = "deploy\server\Dockerfile"; "README.md" = "deploy\huggingface\README.md"
+    "deploy\server\start.sh" = "deploy\server\start.sh" }
+foreach ($entry in $files.GetEnumerator()) {
     # Linux line endings: the Space builds and runs on Linux.
-    $text = [IO.File]::ReadAllText((Join-Path $repo "deploy\huggingface\$name")) -replace "`r`n", "`n"
-    [IO.File]::WriteAllText((Join-Path $StageDir $name), $text, (New-Object Text.UTF8Encoding $false))
+    $text = [IO.File]::ReadAllText((Join-Path $repo $entry.Value)) -replace "`r`n", "`n"
+    [IO.File]::WriteAllText((Join-Path $StageDir $entry.Key), $text, (New-Object Text.UTF8Encoding $false))
 }
 Write-Host "Space files assembled in $StageDir"
 if ($StageOnly) { return }
