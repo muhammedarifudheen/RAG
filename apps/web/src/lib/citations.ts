@@ -9,7 +9,9 @@ export interface ParsedCitation extends CodeRange {
   ref: string;
 }
 
-const CITATION = /\[([^\[\]:\n]+):(\d+)(?:-(\d+))?\]/g;
+// `[path:42-58]`, `[path:42]`, and `[path:5-7, 10-12]` for several places in one file.
+const CITATION = /\[([^\[\]:\n]+):(\d+(?:-\d+)?(?:\s*,\s*\d+(?:-\d+)?)*)\]/g;
+const RANGE = /(\d+)(?:-(\d+))?/g;
 // Fenced blocks and inline code spans, which must be left untouched.
 const CODE = /(```[\s\S]*?```|`[^`\n]*`)/g;
 const HREF_PREFIX = "#cite:";
@@ -44,10 +46,15 @@ export function linkifyCitations(markdown: string): string {
     .split(CODE)
     .map((part, index) => {
       if (index % 2 === 1) return part; // a code span or block
-      return part.replace(CITATION, (_match, path: string, start: string, end?: string) => {
-        const file = path.trim();
-        const form = end ? "range" : "line";
-        return `[source](${HREF_PREFIX}${encodePath(file)}:${start}:${end ?? start}:${form})`;
+      return part.replace(CITATION, (_match, path: string, ranges: string) => {
+        const file = encodePath(path.trim());
+        // One link per range, so each place can be opened (and checked) on its own.
+        return [...ranges.matchAll(RANGE)]
+          .map(([, start, end]) => {
+            const form = end ? "range" : "line";
+            return `[source](${HREF_PREFIX}${file}:${start}:${end ?? start}:${form})`;
+          })
+          .join(" ");
       });
     })
     .join("");

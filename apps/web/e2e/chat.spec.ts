@@ -113,6 +113,37 @@ test("the excerpts given to the model can be opened too", async ({ page }) => {
   await expect(panel.locator(".code-view .line.cited")).toHaveCount(2);
 });
 
+test("a citation naming several places in a file becomes one button per place", async ({ page }) => {
+  await page.route("**/api/ask", (route) =>
+    route.fulfill({
+      json: {
+        ...ANSWER,
+        answer: "Names are formatted in one place [pkg/models.py:20-21, 4-9].",
+        citations: [
+          { ref: "[pkg/models.py:20-21]", file: "pkg/models.py", start_line: 20, end_line: 21, verified: true },
+          { ref: "[pkg/models.py:4-9]", file: "pkg/models.py", start_line: 4, end_line: 9, verified: false },
+        ],
+      },
+    }),
+  );
+  await mockFiles(page, [MODELS_FILE]);
+
+  await askQuestion(page, ANSWER.question);
+  const answer = page.getByRole("article", { name: "Answer" });
+
+  await expect(answer.getByRole("button", { name: "pkg/models.py:20-21" })).toHaveAttribute(
+    "data-verified",
+    "true",
+  );
+  const second = answer.getByRole("button", { name: /pkg\/models\.py:4-9/ });
+  await expect(second).toHaveAttribute("data-verified", "false");
+  await expect(answer).not.toContainText("20-21, 4-9");
+
+  await second.click();
+  const panel = page.getByRole("complementary", { name: "Cited code" });
+  await expect(panel.locator(".code-view .line.cited")).toHaveCount(6);
+});
+
 test("shows the reason when the question cannot be answered", async ({ page }) => {
   await page.route("**/api/ask", (route) =>
     apiError(route, 503, "Anthropic credentials are not configured; set ANTHROPIC_API_KEY."),

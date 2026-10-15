@@ -58,6 +58,25 @@ $script:fatal = $false
 
 function Say([string]$message) { Write-Host ("{0}  {1}" -f (Get-Date -Format "HH:mm:ss"), $message) }
 
+function Invoke-Bounded([string]$exe, [string[]]$arguments, [int]$seconds) {
+    # Runs ssh or scp with a hard time limit. A connection can stall while it is
+    # being set up, where ssh's own timeouts do not apply, and wait forever.
+    $id = [guid]::NewGuid().ToString("N").Substring(0, 8)
+    $out = "$work\call-$id.out"; $err = "$work\call-$id.err"
+    $quoted = $arguments | ForEach-Object { if ($_ -match "\s") { '"' + $_ + '"' } else { $_ } }
+    $process = Start-Process -FilePath $exe -ArgumentList $quoted -PassThru -WindowStyle Hidden `
+        -RedirectStandardOutput $out -RedirectStandardError $err
+    $null = $process.Handle  # keeps the exit code readable after the process ends
+    $finished = $process.WaitForExit($seconds * 1000)
+    if (-not $finished) {
+        Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+        $null = $process.WaitForExit(5000)
+    }
+    $text = if (Test-Path -LiteralPath $out) { Get-Content -LiteralPath $out -Raw } else { "" }
+    Remove-Item -LiteralPath $out, $err -Force -ErrorAction SilentlyContinue
+    [pscustomobject]@{ Ok = ($finished -and $process.ExitCode -eq 0); Output = "$text".Trim() }
+}
+
 function SshOptions([string]$hostKeyMode) {
     # The keep-alive settings make ssh exit within a minute of the tunnel dying,
     # instead of waiting on it for as long as the machine stays up.
@@ -114,8 +133,7 @@ function Start-Tunnel {
     # accepted on first contact and pinned for the rest of this tunnel's life.
     Start-Sleep -Seconds 2
     $options = SshOptions "accept-new"
-    & ssh.exe -p $script:port @options $remote "true" 2>$null
-    return ($LASTEXITCODE -eq 0)
+    return (Invoke-Bounded "ssh.exe" (@("-p", $script:port) + $options + @($remote, "true")) 45).Ok
 }
 
 function Invoke-Remote([string]$name, [string]$body, [string]$argument = "") {
@@ -123,11 +141,11 @@ function Invoke-Remote([string]$name, [string]$body, [string]$argument = "") {
     $local = "$work\$name.sh"
     [IO.File]::WriteAllText($local, ($body -replace "`r`n", "`n"), (New-Object Text.UTF8Encoding $false))
     $options = SshOptions "yes"
-    & scp.exe -q -P $script:port @options $local "${remote}:.atlas-$name.sh" 2>$null
-    if ($LASTEXITCODE -ne 0) { return $null }
-    $output = & ssh.exe -p $script:port @options $remote "bash .atlas-$name.sh $argument" 2>$null
-    if ($LASTEXITCODE -ne 0) { return $null }
-    return ($output -join "`n")
+    $copy = Invoke-Bounded "scp.exe" (@("-q", "-P", $script:port) + $options + @($local, "${remote}:.atlas-$name.sh")) 60
+    if (-not $copy.Ok) { return $null }
+    $run = Invoke-Bounded "ssh.exe" (@("-p", $script:port) + $options + @($remote, "bash .atlas-$name.sh $argument".Trim())) 180
+    if (-not $run.Ok) { return $null }
+    return $run.Output
 }
 
 # --- Remote scripts --------------------------------------------------------------
@@ -167,8 +185,7 @@ function Send-Source {
     & tar.exe @tarArguments
     if ($LASTEXITCODE -ne 0) { return $false }
     $options = SshOptions "yes"
-    & scp.exe -q -P $script:port @options $archive "${remote}:atlas-src.tgz" 2>$null
-    return ($LASTEXITCODE -eq 0)
+    return (Invoke-Bounded "scp.exe" (@("-q", "-P", $script:port) + $options + @($archive, "${remote}:atlas-src.tgz")) 180).Ok
 }
 
 # The only settings copied from the local .env to the VM.
@@ -222,8 +239,8 @@ function Sync-ApiKey([switch]$NoRestart) {
     [IO.File]::WriteAllText($temp, (($lines -join "`n") + "`n"), (New-Object Text.UTF8Encoding $false))
     try {
         $options = SshOptions "yes"
-        & scp.exe -q -P $script:port @options $temp "${remote}:.atlas-key.env" 2>$null
-        if ($LASTEXITCODE -ne 0) { return $false }
+        $copy = Invoke-Bounded "scp.exe" (@("-q", "-P", $script:port) + $options + @($temp, "${remote}:.atlas-key.env")) 60
+        if (-not $copy.Ok) { return $false }
     }
     finally { [IO.File]::Delete($temp) }
     if ($NoRestart) { return ((Invoke-Remote "key" $keyScript "norestart") -eq "APPLIED") }

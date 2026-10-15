@@ -7,7 +7,10 @@ from app.embedding import Embedder
 from app.models import File, Symbol
 from app.schemas import Citation, CodeChunk
 
-_CITATION = re.compile(r"\[([^\[\]:\n]+):(\d+)(?:-(\d+))?\]")
+# `[path:42-58]`, `[path:42]`, and the form models sometimes use for several
+# places in one file: `[path:5-7, 10-12]`.
+_CITATION = re.compile(r"\[([^\[\]:\n]+):(\d+(?:-\d+)?(?:\s*,\s*\d+(?:-\d+)?)*)\]")
+_RANGE = re.compile(r"(\d+)(?:-(\d+))?")
 
 
 def snippet(content: str, start_line: int, end_line: int, max_lines: int) -> tuple[str, int]:
@@ -59,20 +62,24 @@ def extract_citations(answer: str, chunks: list[CodeChunk]) -> list[Citation]:
     """Citations written in an answer, each checked against the chunks the model was given."""
     citations: dict[str, Citation] = {}
     for match in _CITATION.finditer(answer):
-        path, start = match[1].strip(), int(match[2])
-        end = int(match[3]) if match[3] else start
-        citations.setdefault(
-            match[0],
-            Citation(
-                ref=match[0],
-                file=path,
-                start_line=start,
-                end_line=end,
-                verified=any(
-                    chunk.file == path
-                    and chunk.start_line <= start <= end <= chunk.snippet_end_line
-                    for chunk in chunks
+        path = match[1].strip()
+        # Each range of a multi-range citation is checked, and reported, on its own.
+        for part in _RANGE.finditer(match[2]):
+            start = int(part[1])
+            end = int(part[2]) if part[2] else start
+            ref = f"[{path}:{part[0]}]"
+            citations.setdefault(
+                ref,
+                Citation(
+                    ref=ref,
+                    file=path,
+                    start_line=start,
+                    end_line=end,
+                    verified=any(
+                        chunk.file == path
+                        and chunk.start_line <= start <= end <= chunk.snippet_end_line
+                        for chunk in chunks
+                    ),
                 ),
-            ),
-        )
+            )
     return list(citations.values())

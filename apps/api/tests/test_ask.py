@@ -81,6 +81,19 @@ def test_citations_must_fall_inside_a_chunks_lines(client, answerer):
     ]
 
 
+def test_a_citation_with_several_ranges_is_checked_range_by_range(client, answerer):
+    # Models sometimes cite two places in one file within a single bracket.
+    answerer.reply = "Formatting happens here [pkg/models.py:20-20, 21-21, 1-200]."
+
+    citations = client.post("/ask", json={"question": QUESTION, "top_k": 1}).json()["citations"]
+
+    assert [(c["ref"], c["start_line"], c["end_line"], c["verified"]) for c in citations] == [
+        ("[pkg/models.py:20-20]", 20, 20, True),
+        ("[pkg/models.py:21-21]", 21, 21, True),
+        ("[pkg/models.py:1-200]", 1, 200, False),
+    ]
+
+
 def test_model_failures_keep_their_status(client, answerer):
     answerer.error = AnswerError(502, "The Anthropic API could not be reached.")
 
