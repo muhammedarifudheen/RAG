@@ -4,8 +4,12 @@
 # from the database built into the image (see bake.sh).
 set -euo pipefail
 source /srv/postgres.sh
+# The host's logs show only this script's output, so a failed start shows the
+# database's own log too.
+trap 'echo "start: failed; the database log follows"; tail -n 30 /tmp/postgres.log' ERR
 
 start_postgres
+echo "start: database ready; starting the API"
 
 # In the background, once the API is up: load the embedding model with one search,
 # so the first visitor does not wait for it, then add any starter sources missing

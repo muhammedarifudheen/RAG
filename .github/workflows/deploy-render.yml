@@ -1,0 +1,62 @@
+name: Deploy server
+
+# Deploys the public website's server (deploy/server) to Render once the tests
+# pass. Render's own auto-deploy needs its GitHub app, so this asks Render's API
+# instead, then waits so a failed deploy shows here as a failed run. Needs the
+# repository secret RENDER_API_KEY and variable RENDER_SERVICE_ID; without them
+# nothing runs.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - apps/api/**
+      - apps/worker/**
+      - packages/shared/**
+      - deploy/server/**
+      - .github/workflows/deploy-render.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-render
+  cancel-in-progress: false
+
+jobs:
+  test:
+    if: ${{ vars.RENDER_SERVICE_ID != '' }}
+    uses: ./.github/workflows/ci.yml
+
+  deploy:
+    name: Deploy to Render
+    needs: test
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+      SERVICE: ${{ vars.RENDER_SERVICE_ID }}
+    steps:
+      - name: Start a deploy of this commit
+        id: start
+        run: |
+          deploy=$(curl -fsS -X POST "https://api.render.com/v1/services/$SERVICE/deploys" \
+            -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
+            -d "{\"commitId\": \"$GITHUB_SHA\"}" | jq -r .id)
+          echo "Render deploy $deploy"
+          echo "id=$deploy" >> "$GITHUB_OUTPUT"
+      - name: Wait for it to go live
+        run: |
+          while true; do
+            status=$(curl -fsS "https://api.render.com/v1/services/$SERVICE/deploys/${{ steps.start.outputs.id }}" \
+              -H "Authorization: Bearer $RENDER_API_KEY" | jq -r .status)
+            echo "$(date -u +%H:%M:%S) $status"
+            case "$status" in
+              live) exit 0 ;;
+              build_failed|update_failed|canceled|deactivated|pre_deploy_failed)
+                echo "::error::The Render deploy ended as $status; see the service's logs in Render."
+                exit 1 ;;
+            esac
+            sleep 20
+          done
