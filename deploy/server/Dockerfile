@@ -34,7 +34,7 @@ RUN useradd --create-home --uid 1000 user \
     && cp -r /build/apps/api/migrations /srv/api/ \
     && rm -rf /build \
     && chown -R user:user /srv /opt/huggingface
-COPY --chown=user:user deploy/server/start.sh /srv/start.sh
+COPY --chown=user:user deploy/server/postgres.sh deploy/server/bake.sh deploy/server/start.sh /srv/
 
 USER user
 WORKDIR /srv/api
@@ -45,5 +45,11 @@ ENV HF_HUB_OFFLINE=1 \
     EMBEDDING_BATCH_SIZE=4 \
     PORT=7860 \
     DATABASE_URL=postgresql+psycopg://user@127.0.0.1:5432/atlas
+
+# The starter sources, added now so the image ships with them (see bake.sh).
+# Render passes the service's SEED_SOURCES setting here; this is the default.
+ARG SEED_SOURCES="https://en.wikipedia.org/wiki/HMAC https://docs.python.org/3/library/hmac.html https://github.com/pallets/itsdangerous"
+RUN EMBEDDING_BATCH_SIZE=16 SEED_SOURCES="$SEED_SOURCES" bash /srv/bake.sh
+
 EXPOSE 7860
 CMD ["bash", "/srv/start.sh"]

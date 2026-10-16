@@ -132,9 +132,12 @@ Postgres, the API and the embedding model in one container that fits in 512 MB.
    `https://<github-user>.github.io/<repo>/`.
 
 The free server sleeps after 15 idle minutes; the first visit afterwards waits
-about a minute while it starts. It keeps no data across restarts. On every
-start, it re-adds the sources listed in its `SEED_SOURCES` setting, so those
-are ready a few minutes later.
+about a minute while it starts, and the site says so. It keeps no data across
+restarts, so the starter sources in its `SEED_SOURCES` setting are built into
+the server's image ([deploy/server/bake.sh](deploy/server/bake.sh)) and are there
+as soon as it starts. Sources an admin adds later are lost at the next restart;
+to keep one, add it to `SEED_SOURCES` (Render then rebuilds the image).
+
 ## Root scripts
 
 | Command          | Does                                  |

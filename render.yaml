@@ -1,7 +1,8 @@
 # Render Blueprint for the public website's server (the site itself is on GitHub
 # Pages). It runs deploy/server's image on Render's free plan: 512 MB of memory,
-# asleep after 15 idle minutes, and no data kept across restarts, which is why
-# SEED_SOURCES re-adds the starter content on every start.
+# asleep after 15 idle minutes, and no data kept across restarts. The starter
+# sources in SEED_SOURCES are therefore built into the image (deploy/server/bake.sh);
+# changing the setting rebuilds it.
 services:
   - type: web
     name: atlas-api

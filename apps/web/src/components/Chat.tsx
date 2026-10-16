@@ -8,6 +8,7 @@ import { ask } from "@/lib/api";
 import type { CodeRange } from "@/lib/citations";
 
 import { Answer } from "./Answer";
+import { useTakingLong, WAKING_HINT } from "./States";
 
 // Loaded in the browser on first use. Next.js will not bundle Shiki for the server,
 // which makes any module importing it asynchronous there and breaks server rendering
@@ -28,6 +29,7 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [question, setQuestion] = useState("");
   const [pending, setPending] = useState(false);
+  const slow = useTakingLong(pending);
   const [selected, setSelected] = useState<CodeRange | null>(null);
   const nextId = useRef(0);
   const end = useRef<HTMLDivElement>(null);
@@ -103,9 +105,10 @@ export function Chat() {
           })}
 
           {pending && (
-            <p role="status" className="animate-pulse text-sm text-slate-500">
-              Searching the code and writing an answerâ€¦
-            </p>
+            <div role="status" className="text-sm text-slate-500">
+              <p className="animate-pulse">Searching the knowledge base and writing an answer…</p>
+              {slow && <p className="mt-1">{WAKING_HINT}</p>}
+            </div>
           )}
           <div ref={end} />
         </div>
