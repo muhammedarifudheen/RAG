@@ -130,6 +130,14 @@ Postgres, the API and the embedding model in one container that fits in 512 MB.
      the server's address (`https://atlas-api-….onrender.com`).
 3. Re-run the **Publish website** workflow. The site is published at
    `https://<github-user>.github.io/<repo>/`.
+4. To redeploy the server on every push, add the repository secret
+   `RENDER_API_KEY` and variable `RENDER_SERVICE_ID` (the service's `srv-…` id).
+   The **Deploy server** workflow then runs the tests, deploys, and fails if
+   Render's deploy does. (Render's own auto-deploy needs its GitHub app.)
+
+To check the live site in a real browser (home, admin lock, chat with verified
+citations, graph, health), run `node live-check.mjs` in `apps/web`; set
+`SITE_URL` for a site other than this repository's.
 
 The free server sleeps after 15 idle minutes; the first visit afterwards waits
 about a minute while it starts, and the site says so. It keeps no data across
