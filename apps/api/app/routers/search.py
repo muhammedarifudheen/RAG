@@ -19,7 +19,7 @@ router = APIRouter(tags=["search"])
 @router.get(
     "/search",
     response_model=SearchResponse,
-    summary="Semantic search over symbols",
+    summary="Semantic search over the knowledge base",
     responses=RATE_LIMITED,
     dependencies=[Depends(rate_limit("default", lambda: settings.rate_limit_per_minute))],
 )
@@ -44,13 +44,13 @@ def search(
 @router.post(
     "/ask",
     response_model=AskResponse,
-    summary="Ask a question about the codebase",
+    summary="Ask a question about the knowledge base",
     responses={
         **RATE_LIMITED,
         409: {"description": "Nothing has been ingested yet."},
         422: {"description": "Invalid request, or the model declined to answer."},
-        502: {"description": "The Anthropic API failed."},
-        503: {"description": "Anthropic credentials are missing or rate limited."},
+        502: {"description": "The model provider (Anthropic or Gemini) failed."},
+        503: {"description": "The model provider is not configured, rejected the key, or is rate limiting."},
     },
     dependencies=[Depends(rate_limit("ask", lambda: settings.ask_rate_limit_per_minute))],
 )
@@ -61,9 +61,10 @@ def ask(
     answerer: Annotated[Answerer, Depends(get_answerer)],
 ) -> AskResponse:
     """Runs the same vector search as `/search`, sends the top results and the question
-    to Claude, and returns the answer with inline `[path:start-end]` citations.
+    to the configured model (Claude or Gemini), and returns the answer with inline
+    `[path:start-end]` citations.
 
-    `chunks` holds the code that was sent to the model. Each entry in `citations` is
+    `chunks` holds the excerpts that were sent to the model. Each entry in `citations` is
     `verified` only if its lines lie inside one of those chunks."""
     question = body.question.strip()
     if not question:
@@ -71,7 +72,7 @@ def ask(
 
     chunks = search_symbols(db, embedder, question, body.top_k, settings.snippet_max_lines)
     if not chunks:
-        raise HTTPException(409, "No embedded symbols found; ingest a repository first.")
+        raise HTTPException(409, "The knowledge base is empty; add a source first.")
 
     try:
         result = answerer.answer(question, chunks)
