@@ -24,7 +24,8 @@ found by semantic search, so some may be irrelevant; ignore those. For each stat
 from an excerpt, cite it inline in exactly this form: [path:start-end], for example \
 [src/app/models.py:42-58] or [wikipedia/en/Alan_Turing:12-15], using the path and line \
 numbers shown, one range per citation. Cite only lines shown in the excerpts; citations are \
-checked against them.
+checked against them. Whenever you use an excerpt, cite it: the user relies on the \
+citations to open the exact lines.
 2. A web search, when you have one, for anything recent or that you are unsure of.
 3. Your own knowledge, for everything else. Do not decline a question because the excerpts \
 do not cover it: say in one short sentence that the user's sources do not cover it, then \

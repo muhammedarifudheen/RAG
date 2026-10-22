@@ -159,7 +159,7 @@ Postgres, the API and the embedding model in one container that fits in 512 MB.
    Render's deploy does. (Render's own auto-deploy needs its GitHub app.)
 
 To check the live site in a real browser (home, admin lock, chat with verified
-citations, graph, health), run `node live-check.mjs` in `apps/web`; set
+citations, the assistant with follow-ups and saved chats, graph, health), run `node live-check.mjs` in `apps/web`; set
 `SITE_URL` for a site other than this repository's.
 
 The free server sleeps after 15 idle minutes; the first visit afterwards waits

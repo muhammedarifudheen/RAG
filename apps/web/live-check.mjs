@@ -13,6 +13,16 @@ page.on("console", (message) => {
   if (message.type() === "error") failures.push(`console error: ${message.text()}`);
 });
 
+/** Waits for answer number `index`, failing early with the page's message if one appears. */
+async function answer(index = 0) {
+  const article = page.getByRole("article", { name: "Answer", exact: true }).nth(index);
+  // Text only: Next.js puts an empty alert (its route announcer) on every page.
+  const alert = page.getByRole("alert").filter({ hasText: /\S/});
+  await article.or(alert).first().waitFor({ timeout: 300_000 });
+  if (!(await article.isVisible())) throw new Error(`the page said: ${await alert.first().innerText()}`);
+  return article;
+}
+
 async function check(name, run) {
   const started = Date.now();
   try {
@@ -44,18 +54,44 @@ await check("chat answers with verified citations", async () => {
   await page.goto(new URL("chat/", SITE).href);
   await page.getByLabel("Question").fill("How does itsdangerous check that a signature is valid?");
   await page.getByRole("button", { name: "Ask" }).click();
-  const answer = page.getByRole("article", { name: "Answer" });
-  await answer.waitFor({ timeout: 300_000 });
-  const text = (await answer.innerText()).replace(/\s+/g, " ");
-  const citations = answer.locator("button[data-verified]");
+  const reply = await answer();
+  const text = (await reply.innerText()).replace(/\s+/g, " ");
+  const citations = reply.locator("button[data-verified]");
   const count = await citations.count();
-  const verified = await answer.locator('button[data-verified="true"]').count();
+  const verified = await reply.locator('button[data-verified="true"]').count();
   if (count === 0) throw new Error(`no citations in: ${text.slice(0, 200)}`);
   if (verified !== count) throw new Error(`only ${verified} of ${count} citations verified`);
   await citations.first().click();
   const panel = page.getByRole("complementary", { name: "Cited code" });
   await panel.locator("pre, code").first().waitFor({ timeout: 60_000 });
   return `${verified}/${count} citations verified; the first opens the cited lines. Answer: "${text.slice(0, 150)}…"`;
+});
+
+await check("the assistant answers a general question and offers follow-ups", async () => {
+  await page.getByRole("button", { name: "+ New chat" }).click();
+  await page.getByLabel("Question").fill("What is the capital of Japan? One sentence.");
+  await page.getByRole("button", { name: "Ask" }).click();
+  const text = (await (await answer()).innerText()).replace(/\s+/g, " ");
+  if (!/tokyo/i.test(text)) throw new Error(`no Tokyo in: ${text.slice(0, 200)}`);
+  const by = text.match(/Answered by [^·]+(· [a-z ]+)?/)?.[0] ?? "(no provider line)";
+  const offered = page.getByRole("group", { name: "Suggested questions" }).getByRole("button");
+  await offered.first().waitFor({ timeout: 10_000 });
+  return `${by.trim()}; ${await offered.count()} follow-ups offered`;
+});
+
+await check("a suggested follow-up is answered with the conversation", async () => {
+  const offered = page.getByRole("group", { name: "Suggested questions" }).getByRole("button");
+  const question = await offered.first().innerText();
+  await offered.first().click();
+  const second = (await (await answer(1)).innerText()).replace(/\s+/g, " ");
+  return `asked "${question}"; answer: "${second.slice(0, 120)}…"`;
+});
+
+await check("chats are kept in the sidebar", async () => {
+  await page.reload();
+  const saved = page.getByRole("complementary", { name: "Saved chats" }).getByRole("listitem");
+  await saved.first().waitFor({ timeout: 30_000 });
+  return `${await saved.count()} saved chats after a reload`;
 });
 
 await check("graph page draws the dependency graph", async () => {
