@@ -1,6 +1,13 @@
 "use client";
 
-import type { AskResponse, AssistantMode, ChatTurn } from "@atlas/shared";
+import type {
+  AskResponse,
+  AssistantMode,
+  AssistantRoute,
+  ChatTurn,
+  CouncilAgent,
+  GeneratedImage,
+} from "@atlas/shared";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
@@ -26,7 +33,7 @@ import type { CodeRange } from "@/lib/citations";
 import { chatToMarkdown, copyText, download, exportAllChats, fileNameOf } from "@/lib/exporting";
 import { useSpeaker } from "@/lib/speech";
 
-import { Answer, StreamingAnswer } from "./Answer";
+import { Answer, Gallery, StreamingAnswer } from "./Answer";
 import { ChatComposer, type ComposerHandle } from "./ChatComposer";
 import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
 import { ChatSidebar } from "./ChatSidebar";
@@ -58,6 +65,16 @@ const STARTERS = [
 
 type DialogName = "settings" | "share" | "shortcuts" | null;
 
+/** What the server has said about the answer being prepared. */
+interface Progress {
+  route: AssistantRoute | null;
+  agents: CouncilAgent[];
+  merging: number | null;
+  images: GeneratedImage[];
+}
+
+const NO_PROGRESS: Progress = { route: null, agents: [], merging: null, images: [] };
+
 function turnsOf(messages: StoredMessage[]): ChatTurn[] {
   return messages
     .flatMap((message): ChatTurn[] => {
@@ -82,6 +99,7 @@ export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
   const [pending, setPending] = useState<null | "answer" | "image">(null);
   const [streaming, setStreaming] = useState<string | null>(null);
+  const [progress, setProgress] = useState<Progress>(NO_PROGRESS);
   const slow = useTakingLong(pending !== null && !streaming);
   const [selected, setSelected] = useState<CodeRange | null>(null);
   const [chats, setChats] = useState<SavedChat[]>([]);
@@ -178,6 +196,7 @@ export function Chat() {
     setMessages(withIds([...base, question]));
     setPending(draw ? "image" : "answer");
     setStreaming(null);
+    setProgress(NO_PROGRESS);
     setAtBottom(true);
     const controller = new AbortController();
     abort.current = controller;
@@ -198,6 +217,17 @@ export function Chat() {
         {
           onDelta: (piece) => setStreaming((current) => (current ?? "") + piece),
           onReset: () => setStreaming(null),
+          onRoute: (route) => setProgress((p) => ({ ...p, route })),
+          onAgent: (agent) =>
+            setProgress((p) => {
+              const known = p.agents.find((a) => a.id === agent.id);
+              const agents = known
+                ? p.agents.map((a) => (a.id === agent.id ? { ...a, ...agent } : a))
+                : [...p.agents, agent];
+              return { ...p, agents };
+            }),
+          onMerging: (drafts) => setProgress((p) => ({ ...p, merging: drafts })),
+          onImage: (image) => setProgress((p) => ({ ...p, images: [...p.images, image] })),
         },
         controller.signal,
       );
@@ -345,6 +375,7 @@ export function Chat() {
     return () => window.removeEventListener("keydown", listener);
   }, []);
 
+  const drawing = pending === "image" || progress.route === "image";
   const last = messages.at(-1);
   const lastAnswerId = last?.role === "assistant" ? last.id : null;
   const suggestions = !pending && last?.role === "assistant" ? (last.response.suggestions ?? []) : [];
@@ -500,15 +531,23 @@ export function Chat() {
               );
             })}
 
-            {pending && streaming && pending === "answer" && <StreamingAnswer text={streaming} />}
+            {pending && streaming && !drawing && <StreamingAnswer text={streaming} />}
 
-            {pending && (!streaming || pending === "image") && (
+            {pending && (!streaming || drawing) && (
               <div role="status" className="slab py-2 pl-4 text-sm text-muted">
                 <p className="animate-pulse">
-                  {pending === "image"
-                    ? "Writing a description and drawing your picture…"
-                    : "Searching the knowledge base and writing an answer…"}
+                  {drawing
+                    ? progress.images.length
+                      ? `${progress.images.length} ${progress.images.length === 1 ? "picture" : "pictures"} ready, more on the way…`
+                      : "Writing a description and drawing your picture…"
+                    : progress.merging
+                      ? `Merging the best points of ${progress.merging} answers…`
+                      : progress.agents.length
+                        ? `The council is answering: ${progress.agents.filter((a) => a.state === "done").length} of ${progress.agents.length} agents done…`
+                        : "Searching the knowledge base and writing an answer…"}
                 </p>
+                {!drawing && progress.agents.length > 0 && <CouncilPanel agents={progress.agents} />}
+                {drawing && progress.images.length > 0 && <Gallery images={progress.images} />}
                 {slow && <p className="mt-1">{WAKING_HINT}</p>}
               </div>
             )}
@@ -582,6 +621,38 @@ export function Chat() {
       {dialog === "share" && current && <ShareDialog chat={current} onClose={() => setDialog(null)} />}
       {dialog === "shortcuts" && <ShortcutsDialog onClose={() => setDialog(null)} />}
     </div>
+  );
+}
+
+const AGENT_STATES: Record<CouncilAgent["state"], { mark: string; tone: string; label: string }> = {
+  thinking: { mark: "◌", tone: "border-line text-muted", label: "thinking" },
+  done: { mark: "✓", tone: "border-ok/40 text-ok", label: "answered" },
+  failed: { mark: "✕", tone: "border-danger/30 text-danger/80 line-through", label: "failed" },
+  skipped: { mark: "…", tone: "border-line text-faint", label: "too slow" },
+};
+
+/** The council's agents and how each is getting on. */
+function CouncilPanel({ agents }: { agents: CouncilAgent[] }) {
+  return (
+    <ul aria-label="Council agents" className="mt-2 flex flex-wrap gap-1.5">
+      {agents.map((agent) => {
+        const look = AGENT_STATES[agent.state];
+        return (
+          <li
+            key={agent.id}
+            title={`${agent.service} ${agent.model}: ${look.label}${agent.seconds ? ` in ${agent.seconds}s` : ""}`}
+            className={`flex items-center gap-1.5 border px-2 py-0.5 font-mono text-[10.5px] ${look.tone}`}
+          >
+            <span aria-hidden="true" className={agent.state === "thinking" ? "animate-spin" : ""}>
+              {look.mark}
+            </span>
+            <span className="text-soft">{agent.service}</span>
+            <span className="max-w-[10rem] truncate">{agent.model}</span>
+            <span className="sr-only">{look.label}</span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 

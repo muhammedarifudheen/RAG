@@ -76,8 +76,20 @@ export interface AttachmentText {
 }
 
 export interface GeneratedImage {
+  /** A web address, or a data: URL for services that return the picture itself. */
   url: string;
   prompt: string;
+  /** The service that drew it. */
+  service?: string | null;
+}
+
+/** One agent of the council, as reported while the answer is prepared. */
+export interface CouncilAgent {
+  id: number;
+  service?: string;
+  model?: string;
+  state: "thinking" | "done" | "failed" | "skipped";
+  seconds?: number;
 }
 
 /** How the assistant picks models: by question type, or the strongest first. */
@@ -125,6 +137,8 @@ export interface AskResponse {
   web_sources?: WebSource[];
   /** Pictures drawn for the answer. */
   images?: GeneratedImage[];
+  /** The council's agents whose drafts were merged into the answer. */
+  agents?: string[];
 }
 
 // --- /shares ----------------------------------------------------------------

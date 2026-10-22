@@ -109,12 +109,18 @@ The chat page answers any question, not only questions about your sources:
 - **Then the web and general knowledge.** When your sources do not cover a question,
   it says so and answers anyway; for recent events it searches the web (Gemini's
   Google search when the key has that quota, or Groq's compound models).
-- **Several AI services.** Gemini, Groq, OpenRouter, Mistral and Claude: each is used
-  once its key is set (`GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`,
-  `MISTRAL_API_KEY`, `ANTHROPIC_API_KEY`). The **Auto** mode routes each question by
-  type (your sources, code, recent events, reasoning, small talk, general) to the
-  services and models that suit it; **Best model** always starts with the strongest.
-  Either way, a busy or failing service hands over to the next one.
+- **A council of AI agents.** Up to 12 agents on different services answer each
+  question in parallel; one model (the strongest that just answered) then merges their
+  best points into the answer you see, settling disagreements and dropping mistakes.
+  You watch the council work: each agent shows as thinking, answered, failed or too
+  slow. An agent that fails (out of quota, overloaded) is replaced by the next model in
+  line, and slow agents are not waited for once two have answered.
+- **Every free AI service.** Gemini, OpenRouter (every free model in its catalogue),
+  GitHub Models, Mistral, Cerebras, Groq, SambaNova, NVIDIA, Cohere, Hugging Face,
+  Cloudflare Workers AI, Together and Claude join the council once their key is set
+  (see `.env.example`); Pollinations and AI Horde need no key and are always there. The
+  **Auto** mode orders agents by question type (your sources, code, recent events,
+  reasoning, small talk, general); **Best model** puts the strongest first.
 - **A chatbot.** Answers stream as they are written, follow-ups remember the
   conversation, three follow-up questions are suggested, and past chats are kept in
   the browser's sidebar.
@@ -122,8 +128,10 @@ The chat page answers any question, not only questions about your sources:
   `POST /attachments`; nothing is stored) and images (sent to the models that can see
   them). Drop or paste them into the message box; follow-ups still see them.
 - **Pictures.** "Draw a lighthouse at dusk", or the Draw switch: a fast model writes a
-  detailed prompt and [Pollinations](https://pollinations.ai) draws it (free, no key;
-  `IMAGE_URL_TEMPLATE` points elsewhere).
+  detailed prompt and several services draw it at once, shown as a gallery as each
+  picture arrives: [Pollinations](https://pollinations.ai) and
+  [AI Horde](https://aihorde.net) (free, no key), plus FLUX on Cloudflare and Hugging
+  Face when their keys are set.
 - **Your settings.** Answer length (concise, balanced, detailed), creativity
   (temperature) and custom instructions sent with every question; answers read aloud.
 - **Everything around it.** Copy, regenerate, edit a question and resend, copy code
@@ -135,9 +143,9 @@ The chat page answers any question, not only questions about your sources:
 The API side is `apps/api/app/assistant` (router, providers, prompt). `/ask` uses it
 for streaming requests (`Accept: text/event-stream`) and for any request with
 `history`, `attachments`, `style`, `temperature`, `instructions` or `task`; a plain JSON
-question still gets the sources-only answer. Each service tries its best-suited models
-first; when all of those fail, the rest of every service's models are tried, since free
-quotas are counted per model.
+question still gets the sources-only answer. `ASSISTANT_COUNCIL_SIZE=1` turns the
+council off: then one model answers, and when it fails the next takes over (each
+service's best-suited models first, then the rest, since free quotas are per model).
 
 ## Deployment and CI
 

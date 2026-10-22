@@ -1,20 +1,22 @@
 """The assistant: answers any question, from the knowledge base, the web or general knowledge.
 
-It routes each question to the model services that suit it (see router), streams
-the answer as it is written, and moves on to the next service or model when one
-is overloaded, out of quota or failing.
+It routes each question to the model services that suit it (see router). With a
+council (the default), up to a dozen agents on different services answer in
+parallel and one model merges their best points into the answer it streams; a
+failing agent is replaced by the next model in line, and slow ones are not waited
+for. Without one, a single model answers, and the next takes over if it fails.
 """
 
 from __future__ import annotations
 
 import logging
-import random
+import queue
 import re
+import threading
 import time
 from collections.abc import Iterator, Sequence
 from dataclasses import dataclass
 from functools import cache
-from urllib.parse import quote
 
 import anthropic
 import httpx2
@@ -24,7 +26,23 @@ from app.config import settings
 from app.schemas import AskResponse, Attachment, ChatTurn, CodeChunk, GeneratedImage, WebSource
 from app.services.search import extract_citations
 
-from .prompt import IMAGE_SYSTEM, FollowUpSplitter, conversation, system_prompt
+from .horde import HordeTextProvider
+from .images import (
+    CloudflareImages,
+    HordeImages,
+    HuggingFaceImages,
+    ImageService,
+    PollinationsImages,
+    gallery,
+)
+from .prompt import (
+    IMAGE_SYSTEM,
+    MERGE,
+    FollowUpSplitter,
+    conversation,
+    system_prompt,
+    with_drafts,
+)
 from .providers import (
     ClaudeProvider,
     GeminiProvider,
@@ -32,8 +50,10 @@ from .providers import (
     Outcome,
     Provider,
     ProviderError,
+    Turn,
 )
 from .router import Mode, Route, classify, model_order, provider_order, wants_image
+from .services import configured, openrouter_free_models
 
 logger = logging.getLogger("atlas.api.assistant")
 
@@ -59,6 +79,28 @@ class Options:
     task: str = "answer"  # or "image"
 
 
+# Services too slow to wait for when a quick reply is all that is needed.
+SLOW_SERVICES = ("horde",)
+PROMPT_WRITING_SECONDS = 20.0
+
+# Services that cannot see attached images (they would answer without them).
+NO_VISION = ("horde", "pollinations")
+
+
+@dataclass
+class Draft:
+    """One agent's answer, for the merger."""
+
+    agent: int
+    service: str  # the provider's name, and the model it was asked for
+    seat: str
+    provider: str  # its label, and the model that answered
+    model: str
+    answer: str
+    suggestions: list[str]
+    web_sources: list[dict[str, str]]
+
+
 class AssistantError(Exception):
     def __init__(self, status_code: int, detail: str) -> None:
         super().__init__(detail)
@@ -76,8 +118,24 @@ class Assistant:
         web_search: bool = True,
         min_score: float = 0.3,
         image_url_template: str = "https://image.pollinations.ai/prompt/{prompt}?seed={seed}",
+        image_services: Sequence[ImageService] | None = None,
+        gallery_size: int = 1,
+        image_max_wait: float = 75.0,
+        council_size: int = 1,
+        council_grace: float = 15.0,
+        council_max_wait: float = 60.0,
     ) -> None:
         self.providers = {p.name: p for p in providers}
+        self.image_services = (
+            list(image_services)
+            if image_services is not None
+            else [PollinationsImages(image_url_template)]
+        )
+        self.gallery_size = gallery_size
+        self.image_max_wait = image_max_wait
+        self.council_size = council_size
+        self.council_grace = council_grace
+        self.council_max_wait = council_max_wait
         self.best_order = best_order
         self.models_per_provider = models_per_provider
         self.web_search = web_search
@@ -117,6 +175,10 @@ class Assistant:
         system = system_prompt(style=options.style, instructions=options.instructions)
         tuning = {} if options.temperature is None else {"temperature": options.temperature}
         turns = conversation(question, shown, history, options.attachments)
+        panel = self._candidates(order, route, images)
+        if self.council_size > 1 and len(panel) > 1:
+            yield from self._council(question, route, panel, order, shown, system, turns, tuning)
+            return
         failures: list[str] = []
         for name, model in self._attempts(order, route):
             provider = self.providers[name]
@@ -173,6 +235,235 @@ class Assistant:
         last = failures[-1] if failures else "no answer"
         yield "error", {"status": 503, "detail": f"Every AI service failed; the last said: {last}"}
 
+    def _candidates(
+        self, order: Sequence[str], route: Route, images: bool
+    ) -> list[tuple[str, str]]:
+        """Agents for a council, in the order to seat them: each service's best-suited
+        model first, taking turns between services so the panel is varied, then each
+        service's next models (seated as replacements when an agent fails)."""
+        names = [n for n in order if not (images and n in NO_VISION)]
+        ranked = {n: model_order(self.providers[n].models, route) for n in names}
+        depth = max((len(models) for models in ranked.values()), default=0)
+        return [(n, ranked[n][i]) for i in range(depth) for n in names if i < len(ranked[n])]
+
+    def _council(
+        self,
+        question: str,
+        route: Route,
+        candidates: list[tuple[str, str]],
+        order: Sequence[str],
+        shown: Sequence[CodeChunk],
+        system: str,
+        turns: list[Turn],
+        tuning: dict,
+    ) -> Iterator[Event]:
+        """Seats up to `council_size` agents, collects their drafts, then merges them."""
+        results: queue.Queue = queue.Queue()
+        seats = candidates[: self.council_size]
+        reserve = candidates[self.council_size :]
+
+        def run(agent: int, name: str, model: str) -> None:
+            provider = self.providers[name]
+            web = self.web_search and route != "chat" and provider.searches(model)
+            outcome = Outcome()
+            started = time.monotonic()
+            try:
+                splitter = FollowUpSplitter()
+                for piece in provider.stream(model, system, turns, outcome, web=web, **tuning):
+                    splitter.feed(piece)
+                _, answer, suggestions = splitter.finish()
+                if not answer:
+                    raise ProviderError(f"{provider.label} {model} returned an empty answer.")
+                draft = Draft(
+                    agent,
+                    name,
+                    model,
+                    provider.label,
+                    outcome.model or model,
+                    answer,
+                    suggestions,
+                    outcome.web_sources,
+                )
+                results.put(("done", agent, draft, time.monotonic() - started))
+            except (ProviderError, ValueError, KeyError) as error:
+                detail = str(error) if isinstance(error, ProviderError) else f"bad reply: {error}"
+                results.put(("failed", agent, detail, time.monotonic() - started))
+            except Exception as error:  # an agent must never take the council down
+                logger.exception("assistant %s %s crashed", name, model)
+                results.put(
+                    ("failed", agent, f"{type(error).__name__}", time.monotonic() - started)
+                )
+
+        def seat(agent: int, name: str, model: str) -> Event:
+            threading.Thread(target=run, args=(agent, name, model), daemon=True).start()
+            label = self.providers[name].label
+            return "agent", {"id": agent, "service": label, "model": model, "state": "thinking"}
+
+        for agent, (name, model) in enumerate(seats):
+            yield seat(agent, name, model)
+        running = set(range(len(seats)))
+        next_agent = len(seats)
+        drafts: list[Draft] = []
+        failures: list[str] = []
+        started = time.monotonic()
+        enough_at: float | None = None
+        while running:
+            if enough_at is not None:
+                until = min(enough_at + self.council_grace, started + self.council_max_wait)
+            elif drafts:
+                until = started + self.council_max_wait
+            else:
+                until = started + max(self.council_max_wait, 150.0)
+            try:
+                state, agent, detail, seconds = results.get(
+                    timeout=max(0.0, until - time.monotonic())
+                )
+            except queue.Empty:
+                break
+            running.discard(agent)
+            if state == "done":
+                drafts.append(detail)
+                if len(drafts) >= 2 and enough_at is None:
+                    enough_at = time.monotonic()
+                yield "agent", {"id": agent, "state": "done", "seconds": round(seconds, 1)}
+                continue
+            failures.append(detail)
+            logger.info("assistant agent %d failed in %.1fs (%s)", agent, seconds, detail)
+            yield "agent", {"id": agent, "state": "failed", "seconds": round(seconds, 1)}
+            if reserve:
+                name, model = reserve.pop(0)
+                yield seat(next_agent, name, model)
+                running.add(next_agent)
+                next_agent += 1
+        for agent in sorted(running):
+            yield "agent", {"id": agent, "state": "skipped"}
+
+        if not drafts:
+            last = failures[-1] if failures else "no answer in time"
+            yield (
+                "error",
+                {"status": 503, "detail": f"Every AI service failed; the last said: {last}"},
+            )
+            return
+        drafts.sort(key=lambda d: d.agent)  # the best-suited agents first
+        sources = [source for d in drafts for source in d.web_sources]
+        if len(drafts) == 1:
+            only = drafts[0]
+            yield "delta", {"text": only.answer}
+            yield (
+                "done",
+                self._response(
+                    question,
+                    only.answer,
+                    shown,
+                    only.model,
+                    True,
+                    only.provider,
+                    route,
+                    only.suggestions,
+                    sources,
+                    drafts,
+                ).model_dump(),
+            )
+            return
+
+        yield "merging", {"drafts": len(drafts)}
+        merge_turns = with_drafts(turns, [d.answer for d in drafts])
+        merge_system = f"{system}\n\n{MERGE}"
+        for name, model in _merge_order(drafts, order, self._attempts(order, route)):
+            provider = self.providers[name]
+            outcome = Outcome()
+            splitter = FollowUpSplitter()
+            wrote = False
+            started = time.monotonic()
+            try:
+                for piece in provider.stream(
+                    model, merge_system, merge_turns, outcome, web=False, **tuning
+                ):
+                    text = splitter.feed(piece)
+                    if text:
+                        wrote = True
+                        yield "delta", {"text": text}
+                rest, answer, suggestions = splitter.finish()
+                if not answer:
+                    raise ProviderError(f"{provider.label} {model} returned an empty answer.")
+                if rest:
+                    yield "delta", {"text": rest}
+            except (ProviderError, ValueError, KeyError) as error:
+                logger.info("assistant merge %s %s failed (%s)", name, model, error)
+                if wrote:
+                    yield "reset", {"provider": provider.label}
+                continue
+            logger.info(
+                "assistant merged %d drafts with %s %s in %.1fs",
+                len(drafts),
+                name,
+                model,
+                time.monotonic() - started,
+            )
+            yield (
+                "done",
+                self._response(
+                    question,
+                    answer,
+                    shown,
+                    outcome.model or model,
+                    outcome.complete,
+                    "Atlas council",
+                    route,
+                    suggestions or drafts[0].suggestions,
+                    sources + outcome.web_sources,
+                    drafts,
+                ).model_dump(),
+            )
+            return
+
+        # No model could merge: the best-suited agent's draft stands.
+        best = drafts[0]
+        yield "delta", {"text": best.answer}
+        yield (
+            "done",
+            self._response(
+                question,
+                best.answer,
+                shown,
+                best.model,
+                True,
+                best.provider,
+                route,
+                best.suggestions,
+                sources,
+                drafts,
+            ).model_dump(),
+        )
+
+    def _response(
+        self,
+        question: str,
+        answer: str,
+        shown: Sequence[CodeChunk],
+        model: str,
+        complete: bool,
+        provider: str,
+        route: Route,
+        suggestions: list[str],
+        sources: list[dict[str, str]],
+        drafts: Sequence[Draft],
+    ) -> AskResponse:
+        return AskResponse(
+            question=question,
+            answer=answer,
+            citations=extract_citations(answer, list(shown)),
+            chunks=list(shown),
+            model=model,
+            complete=complete,
+            provider=provider,
+            route=route,
+            suggestions=suggestions,
+            web_sources=_unique_sources(sources),
+            agents=[f"{d.provider} · {d.model}" for d in drafts],
+        )
+
     def _attempts(self, order: Sequence[str], route: Route) -> list[tuple[str, str]]:
         """(service, model) pairs in the order to try them: each service's best-suited
         models first, then, if all of those fail, the rest of every service's models.
@@ -190,9 +481,14 @@ class Assistant:
         yield "route", {"route": route, "mode": mode, "providers": order}
         prompt, provider_label, model_name = _bare_request(question), None, "flux"
         turns = conversation(question, [], history)
-        for name in order:
+        # Quick models only, and not for long: the request's own words will do.
+        give_up = time.monotonic() + PROMPT_WRITING_SECONDS
+        for name, model in self._attempts(order, route):
+            if name in SLOW_SERVICES:
+                continue
+            if time.monotonic() > give_up:
+                break
             provider = self.providers[name]
-            model = provider.models[0]
             outcome = Outcome()
             try:
                 written = "".join(
@@ -205,11 +501,15 @@ class Assistant:
                 prompt = written.strip('"').strip()[:800]
                 provider_label = provider.label
                 break
-        url = self.image_url_template.format(
-            prompt=quote(prompt, safe=""), seed=random.randint(1, 1_000_000)
-        )
         answer = f"{PICTURE_ANSWER}, drawn from this description:\n\n> {prompt}"
         yield "delta", {"text": answer}
+        drawn = []
+        for picture in gallery(self.image_services, prompt, self.gallery_size, self.image_max_wait):
+            drawn.append(GeneratedImage(url=picture.url, prompt=prompt, service=picture.service))
+            yield "image", drawn[-1].model_dump()
+        if not drawn:
+            yield "error", {"status": 503, "detail": "No image service could draw this picture."}
+            return
         response = AskResponse(
             question=question,
             answer=answer,
@@ -224,7 +524,7 @@ class Assistant:
                 "Draw it as a watercolour painting",
                 "Draw it at night",
             ],
-            images=[GeneratedImage(url=url, prompt=prompt)],
+            images=drawn,
         )
         yield "done", response.model_dump()
 
@@ -257,6 +557,17 @@ def _bare_request(question: str) -> str:
     """The description in a request to draw: "draw a fox" becomes "a fox"."""
     bare = _REQUEST.sub("", question.strip(), count=1).strip().rstrip("?.!")
     return bare or question.strip()
+
+
+def _merge_order(
+    drafts: Sequence[Draft], order: Sequence[str], attempts: Sequence[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """Who merges: the models that just answered (so known to be working), the
+    strongest service first, then everything else in the usual order."""
+    rank = {name: i for i, name in enumerate(order)}
+    ranked = sorted(drafts, key=lambda d: (rank.get(d.service, len(rank)), d.agent))
+    answered = [(d.service, d.seat) for d in ranked]
+    return answered + [pair for pair in attempts if pair not in answered]
 
 
 def _wants_picture(question: str, history: Sequence[ChatTurn]) -> bool:
@@ -301,53 +612,68 @@ def _build() -> Assistant:
         providers.append(
             GeminiProvider(http, settings.gemini_api_key, _models("gemini_models"), limit)
         )
-    if settings.groq_api_key:
-        providers.append(
-            OpenAICompatibleProvider(
-                "groq",
-                "Groq",
-                "https://api.groq.com/openai/v1",
-                http,
-                settings.groq_api_key,
-                _models("groq_models"),
-                limit,
-            )
-        )
-    if settings.openrouter_api_key:
-        providers.append(
-            OpenAICompatibleProvider(
-                "openrouter",
-                "OpenRouter",
-                "https://openrouter.ai/api/v1",
-                http,
-                settings.openrouter_api_key,
-                _models("openrouter_models"),
-                limit,
-                extra_headers={"X-Title": "Atlas"},
-            )
-        )
-    if settings.mistral_api_key:
-        providers.append(
-            OpenAICompatibleProvider(
-                "mistral",
-                "Mistral",
-                "https://api.mistral.ai/v1",
-                http,
-                settings.mistral_api_key,
-                _models("mistral_models"),
-                limit,
-            )
-        )
     if settings.anthropic_api_key:
         client = anthropic.Anthropic(api_key=settings.anthropic_api_key, timeout=120.0)
         providers.append(ClaudeProvider(client, [settings.anthropic_model], limit))
+
+    def models_of(setting: str) -> list[str]:
+        if setting == "openrouter_models" and getattr(settings, setting).strip() == "auto":
+            return openrouter_free_models(http)
+        return _models(setting)
+
+    for service, key, base, models in configured(lambda name: getattr(settings, name), models_of):
+        providers.append(
+            OpenAICompatibleProvider(
+                service.name,
+                service.label,
+                base,
+                http,
+                key,
+                models,
+                limit,
+                extra_headers=service.extra_headers,
+            )
+        )
+    if settings.horde_enabled:
+        providers.append(
+            HordeTextProvider(http, settings.horde_api_key, _models("horde_text_models"))
+        )
+
+    images: list[ImageService] = []
+    if settings.cloudflare_account_id and settings.cloudflare_api_token:
+        images.append(
+            CloudflareImages(
+                http,
+                settings.cloudflare_account_id,
+                settings.cloudflare_api_token,
+                settings.cloudflare_image_model,
+            )
+        )
+    if settings.huggingface_api_key:
+        images.append(
+            HuggingFaceImages(http, settings.huggingface_api_key, settings.huggingface_image_model)
+        )
+    if settings.horde_enabled:
+        images.append(HordeImages(http, settings.horde_api_key, _models("horde_image_models")))
+    images.append(PollinationsImages(settings.image_url_template))
+
+    logger.info(
+        "assistant services: %s; image services: %s",
+        ", ".join(f"{p.name} ({len(p.models)})" for p in providers) or "none",
+        ", ".join(i.label for i in images),
+    )
     return Assistant(
         providers,
         best_order=settings.assistant_best_order,
         models_per_provider=settings.assistant_models_per_provider,
         web_search=settings.assistant_web_search,
         min_score=settings.assistant_min_score,
-        image_url_template=settings.image_url_template,
+        image_services=images,
+        gallery_size=settings.image_gallery_size,
+        image_max_wait=settings.image_max_wait,
+        council_size=settings.assistant_council_size,
+        council_grace=settings.assistant_council_grace,
+        council_max_wait=settings.assistant_council_max_wait,
     )
 
 

@@ -314,3 +314,31 @@ test("a starter on the empty page asks its question", async ({ page }) => {
   await expect(answers(page)).toContainText("Sorted.");
   expect(sent[0].question).toMatch(/^Write a Python function/);
 });
+
+test("a gallery shows each service's picture, and data pictures can only be saved", async ({ page }) => {
+  await page.route("https://draw.example/**", (route) =>
+    route.fulfill({ status: 200, contentType: "image/png", body: PNG }),
+  );
+  await mockAssistant(page, [
+    reply("Here's your picture, drawn from this description:\n\n> A fox", {
+      route: "image",
+      images: [
+        { url: "https://draw.example/a.png", prompt: "A fox", service: "Pollinations" },
+        { url: `data:image/png;base64,${PNG.toString("base64")}`, prompt: "A fox", service: "AI Horde" },
+      ],
+    }),
+  ]);
+  await page.goto("/chat");
+  await ask(page, "draw a fox");
+
+  const pictures = answers(page).getByRole("list", { name: "Pictures" }).getByRole("listitem");
+  await expect(pictures).toHaveCount(2);
+  await expect(pictures.nth(0)).toContainText("Pollinations");
+  await expect(pictures.nth(0).getByRole("link", { name: "Open full size" })).toBeVisible();
+  await expect(pictures.nth(1)).toContainText("AI Horde");
+  await expect(pictures.nth(1).getByRole("link", { name: "Open full size" })).toHaveCount(0);
+  await expect(pictures.nth(1).getByRole("link", { name: "Download" })).toHaveAttribute(
+    "download",
+    "atlas-picture.jpg",
+  );
+});

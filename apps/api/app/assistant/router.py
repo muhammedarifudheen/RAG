@@ -21,19 +21,43 @@ from typing import Literal
 Mode = Literal["auto", "best"]
 Route = Literal["sources", "code", "current", "reasoning", "chat", "general", "image", "vision"]
 
-# Strongest-suited first. Gemini leads where a web search helps, since only it
-# can search; Groq leads small talk because it answers fastest.
+# Every service, strongest first; each route lists the ones it prefers first and
+# then the rest in this order.
+ALL_SERVICES = (
+    "claude",
+    "gemini",
+    "openrouter",
+    "github",
+    "mistral",
+    "cerebras",
+    "groq",
+    "sambanova",
+    "nvidia",
+    "cohere",
+    "huggingface",
+    "cloudflare",
+    "together",
+    "pollinations",
+    "horde",
+)
+
+
+def _prefer(*first: str) -> tuple[str, ...]:
+    return first + tuple(name for name in ALL_SERVICES if name not in first)
+
+
+# Gemini leads where a web search helps, since it can search; Groq and Cerebras
+# lead small talk and picture prompts because they answer fastest.
 ROUTE_ORDER: dict[str, tuple[str, ...]] = {
-    "sources": ("gemini", "claude", "openrouter", "mistral", "groq"),
-    "code": ("claude", "openrouter", "gemini", "mistral", "groq"),
-    "current": ("gemini", "claude", "openrouter", "mistral", "groq"),
-    "reasoning": ("claude", "openrouter", "gemini", "groq", "mistral"),
-    "chat": ("groq", "gemini", "mistral", "openrouter", "claude"),
-    "general": ("gemini", "claude", "openrouter", "mistral", "groq"),
-    # Writing a picture's prompt is quick work: the fastest first.
-    "image": ("groq", "gemini", "mistral", "openrouter", "claude"),
+    "sources": _prefer("gemini", "claude", "openrouter", "github", "mistral"),
+    "code": _prefer("claude", "openrouter", "github", "gemini", "mistral", "cerebras"),
+    "current": _prefer("gemini", "claude", "openrouter", "github", "mistral", "groq"),
+    "reasoning": _prefer("claude", "openrouter", "gemini", "github", "groq", "cerebras"),
+    "chat": _prefer("groq", "cerebras", "gemini", "mistral", "openrouter"),
+    "general": _prefer("gemini", "claude", "openrouter", "github", "mistral", "groq"),
+    "image": _prefer("groq", "cerebras", "gemini", "mistral", "openrouter"),
     # Services whose models see images reliably first.
-    "vision": ("gemini", "claude", "mistral", "openrouter", "groq"),
+    "vision": _prefer("gemini", "claude", "openrouter", "github", "mistral"),
 }
 
 # Routes that keep their own order in "best" mode too.

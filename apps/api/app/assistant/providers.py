@@ -1,8 +1,9 @@
 """The model services the assistant can use, each streaming its answer as text.
 
-Gemini is called over its REST API and may search Google for the answer. Groq,
-OpenRouter and Mistral speak the OpenAI chat-completions protocol, so one class
-serves all three. Claude goes through Anthropic's SDK.
+Gemini is called over its REST API and may search Google for the answer. Most
+others (Groq, OpenRouter, Mistral and the rest in services.py) speak the OpenAI
+chat-completions protocol, so one class serves them all. Claude goes through
+Anthropic's SDK; AI Horde has its own queue (horde.py).
 """
 
 from __future__ import annotations
@@ -181,7 +182,8 @@ class _SearchRefused(Exception):
 
 
 class OpenAICompatibleProvider:
-    """Groq, OpenRouter and Mistral: the OpenAI chat-completions protocol.
+    """Groq, OpenRouter, Mistral and the others in services.py: the OpenAI
+    chat-completions protocol.
 
     Groq's "compound" models search the web by themselves.
     """
@@ -192,7 +194,7 @@ class OpenAICompatibleProvider:
         label: str,
         base_url: str,
         client: httpx2.Client,
-        api_key: str,
+        api_key: str | None,
         models: list[str],
         max_tokens: int,
         extra_headers: dict[str, str] | None = None,
@@ -228,7 +230,9 @@ class OpenAICompatibleProvider:
         }
         if temperature is not None:
             payload["temperature"] = temperature
-        headers = {"Authorization": f"Bearer {self.api_key}", **self.extra_headers}
+        # Pollinations needs no key.
+        auth = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
+        headers = {**auth, **self.extra_headers}
         try:
             with self.client.stream(
                 "POST", f"{self.base_url}/chat/completions", headers=headers, json=payload

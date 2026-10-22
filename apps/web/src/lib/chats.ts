@@ -77,18 +77,26 @@ export function saveChats(chats: SavedChat[]): void {
   }
 }
 
-/** The chat without the bytes of attached images (their names stay). */
+/**
+ * The chat without the bytes of images: attached ones keep their names, and drawn
+ * pictures that came as data (not a web address) are left out.
+ */
 export function withoutImageData(chat: SavedChat): SavedChat {
   return {
     ...chat,
-    messages: chat.messages.map((message) =>
-      message.role === "user" && message.attachments
-        ? {
-            ...message,
-            attachments: message.attachments.map(({ data: _data, ...rest }) => rest),
-          }
-        : message,
-    ),
+    messages: chat.messages.map((message) => {
+      if (message.role === "user" && message.attachments) {
+        return {
+          ...message,
+          attachments: message.attachments.map(({ data: _data, ...rest }) => rest),
+        };
+      }
+      if (message.role === "assistant" && message.response.images?.length) {
+        const images = message.response.images.filter((image) => !image.url.startsWith("data:"));
+        return { ...message, response: { ...message.response, images } };
+      }
+      return message;
+    }),
   };
 }
 

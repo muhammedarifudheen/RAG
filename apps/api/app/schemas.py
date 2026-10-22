@@ -148,6 +148,7 @@ class WebSource(BaseModel):
 class GeneratedImage(BaseModel):
     url: str = Field(description="Where the picture is drawn; the browser loads it from there.")
     prompt: str = Field(description="What was asked of the image model.")
+    service: str | None = Field(default=None, description="The service that drew it.")
 
 
 class AskResponse(BaseModel):
@@ -165,6 +166,9 @@ class AskResponse(BaseModel):
     suggestions: list[str] = Field(default=[], description="Follow-up questions to offer.")
     web_sources: list[WebSource] = Field(default=[], description="Web pages a search found.")
     images: list[GeneratedImage] = Field(default=[], description="Pictures drawn for the answer.")
+    agents: list[str] = Field(
+        default=[], description="The council's agents whose drafts were merged into the answer."
+    )
 
 
 class SymbolRef(BaseModel):

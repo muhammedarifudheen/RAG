@@ -30,33 +30,82 @@ class Settings(BaseSettings):
     anthropic_max_tokens: int = 16000
 
     # --- The assistant: the chat that answers anything (see app/assistant) ---------
-    # More providers: each one is used once its key is set. All but Claude have
-    # free tiers. Model lists are tried in order; the router reorders them per
-    # question type (coding models for code, reasoning models for reasoning).
-    groq_api_key: str | None = None
+    # Every service below is used once its key is set; all have free tiers. Model
+    # lists are comma-separated and tried in order; the router puts coding models
+    # first for code and reasoning models for reasoning.
+    groq_api_key: str | None = None  # console.groq.com/keys
     groq_models: str = "openai/gpt-oss-120b,groq/compound,llama-3.3-70b-versatile,qwen/qwen3-32b"
-    openrouter_api_key: str | None = None
-    openrouter_models: str = (
-        "deepseek/deepseek-chat-v3.1:free,deepseek/deepseek-r1-0528:free,"
-        "qwen/qwen3-coder:free,meta-llama/llama-3.3-70b-instruct:free"
-    )
-    mistral_api_key: str | None = None
+    openrouter_api_key: str | None = None  # openrouter.ai/keys
+    # "auto": every free model in OpenRouter's public catalogue (it changes often).
+    openrouter_models: str = "auto"
+    mistral_api_key: str | None = None  # console.mistral.ai/api-keys
     mistral_models: str = "mistral-large-latest,mistral-medium-latest,codestral-latest"
+    cerebras_api_key: str | None = None  # cloud.cerebras.ai
+    cerebras_models: str = "gpt-oss-120b,llama-3.3-70b,qwen-3-32b"
+    # A GitHub token with the "Models" permission (github.com/settings/tokens).
+    github_models_token: str | None = None
+    github_models_models: str = (
+        "openai/gpt-4.1,openai/gpt-4.1-mini,meta/Llama-3.3-70B-Instruct,deepseek/DeepSeek-V3-0324"
+    )
+    cloudflare_account_id: str | None = None  # dash.cloudflare.com → Workers AI
+    cloudflare_api_token: str | None = None
+    cloudflare_models: str = (
+        "@cf/meta/llama-3.3-70b-instruct-fp8-fast,@cf/qwen/qwq-32b,"
+        "@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"
+    )
+    huggingface_api_key: str | None = None  # huggingface.co/settings/tokens
+    huggingface_models: str = (
+        "meta-llama/Llama-3.3-70B-Instruct,Qwen/Qwen2.5-72B-Instruct,deepseek-ai/DeepSeek-V3-0324"
+    )
+    sambanova_api_key: str | None = None  # cloud.sambanova.ai
+    sambanova_models: str = "Meta-Llama-3.3-70B-Instruct,DeepSeek-V3-0324"
+    nvidia_api_key: str | None = None  # build.nvidia.com
+    nvidia_models: str = "meta/llama-3.3-70b-instruct,deepseek-ai/deepseek-r1"
+    cohere_api_key: str | None = None  # dashboard.cohere.com/api-keys
+    cohere_models: str = "command-a-03-2025"
+    together_api_key: str | None = None  # api.together.ai
+    together_models: str = "meta-llama/Llama-3.3-70B-Instruct-Turbo-Free"
+    # Free without any key.
+    pollinations_text: bool = True
+    pollinations_text_models: str = "openai-fast"
+    # AI Horde: volunteers' machines; anonymous use ("0000000000") is free but slow.
+    horde_enabled: bool = True
+    horde_api_key: str = "0000000000"
+    horde_text_models: str = "google/gemma-4-31b"
+    horde_image_models: str = "Deliberate,stable_diffusion"
+
     # How many of one provider's models to try before moving to the next provider.
     assistant_models_per_provider: int = 2
     # "Best model + fallbacks" order, strongest first.
-    assistant_best_order: str = "claude,gemini,openrouter,mistral,groq"
+    assistant_best_order: str = (
+        "claude,gemini,openrouter,github,mistral,cerebras,groq,sambanova,nvidia,"
+        "cohere,huggingface,cloudflare,together,pollinations,horde"
+    )
+    # The council: this many agents answer each question in parallel and one model
+    # merges their best points. 1 turns the council off (one model answers).
+    assistant_council_size: int = 12
+    # Once two agents have answered, wait this many more seconds for the rest.
+    assistant_council_grace: float = 12.0
+    # And never wait longer than this for the panel (the first answer is waited for).
+    assistant_council_max_wait: float = 60.0
     # Let models search the web for recent facts: Gemini through Google (its search
     # quota is separate; refused, it answers without), Groq through its compound models.
     assistant_web_search: bool = True
     # Knowledge-base excerpts less similar than this are not shown to the model.
     assistant_min_score: float = 0.3
     assistant_max_tokens: int = 8000
-    # Pictures are drawn by Pollinations (free, no key); {prompt} and {seed} are filled in.
+
+    # Pictures: a gallery from several services at once. Pollinations needs no key
+    # ({prompt} and {seed} are filled in); Cloudflare and Hugging Face use their keys
+    # above; AI Horde is free but often slow.
     image_url_template: str = (
         "https://image.pollinations.ai/prompt/{prompt}"
         "?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
     )
+    image_gallery_size: int = 4
+    image_max_wait: float = 75.0
+    cloudflare_image_model: str = "@cf/black-forest-labs/flux-1-schnell"
+    huggingface_image_model: str = "black-forest-labs/FLUX.1-schnell"
 
     # When set, adding and removing sources needs `Authorization: Bearer <token>`;
     # searching and asking stay open. Unset, everything is open (local use).

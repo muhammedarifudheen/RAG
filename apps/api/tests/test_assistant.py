@@ -455,6 +455,9 @@ def test_only_services_with_a_key_are_used(monkeypatch):
         "anthropic_api_key",
     ):
         monkeypatch.setattr(settings, key, None)
+    # The services that need no key are left out here.
+    monkeypatch.setattr(settings, "pollinations_text", False)
+    monkeypatch.setattr(settings, "horde_enabled", False)
     monkeypatch.setattr(settings, "groq_api_key", "gsk")
     monkeypatch.setattr(settings, "mistral_api_key", "ms")
     service._build.cache_clear()

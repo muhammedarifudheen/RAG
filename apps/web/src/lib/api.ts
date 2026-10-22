@@ -8,7 +8,9 @@ import type {
   Attachment,
   AttachmentText,
   ChatTurn,
+  CouncilAgent,
   FileDetail,
+  GeneratedImage,
   FileGraph,
   HealthParams,
   HealthReport,
@@ -123,6 +125,12 @@ export interface AssistantHandlers {
   onDelta?: (text: string) => void;
   /** A service failed partway; drop the text so far, the next one starts over. */
   onReset?: () => void;
+  /** A council agent was seated, answered, failed or was not waited for. */
+  onAgent?: (agent: CouncilAgent) => void;
+  /** The agents' drafts are being merged into one answer. */
+  onMerging?: (drafts: number) => void;
+  /** A picture of the gallery is ready. */
+  onImage?: (image: GeneratedImage) => void;
 }
 
 export interface AssistantQuestion {
@@ -188,6 +196,12 @@ export async function askAssistant(
       handlers.onDelta?.(data.text as string);
     } else if (event.event === "reset") {
       handlers.onReset?.();
+    } else if (event.event === "agent") {
+      handlers.onAgent?.(data as unknown as CouncilAgent);
+    } else if (event.event === "merging") {
+      handlers.onMerging?.(Number(data.drafts) || 0);
+    } else if (event.event === "image") {
+      handlers.onImage?.(data as unknown as GeneratedImage);
     } else if (event.event === "done") {
       return data as unknown as AskResponse;
     } else if (event.event === "error") {

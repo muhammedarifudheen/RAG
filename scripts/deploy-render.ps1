@@ -9,8 +9,9 @@
   dashboard instead.
 
   Needs a Render API key (https://dashboard.render.com/u/settings#api-keys),
-  passed as -ApiKey or in RENDER_API_KEY. The model key (GEMINI_API_KEY or
-  ANTHROPIC_API_KEY) and LLM_PROVIDER are read from the repository's .env.
+  passed as -ApiKey or in RENDER_API_KEY. The model keys (GEMINI_API_KEY,
+  ANTHROPIC_API_KEY and every other AI service's key listed in .env.example) and
+  LLM_PROVIDER are read from the repository's .env.
 
 .PARAMETER SiteOrigin
   The website's origin, allowed to call the API: https://<github user>.github.io
@@ -62,7 +63,8 @@ $settings = [ordered]@{
     CORS_ORIGINS = (ConvertTo-Json @($SiteOrigin.TrimEnd("/")) -Compress)
     SEED_SOURCES = $SeedSources
 }
-foreach ($key in "GEMINI_API_KEY", "GEMINI_MODELS", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY") {
+foreach ($key in "GEMINI_API_KEY", "GEMINI_MODELS", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY",
+    "CEREBRAS_API_KEY", "GITHUB_MODELS_TOKEN", "CLOUDFLARE_ACCOUNT_ID", "CLOUDFLARE_API_TOKEN", "HUGGINGFACE_API_KEY", "SAMBANOVA_API_KEY", "NVIDIA_API_KEY", "COHERE_API_KEY", "TOGETHER_API_KEY") {
     $value = Read-DotEnv $key
     if ($value) { $settings[$key] = $value }
 }

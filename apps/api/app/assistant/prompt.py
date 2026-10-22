@@ -144,3 +144,22 @@ class FollowUpSplitter:
         # A model sometimes bolds or heads the marker line; drop what is left of that.
         answer = re.sub(r"[\s*#_]+$", "", answer).strip()
         return rest, answer, questions[:3]
+
+
+MERGE = """\
+Several independent assistants have drafted answers to the user's latest message; \
+their drafts follow the message in <draft> tags. Write the single best answer yourself: \
+keep every correct and useful point that any draft makes, prefer what the excerpts, \
+attached files or web results support, settle disagreements by what is best supported \
+(saying briefly when something stays uncertain), and drop mistakes, padding and \
+repetition. Do not mention the drafts, the assistants or this merging. Follow every rule \
+above, including the citation form and the follow-up questions."""
+
+
+def with_drafts(turns: list[Turn], drafts: Sequence[str], limit: int = 6000) -> list[Turn]:
+    """The conversation with the agents' drafts added to the latest message."""
+    shown = "\n\n".join(
+        f'<draft n="{n}">\n{draft[:limit]}\n</draft>' for n, draft in enumerate(drafts, 1)
+    )
+    last = turns[-1]
+    return [*turns[:-1], Turn(last.role, f"{last.content}\n\n{shown}", last.images)]

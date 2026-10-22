@@ -76,9 +76,7 @@ export function Answer({ response, onCite }: Props) {
         </ReactMarkdown>
       </div>
 
-      {(response.images ?? []).map((image) => (
-        <Picture key={image.url} image={image} />
-      ))}
+      {response.images && response.images.length > 0 && <Gallery images={response.images} />}
 
       {!response.complete && (
         <p className="mt-3 text-xs text-warn">This answer was cut off at the length limit.</p>
@@ -153,12 +151,35 @@ export function StreamingAnswer({ text }: { text: string }) {
   );
 }
 
+/** Drawn pictures: one large, or several side by side. */
+export function Gallery({ images }: { images: GeneratedImage[] }) {
+  if (images.length === 1) {
+    return (
+      <div className="mt-4 max-w-md">
+        <Picture image={images[0]} />
+      </div>
+    );
+  }
+  return (
+    <ul aria-label="Pictures" className="mt-4 grid grid-cols-2 gap-3">
+      {images.map((image, index) => (
+        <li key={`${index}-${image.url.slice(0, 80)}`}>
+          <Picture image={image} />
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 /** A drawn picture: shown as it loads, with links to open and save it. */
 function Picture({ image }: { image: GeneratedImage }) {
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
+  // Browsers will not open a data: URL in a new tab; such pictures can only be saved.
+  const embedded = image.url.startsWith("data:");
+  const extension = image.url.startsWith("data:image/webp") ? "webp" : "jpg";
   return (
-    <figure className="mt-4">
-      <div className="relative aspect-square w-full max-w-md overflow-hidden border border-line bg-raised shadow-block">
+    <figure>
+      <div className="relative aspect-square w-full overflow-hidden border border-line bg-raised shadow-block">
         {state === "loading" && (
           <p className="label absolute inset-0 flex animate-pulse items-center justify-center text-muted">
             Drawing…
@@ -178,11 +199,18 @@ function Picture({ image }: { image: GeneratedImage }) {
           className={`h-full w-full object-cover transition-opacity ${state === "ready" ? "opacity-100" : "opacity-0"}`}
         />
       </div>
-      <figcaption className="mt-2 flex gap-3 text-xs">
-        <a href={image.url} target="_blank" rel="noreferrer" className="text-cyan hover:underline">
-          Open full size
-        </a>
-        <a href={image.url} download="atlas-picture.jpg" className="text-cyan hover:underline">
+      <figcaption className="mt-2 flex flex-wrap items-center gap-3 text-xs">
+        {image.service && <span className="label text-muted">{image.service}</span>}
+        {!embedded && (
+          <a href={image.url} target="_blank" rel="noreferrer" className="text-cyan hover:underline">
+            Open full size
+          </a>
+        )}
+        <a
+          href={image.url}
+          download={`atlas-picture.${extension}`}
+          className="text-cyan hover:underline"
+        >
           Download
         </a>
       </figcaption>
