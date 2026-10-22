@@ -1,6 +1,6 @@
 "use client";
 
-import type { AskResponse, AssistantRoute } from "@atlas/shared";
+import type { AskResponse } from "@atlas/shared";
 import { useMemo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -94,13 +94,6 @@ export function Answer({ response, onCite }: Props) {
         </div>
       )}
 
-      {response.provider && (
-        <p className="mt-3 text-[11px] text-slate-400">
-          Answered by {response.provider} ({response.model})
-          {response.route ? ` · ${ROUTE_LABELS[response.route]}` : ""}
-        </p>
-      )}
-
       {response.chunks.length > 0 && (
       <details className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
         <summary className="cursor-pointer select-none">
@@ -135,15 +128,6 @@ export function Answer({ response, onCite }: Props) {
     </article>
   );
 }
-
-const ROUTE_LABELS: Record<AssistantRoute, string> = {
-  sources: "from your sources",
-  code: "coding question",
-  current: "recent events",
-  reasoning: "reasoning question",
-  chat: "conversation",
-  general: "general question",
-};
 
 /** An answer while it is being written: plain Markdown, citations not yet checked. */
 export function StreamingAnswer({ text }: { text: string }) {

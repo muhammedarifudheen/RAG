@@ -67,7 +67,7 @@ async function ask(page: Page, question: string) {
   await page.getByRole("button", { name: "Ask" }).click();
 }
 
-test("answers anything, says who answered, and lists the web pages it used", async ({ page }) => {
+test("answers anything and lists the web pages it used", async ({ page }) => {
   const sent = await mockAssistant(page, [
     reply("Who won the 2022 World Cup?", "**Argentina** won it, beating France on penalties.", {
       route: "current",
@@ -80,7 +80,8 @@ test("answers anything, says who answered, and lists the web pages it used", asy
 
   const answer = page.getByRole("article", { name: "Answer" });
   await expect(answer.locator("strong")).toHaveText("Argentina");
-  await expect(answer).toContainText("Answered by Gemini (gemini-3.6-flash) · recent events");
+  // Which AI service answered is not shown.
+  await expect(answer).not.toContainText("Gemini");
   await expect(answer.getByRole("link", { name: "2022 FIFA World Cup" })).toHaveAttribute(
     "href",
     "https://example.com/wc2022",
@@ -150,7 +151,6 @@ test("the answer appears while it is written, and a switch of model starts it ov
   const answer = page.getByRole("article", { name: "Answer" });
   await expect(answer).toContainText("The second model's whole answer.");
   await expect(answer).not.toContainText("half-written");
-  await expect(answer).toContainText("Answered by Groq (llama)");
   await expect(page.getByRole("button", { name: "Ask" })).toBeVisible();
 });
 

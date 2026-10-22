@@ -73,10 +73,10 @@ await check("the assistant answers a general question and offers follow-ups", as
   await page.getByRole("button", { name: "Ask" }).click();
   const text = (await (await answer()).innerText()).replace(/\s+/g, " ");
   if (!/tokyo/i.test(text)) throw new Error(`no Tokyo in: ${text.slice(0, 200)}`);
-  const by = text.match(/Answered by [^·]+(· [a-z ]+)?/)?.[0] ?? "(no provider line)";
+  if (/Answered by/.test(text)) throw new Error("the answer names the AI service that wrote it");
   const offered = page.getByRole("group", { name: "Suggested questions" }).getByRole("button");
   await offered.first().waitFor({ timeout: 10_000 });
-  return `${by.trim()}; ${await offered.count()} follow-ups offered`;
+  return `"${text.slice(0, 80)}"; ${await offered.count()} follow-ups offered`;
 });
 
 await check("a suggested follow-up is answered with the conversation", async () => {
