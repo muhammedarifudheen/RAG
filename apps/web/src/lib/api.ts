@@ -1,9 +1,12 @@
 import type {
+  AnswerStyle,
   ApiErrorBody,
   AskRequest,
   AskResponse,
   AssistantMode,
   AssistantRoute,
+  Attachment,
+  AttachmentText,
   ChatTurn,
   FileDetail,
   FileGraph,
@@ -14,6 +17,7 @@ import type {
   IngestProgress,
   IngestRequest,
   IngestResult,
+  SharedChat,
   SiteConfig,
   SourceItem,
 } from "@atlas/shared";
@@ -121,6 +125,32 @@ export interface AssistantHandlers {
   onReset?: () => void;
 }
 
+export interface AssistantQuestion {
+  question: string;
+  history: ChatTurn[];
+  mode: AssistantMode;
+  attachments?: Attachment[];
+  style?: AnswerStyle;
+  temperature?: number | null;
+  instructions?: string;
+  /** "image" draws a picture. */
+  task?: "answer" | "image";
+}
+
+/** The request body, with only what differs from the API's defaults. */
+export function askBody(asked: AssistantQuestion): AskRequest {
+  const body: AskRequest = { question: asked.question };
+  if (asked.history.length > 0) body.history = asked.history;
+  if (asked.attachments?.length) body.attachments = asked.attachments;
+  if (asked.style && asked.style !== "balanced") body.style = asked.style;
+  if (asked.temperature !== undefined && asked.temperature !== null) {
+    body.temperature = asked.temperature;
+  }
+  if (asked.instructions?.trim()) body.instructions = asked.instructions.trim();
+  if (asked.task === "image") body.task = "image";
+  return body;
+}
+
 /**
  * Asks the assistant, which answers anything and streams its answer.
  *
@@ -129,13 +159,12 @@ export interface AssistantHandlers {
  * older API) is accepted too.
  */
 export async function askAssistant(
-  question: string,
-  history: ChatTurn[],
-  mode: AssistantMode,
+  asked: AssistantQuestion,
   handlers: AssistantHandlers = {},
   signal?: AbortSignal,
 ): Promise<AskResponse> {
-  const body: AskRequest = history.length > 0 ? { question, history } : { question };
+  const body = askBody(asked);
+  const mode = asked.mode;
   const response = await fetch(`${API_BASE}/ask`, {
     method: "POST",
     headers: {
@@ -166,6 +195,28 @@ export async function askAssistant(
     }
   }
   throw new ApiError(502, "The answer stopped before it was finished.");
+}
+
+/** Reads a document's text (PDF, EPUB, HTML, code, plain text) for attaching to a question. */
+export async function readAttachment(file: File): Promise<AttachmentText> {
+  const form = new FormData();
+  form.append("file", file);
+  const response = await fetch(`${API_BASE}/attachments`, { method: "POST", body: form });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as AttachmentText;
+}
+
+/** Stores a copy of a conversation; anyone with the returned id can read it. */
+export function createShare<M>(title: string, messages: M[]): Promise<SharedChat<M>> {
+  return request<SharedChat<M>>("/shares", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ title, messages }),
+  });
+}
+
+export function getShare<M>(id: string): Promise<SharedChat<M>> {
+  return request<SharedChat<M>>(`/shares/${encodeURIComponent(id)}`);
 }
 
 export function getFile(path: string): Promise<FileDetail> {

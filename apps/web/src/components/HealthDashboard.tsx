@@ -19,7 +19,7 @@ import { useApi } from "@/lib/useApi";
 
 import { ErrorMessage, Loading, NothingIngested } from "./States";
 
-const INDIGO = "#6366f1";
+const BAR = "#79f2ff";
 const RED = "#dc2626";
 const AMBER = "#f59e0b";
 const CHART_ROWS = 12;
@@ -80,7 +80,7 @@ function Dashboard({ report, ranking }: { report: HealthReport; ranking: HealthR
     <main className="mx-auto w-full max-w-7xl space-y-8 px-4 py-6">
       <header>
         <h1 className="text-xl font-semibold">Code health</h1>
-        <p className="mt-1 text-sm text-slate-600">
+        <p className="mt-1 text-sm text-soft">
           {summary.files} files, {summary.symbols} symbols and {summary.edges} relationships
           analysed.
         </p>
@@ -105,7 +105,7 @@ function Dashboard({ report, ranking }: { report: HealthReport; ranking: HealthR
         <h2 id="complexity" className="text-base font-semibold">
           Complexity
         </h2>
-        <p className="mt-1 text-xs text-slate-500">
+        <p className="mt-1 text-xs text-muted">
           Measured as function length and as fan-out, the number of other files a file depends
           on. Bars past a threshold are red.
         </p>
@@ -123,34 +123,34 @@ function Dashboard({ report, ranking }: { report: HealthReport; ranking: HealthR
         <h2 id="dead-code" className="text-base font-semibold">
           Dead code
         </h2>
-        <p className="mt-1 max-w-3xl text-xs text-slate-500">
+        <p className="mt-1 max-w-3xl text-xs text-muted">
           Functions and methods with no caller or import that Atlas could resolve. Treat these
           as candidates: a method reached only through a variable, or declared on an interface,
           is listed even though it is used.
         </p>
         {report.dead_symbols.length === 0 ? (
-          <p className="mt-4 text-sm text-slate-600">No dead symbols found.</p>
+          <p className="mt-4 text-sm text-soft">No dead symbols found.</p>
         ) : (
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <ChartCard title="Dead symbols by file" unit="symbols" testId="chart-dead">
               <Bars data={countBy(report.dead_symbols)} unit="symbols" color={AMBER} />
             </ChartCard>
-            <div className="max-h-96 overflow-auto rounded-lg border border-slate-200 bg-white">
+            <div className="max-h-96 overflow-auto border border-line bg-panel">
               <table className="w-full text-left text-xs">
                 <caption className="sr-only">Dead symbols</caption>
-                <thead className="sticky top-0 bg-slate-50 text-slate-500">
+                <thead className="sticky top-0 bg-ink text-muted">
                   <tr>
                     <th scope="col" className="px-3 py-2 font-medium">Symbol</th>
                     <th scope="col" className="px-3 py-2 font-medium">Kind</th>
                     <th scope="col" className="px-3 py-2 font-medium">Location</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody className="divide-y divide-line">
                   {report.dead_symbols.map((symbol) => (
                     <tr key={symbol.id}>
                       <td className="break-all px-3 py-1.5 font-mono">{symbol.name}</td>
-                      <td className="px-3 py-1.5 text-slate-500">{symbol.kind}</td>
-                      <td className="break-all px-3 py-1.5 font-mono text-slate-500">
+                      <td className="px-3 py-1.5 text-muted">{symbol.kind}</td>
+                      <td className="break-all px-3 py-1.5 font-mono text-muted">
                         {symbol.file}:{symbol.start_line}-{symbol.end_line}
                       </td>
                     </tr>
@@ -158,7 +158,7 @@ function Dashboard({ report, ranking }: { report: HealthReport; ranking: HealthR
                 </tbody>
               </table>
               {summary.dead_symbols > report.dead_symbols.length && (
-                <p className="border-t border-slate-100 px-3 py-2 text-xs text-slate-500">
+                <p className="border-t border-line px-3 py-2 text-xs text-muted">
                   Showing {report.dead_symbols.length} of {summary.dead_symbols}.
                 </p>
               )}
@@ -172,7 +172,7 @@ function Dashboard({ report, ranking }: { report: HealthReport; ranking: HealthR
           Circular dependencies
         </h2>
         {cycleCount === 0 ? (
-          <p className="mt-2 text-sm text-slate-600">No circular dependencies found.</p>
+          <p className="mt-2 text-sm text-soft">No circular dependencies found.</p>
         ) : (
           <div className="mt-4 grid gap-4 lg:grid-cols-2">
             <CycleList
@@ -196,10 +196,10 @@ function Dashboard({ report, ranking }: { report: HealthReport; ranking: HealthR
 }
 
 function Stat({ label, value, tone }: { label: string; value: number; tone: "amber" | "red" }) {
-  const color = value === 0 ? "text-emerald-600" : tone === "red" ? "text-red-600" : "text-amber-600";
+  const color = value === 0 ? "text-ok" : tone === "red" ? "text-danger" : "text-warn";
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4">
-      <p className="text-xs text-slate-500">{label}</p>
+    <div className="border border-line bg-panel p-4">
+      <p className="text-xs text-muted">{label}</p>
       <p className={`mt-1 text-3xl font-semibold tabular-nums ${color}`}>{value}</p>
     </div>
   );
@@ -217,9 +217,9 @@ function ChartCard({
   children: ReactNode;
 }) {
   return (
-    <figure data-testid={testId} className="rounded-lg border border-slate-200 bg-white p-4">
+    <figure data-testid={testId} className="border border-line bg-panel p-4">
       <figcaption className="text-sm font-medium">
-        {title} <span className="font-normal text-slate-400">({unit})</span>
+        {title} <span className="font-normal text-muted">({unit})</span>
       </figcaption>
       <div className="mt-3 h-80">{children}</div>
     </figure>
@@ -230,7 +230,7 @@ function Bars({
   data,
   unit,
   threshold,
-  color = INDIGO,
+  color = BAR,
 }: {
   data: Datum[];
   unit: string;
@@ -238,13 +238,13 @@ function Bars({
   color?: string;
 }) {
   if (data.length === 0) {
-    return <p className="pt-8 text-center text-sm text-slate-500">Nothing to show.</p>;
+    return <p className="pt-8 text-center text-sm text-muted">Nothing to show.</p>;
   }
   const peak = Math.max(...data.map((d) => d.value));
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
-        <CartesianGrid horizontal={false} stroke="#e2e8f0" />
+        <CartesianGrid horizontal={false} stroke="#2a2a30" />
         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
         <YAxis
           type="category"
@@ -254,7 +254,11 @@ function Bars({
           tick={{ fontSize: 11 }}
           tickFormatter={(name: string) => (name.length > 26 ? `…${name.slice(-25)}` : name)}
         />
-        <Tooltip formatter={(value) => [`${String(value)} ${unit}`, ""]} separator="" />
+        <Tooltip
+          formatter={(value) => [`${String(value)} ${unit}`, ""]}
+          separator=""
+          cursor={{ fill: "rgba(238, 233, 223, 0.06)" }}
+        />
         {threshold !== undefined && threshold <= peak && (
           <ReferenceLine x={threshold} stroke={RED} strokeDasharray="4 3" />
         )}
@@ -276,16 +280,16 @@ function CycleList({
   cycles: { key: string; label: string }[][];
 }) {
   return (
-    <div className="rounded-lg border border-red-200 bg-red-50 p-4">
-      <h3 className="text-sm font-medium text-red-900">
+    <div className="border border-danger/40 bg-danger/10 p-4">
+      <h3 className="text-sm font-medium text-danger">
         {title} <span className="font-normal">({cycles.length})</span>
       </h3>
       {cycles.length === 0 ? (
-        <p className="mt-2 text-xs text-red-800">None.</p>
+        <p className="mt-2 text-xs text-danger">None.</p>
       ) : (
         <ul className="mt-2 space-y-2">
           {cycles.map((cycle) => (
-            <li key={cycle.map((member) => member.key).join("|")} className="text-xs text-red-900">
+            <li key={cycle.map((member) => member.key).join("|")} className="text-xs text-danger">
               <span className="font-mono">{cycle.map((member) => member.label).join(" ⇄ ")}</span>
             </li>
           ))}

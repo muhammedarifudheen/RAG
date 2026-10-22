@@ -2,42 +2,172 @@
 @tailwind components;
 @tailwind utilities;
 
+/* The palette, for the few places outside Tailwind classes (charts, graph, Markdown). */
+:root {
+  color-scheme: dark;
+  --ink: #0a0a0b;
+  --panel: #111113;
+  --raised: #1b1b1f;
+  --line: #2a2a30;
+  --paper: #eee9df;
+  --muted: #8b8891;
+  --signal: #ff3d1f;
+  --acid: #d7ff3b;
+  --cyan: #79f2ff;
+}
+
+body {
+  background-color: var(--ink);
+  /* A faint dot grid, like graph paper on an old screen. */
+  background-image: radial-gradient(rgba(238, 233, 223, 0.05) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+::selection {
+  background: var(--acid);
+  color: var(--ink);
+}
+
+* {
+  scrollbar-color: #3d3d46 transparent;
+  scrollbar-width: thin;
+}
+
+:focus-visible {
+  outline: 2px solid var(--acid);
+  outline-offset: 2px;
+}
+
+@layer components {
+  /* Y2K chrome lettering. */
+  .chrome-text {
+    background: linear-gradient(180deg, #ffffff 0%, #c9ccd3 38%, #6d717a 52%, #e9ebef 70%, #9aa0aa 100%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  /* Small monospace caps, for labels and the numbering of sections. */
+  .label {
+    font-family: var(--font-mono), ui-monospace, monospace;
+    font-size: 10.5px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+  }
+  /* A Constructivist slab: a red bar along the left edge. */
+  .slab {
+    box-shadow: inset 3px 0 0 var(--signal);
+  }
+}
+
 /* Rendered Markdown in chat answers. */
+.markdown {
+  color: var(--paper);
+}
 .markdown > * + * {
-  margin-top: 0.75rem;
+  margin-top: 0.8rem;
 }
 .markdown ul {
-  list-style: disc;
+  list-style: square;
   padding-left: 1.25rem;
+}
+.markdown ul li::marker {
+  color: var(--signal);
 }
 .markdown ol {
   list-style: decimal;
-  padding-left: 1.25rem;
+  padding-left: 1.4rem;
+}
+.markdown ol li::marker {
+  color: var(--muted);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.85em;
+}
+.markdown li + li {
+  margin-top: 0.25rem;
 }
 .markdown h1,
 .markdown h2,
+.markdown h3,
+.markdown h4 {
+  font-family: var(--font-display), sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.markdown h1 {
+  font-size: 1.3rem;
+}
+.markdown h2 {
+  font-size: 1.12rem;
+}
 .markdown h3 {
-  font-weight: 600;
+  font-size: 1rem;
+}
+.markdown strong {
+  color: #fff;
+  font-weight: 650;
 }
 .markdown code {
+  border: 1px solid var(--line);
   border-radius: 0.25rem;
-  background: #f1f5f9;
-  padding: 0.1rem 0.3rem;
-  font-size: 0.85em;
+  background: var(--raised);
+  padding: 0.08rem 0.3rem;
+  font-family: var(--font-mono), monospace;
+  font-size: 0.84em;
+  color: var(--acid);
 }
 .markdown pre {
   overflow-x: auto;
-  border-radius: 0.5rem;
-  background: #f1f5f9;
-  padding: 0.75rem;
+  padding: 0.85rem 1rem;
+  font-size: 12.5px;
+  line-height: 1.6;
 }
 .markdown pre code {
+  border: 0;
   background: none;
   padding: 0;
+  color: inherit;
 }
 .markdown a {
-  color: #4338ca;
+  color: var(--cyan);
   text-decoration: underline;
+  text-decoration-color: rgba(121, 242, 255, 0.4);
+  text-underline-offset: 3px;
+}
+.markdown a:hover {
+  text-decoration-color: var(--cyan);
+}
+.markdown blockquote {
+  border-left: 3px solid var(--signal);
+  padding-left: 0.9rem;
+  color: #c3beb4;
+}
+.markdown hr {
+  border-color: var(--line);
+}
+.markdown table {
+  display: block;
+  overflow-x: auto;
+  border-collapse: collapse;
+  font-size: 0.92em;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid var(--line);
+  padding: 0.35rem 0.65rem;
+  text-align: left;
+}
+.markdown th {
+  background: var(--raised);
+  font-family: var(--font-mono), monospace;
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+.markdown .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
 }
 
 /* Shiki output in the code panel: one .line span per source line. */
@@ -60,32 +190,74 @@
   display: inline-block;
   width: 3rem;
   margin-right: 1rem;
-  color: #94a3b8;
+  color: #5c5a62;
   content: counter(line);
   counter-increment: line;
   text-align: right;
   user-select: none;
 }
 .code-view .line.cited {
-  background: #fef3c7;
-  box-shadow: inset 3px 0 0 #f59e0b;
+  background: rgba(255, 61, 31, 0.16);
+  box-shadow: inset 3px 0 0 var(--signal);
 }
 
 /* File nodes and dependency edges on the graph page. */
 .react-flow__node.file-node {
   width: auto;
   border: 1px solid #cbd5e1;
-  border-radius: 0.5rem;
-  background: #fff;
+  border-radius: 0;
+  background: var(--panel);
   padding: 0.4rem 0.7rem;
-  color: #0f172a;
-  font-size: 12px;
+  color: var(--paper);
+  font-family: var(--font-mono), monospace;
+  font-size: 11.5px;
 }
 .react-flow__node.file-node.in-cycle {
   border: 2px solid #dc2626;
-  background: #fef2f2;
-  color: #991b1b;
+  background: #2a0f0c;
+  color: #ffb4a6;
 }
 .react-flow__node.file-node.selected {
-  box-shadow: 0 0 0 3px #c7d2fe;
+  box-shadow: 4px 4px 0 0 var(--acid);
+}
+.react-flow__background {
+  background: var(--ink);
+}
+.react-flow__controls-button {
+  border-bottom-color: var(--line) !important;
+  background: var(--panel) !important;
+  fill: var(--paper) !important;
+}
+.react-flow__controls-button:hover {
+  background: var(--raised) !important;
+}
+.react-flow__minimap {
+  background: var(--panel) !important;
+}
+.react-flow__attribution {
+  background: transparent !important;
+}
+.react-flow__attribution a {
+  color: var(--muted) !important;
+}
+
+/* Recharts on the health page. */
+.recharts-cartesian-axis-tick-value {
+  fill: var(--muted);
+  font-family: var(--font-mono), monospace;
+  font-size: 11px;
+}
+.recharts-default-tooltip {
+  border-color: var(--line) !important;
+  background: var(--panel) !important;
+  color: var(--paper);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

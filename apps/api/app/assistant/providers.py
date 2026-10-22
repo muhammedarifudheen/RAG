@@ -20,9 +20,16 @@ GEMINI_BASE = "https://generativelanguage.googleapis.com/v1beta/models"
 
 
 @dataclass
+class Image:
+    mime: str  # image/png, image/jpeg, image/webp or image/gif
+    data: str  # base64
+
+
+@dataclass
 class Turn:
     role: str  # "user" or "assistant"
     content: str
+    images: list[Image] = field(default_factory=list)
 
 
 @dataclass
@@ -48,7 +55,14 @@ class Provider(Protocol):
         ...
 
     def stream(
-        self, model: str, system: str, turns: Sequence[Turn], outcome: Outcome, *, web: bool
+        self,
+        model: str,
+        system: str,
+        turns: Sequence[Turn],
+        outcome: Outcome,
+        *,
+        web: bool,
+        temperature: float | None = None,
     ) -> Iterator[str]: ...
 
 
@@ -93,18 +107,31 @@ class GeminiProvider:
         return time.monotonic() >= self.search_off_until
 
     def stream(
-        self, model: str, system: str, turns: Sequence[Turn], outcome: Outcome, *, web: bool
+        self,
+        model: str,
+        system: str,
+        turns: Sequence[Turn],
+        outcome: Outcome,
+        *,
+        web: bool,
+        temperature: float | None = None,
     ) -> Iterator[str]:
+        config: dict = {"maxOutputTokens": self.max_tokens}
+        if temperature is not None:
+            config["temperature"] = temperature
         payload: dict = {
             "system_instruction": {"parts": [{"text": system}]},
             "contents": [
                 {
                     "role": "model" if t.role == "assistant" else "user",
-                    "parts": [{"text": t.content}],
+                    "parts": [
+                        *({"inline_data": {"mime_type": i.mime, "data": i.data}} for i in t.images),
+                        {"text": t.content},
+                    ],
                 }
                 for t in turns
             ],
-            "generationConfig": {"maxOutputTokens": self.max_tokens},
+            "generationConfig": config,
         }
         if web and self.searches(model):
             try:
@@ -183,15 +210,24 @@ class OpenAICompatibleProvider:
         return "compound" in model
 
     def stream(
-        self, model: str, system: str, turns: Sequence[Turn], outcome: Outcome, *, web: bool
+        self,
+        model: str,
+        system: str,
+        turns: Sequence[Turn],
+        outcome: Outcome,
+        *,
+        web: bool,
+        temperature: float | None = None,
     ) -> Iterator[str]:
-        payload = {
+        payload: dict = {
             "model": model,
             "messages": [{"role": "system", "content": system}]
-            + [{"role": t.role, "content": t.content} for t in turns],
+            + [{"role": t.role, "content": _openai_content(t)} for t in turns],
             "max_tokens": self.max_tokens,
             "stream": True,
         }
+        if temperature is not None:
+            payload["temperature"] = temperature
         headers = {"Authorization": f"Bearer {self.api_key}", **self.extra_headers}
         try:
             with self.client.stream(
@@ -217,6 +253,32 @@ class OpenAICompatibleProvider:
             raise ProviderError(f"{self.label} {model} could not be reached: {error}") from error
 
 
+def _openai_content(turn: Turn) -> str | list[dict]:
+    """Plain text, or text and images as content parts (vision models only; others
+    refuse the request and the assistant moves on)."""
+    if not turn.images:
+        return turn.content
+    return [
+        *(
+            {"type": "image_url", "image_url": {"url": f"data:{i.mime};base64,{i.data}"}}
+            for i in turn.images
+        ),
+        {"type": "text", "text": turn.content},
+    ]
+
+
+def _claude_content(turn: Turn) -> str | list[dict]:
+    if not turn.images:
+        return turn.content
+    return [
+        *(
+            {"type": "image", "source": {"type": "base64", "media_type": i.mime, "data": i.data}}
+            for i in turn.images
+        ),
+        {"type": "text", "text": turn.content},
+    ]
+
+
 class ClaudeProvider:
     name = "claude"
     label = "Claude"
@@ -230,14 +292,23 @@ class ClaudeProvider:
         return False
 
     def stream(
-        self, model: str, system: str, turns: Sequence[Turn], outcome: Outcome, *, web: bool
+        self,
+        model: str,
+        system: str,
+        turns: Sequence[Turn],
+        outcome: Outcome,
+        *,
+        web: bool,
+        temperature: float | None = None,
     ) -> Iterator[str]:
+        options: dict = {} if temperature is None else {"temperature": min(temperature, 1.0)}
         try:
             with self.client.messages.stream(
                 model=model,
                 max_tokens=self.max_tokens,
                 system=system,
-                messages=[{"role": t.role, "content": t.content} for t in turns],
+                messages=[{"role": t.role, "content": _claude_content(t)} for t in turns],
+                **options,
             ) as stream:
                 outcome.model = model
                 yield from stream.text_stream

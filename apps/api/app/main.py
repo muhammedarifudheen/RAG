@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import settings
 from app.middleware import log_requests
-from app.routers import files, graph, health, ingest, search, sources
+from app.routers import chat, files, graph, health, ingest, search, sources
 
 DESCRIPTION = """\
 Build a knowledge base from GitHub repositories, web pages, Wikipedia articles and
@@ -23,6 +23,7 @@ TAGS = [
     {"name": "ingest", "description": "Add, list and remove the sources in the knowledge base."},
     {"name": "files", "description": "Source text and symbols of ingested files."},
     {"name": "search", "description": "Vector search and retrieval-augmented answers."},
+    {"name": "chat", "description": "Attached files and shared chats, for the chat page."},
     {"name": "graph", "description": "Call graph traversal."},
     {"name": "health", "description": "Static measures of the ingested code."},
     {"name": "ops", "description": "Operational endpoints."},
@@ -60,6 +61,7 @@ def create_app() -> FastAPI:
     app.include_router(ingest.router)
     app.include_router(sources.router)
     app.include_router(search.router)
+    app.include_router(chat.router)
     app.include_router(graph.router)
     app.include_router(files.router)
     app.include_router(health.router)

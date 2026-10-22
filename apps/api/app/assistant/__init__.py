@@ -1,3 +1,3 @@
-from .service import Assistant, AssistantError, get_assistant
+from .service import Assistant, AssistantError, Options, get_assistant
 
-__all__ = ["Assistant", "AssistantError", "get_assistant"]
+__all__ = ["Assistant", "AssistantError", "Options", "get_assistant"]

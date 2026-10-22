@@ -1,6 +1,7 @@
 from app.models.base import Base
 
 # Import model modules here so Alembic autogenerate can see them.
+from app.models.chat import SharedChat
 from app.models.code_graph import (
     EDGE_KINDS,
     EMBEDDING_DIM,
@@ -20,6 +21,7 @@ __all__ = [
     "Base",
     "Edge",
     "File",
+    "SharedChat",
     "Source",
     "Symbol",
 ]

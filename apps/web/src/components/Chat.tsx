@@ -2,22 +2,34 @@
 
 import type { AskResponse, AssistantMode, ChatTurn } from "@atlas/shared";
 import dynamic from "next/dynamic";
-import { useCallback, useEffect, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { askAssistant } from "@/lib/api";
+import { attachmentsToSend, imageSource } from "@/lib/attachments";
 import {
   loadChats,
   loadMode,
+  loadSettings,
   newChatId,
+  parseImportedChats,
   saveChats,
   saveMode,
+  saveSettings,
   titleOf,
+  DEFAULT_SETTINGS,
+  type ChatSettings,
   type SavedChat,
+  type StoredAttachment,
   type StoredMessage,
 } from "@/lib/chats";
 import type { CodeRange } from "@/lib/citations";
+import { chatToMarkdown, copyText, download, exportAllChats, fileNameOf } from "@/lib/exporting";
+import { useSpeaker } from "@/lib/speech";
 
 import { Answer, StreamingAnswer } from "./Answer";
+import { ChatComposer, type ComposerHandle } from "./ChatComposer";
+import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
+import { ChatSidebar } from "./ChatSidebar";
 import { useTakingLong, WAKING_HINT } from "./States";
 
 // Loaded in the browser on first use. Next.js will not bundle Shiki for the server,
@@ -37,30 +49,57 @@ const MODES: { value: AssistantMode; label: string; hint: string }[] = [
   { value: "best", label: "Best model", hint: "Always starts with the strongest AI available" },
 ];
 
+const STARTERS = [
+  { tag: "Sources", text: "How does itsdangerous sign data and check a signature?" },
+  { tag: "Picture", text: "Draw a retro-futurist city skyline at dusk, chrome and neon" },
+  { tag: "Code", text: "Write a Python function that removes duplicates from a list, keeping order" },
+  { tag: "Explain", text: "Explain the difference between TCP and UDP in a table" },
+];
+
+type DialogName = "settings" | "share" | "shortcuts" | null;
+
+function turnsOf(messages: StoredMessage[]): ChatTurn[] {
+  return messages
+    .flatMap((message): ChatTurn[] => {
+      if (message.role === "user") {
+        const files = message.attachments?.map((a) => a.name) ?? [];
+        const note = files.length ? `\n\n[Attached: ${files.join(", ")}]` : "";
+        return [{ role: "user", content: message.text + note }];
+      }
+      if (message.role === "assistant") {
+        return [{ role: "assistant", content: message.response.answer }];
+      }
+      return [];
+    })
+    .slice(-HISTORY_MESSAGES);
+}
+
+function timeOf(at: number | undefined): string {
+  return at ? new Date(at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "";
+}
+
 export function Chat() {
   const [messages, setMessages] = useState<Message[]>([]);
-  const [question, setQuestion] = useState("");
-  const [pending, setPending] = useState(false);
+  const [pending, setPending] = useState<null | "answer" | "image">(null);
   const [streaming, setStreaming] = useState<string | null>(null);
-  const slow = useTakingLong(pending && !streaming);
+  const slow = useTakingLong(pending !== null && !streaming);
   const [selected, setSelected] = useState<CodeRange | null>(null);
   const [chats, setChats] = useState<SavedChat[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
   const [mode, setMode] = useState<AssistantMode>("auto");
+  const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
   const [showChats, setShowChats] = useState(false);
+  const [dialog, setDialog] = useState<DialogName>(null);
+  const [editing, setEditing] = useState<number | null>(null);
+  const [notice, setNotice] = useState("");
+  const [atBottom, setAtBottom] = useState(true);
   const nextId = useRef(0);
+  const log = useRef<HTMLDivElement>(null);
   const end = useRef<HTMLDivElement>(null);
   const abort = useRef<AbortController | null>(null);
-
-  // Saved chats and the mode live in this browser; read them once mounted.
-  useEffect(() => {
-    setChats(loadChats());
-    setMode(loadMode());
-  }, []);
-
-  useEffect(() => {
-    end.current?.scrollIntoView({ block: "end" });
-  }, [messages, pending, streaming]);
+  const composer = useRef<ComposerHandle>(null);
+  const search = useRef<HTMLInputElement>(null);
+  const speaker = useSpeaker();
 
   const withIds = useCallback(
     (stored: StoredMessage[]): Message[] =>
@@ -68,52 +107,101 @@ export function Chat() {
     [],
   );
 
+  // Saved chats and settings live in this browser; read them once mounted, and open
+  // the chat named in the address (?c=…), as the share page does after an import.
+  useEffect(() => {
+    const saved = loadChats();
+    setChats(saved);
+    setMode(loadMode());
+    setSettings(loadSettings());
+    const wanted = new URLSearchParams(window.location.search).get("c");
+    const chat = wanted ? saved.find((c) => c.id === wanted) : undefined;
+    if (chat) {
+      setChatId(chat.id);
+      setMessages(withIds(chat.messages));
+    }
+  }, [withIds]);
+
+  useEffect(() => {
+    if (atBottom) end.current?.scrollIntoView({ block: "end" });
+  }, [messages, pending, streaming, atBottom]);
+
+  const flash = useCallback((text: string) => {
+    setNotice(text);
+    setTimeout(() => setNotice((current) => (current === text ? "" : current)), 1800);
+  }, []);
+
   function remember(id: string, stored: StoredMessage[]) {
     setChats((current) => {
-      const chat: SavedChat = { id, title: titleOf(stored), updatedAt: Date.now(), messages: stored };
+      const previous = current.find((c) => c.id === id);
+      const chat: SavedChat = {
+        ...previous,
+        id,
+        title: previous?.renamed ? previous.title : titleOf(stored),
+        updatedAt: Date.now(),
+        messages: stored,
+      };
       const next = [chat, ...current.filter((c) => c.id !== id)];
       saveChats(next);
       return next;
     });
   }
 
-  async function send(text: string) {
+  function updateChats(change: (chats: SavedChat[]) => SavedChat[]) {
+    setChats((current) => {
+      const next = change(current);
+      saveChats(next);
+      return next;
+    });
+  }
+
+  /** Sends a question after `base`, the conversation so far (shorter when editing). */
+  async function send(
+    text: string,
+    attachments: StoredAttachment[],
+    draw: boolean,
+    base: StoredMessage[] = messages.map(({ id: _id, ...message }) => message),
+  ) {
     const trimmed = text.trim();
     if (!trimmed || pending) return;
 
     const id = chatId ?? newChatId();
     setChatId(id);
-    const before: StoredMessage[] = messages.map(({ id: _id, ...message }) => message);
-    const history: ChatTurn[] = before
-      .flatMap((message): ChatTurn[] => {
-        if (message.role === "user") return [{ role: "user", content: message.text }];
-        if (message.role === "assistant") {
-          return [{ role: "assistant", content: message.response.answer }];
-        }
-        return [];
-      })
-      .slice(-HISTORY_MESSAGES);
-
-    setMessages((current) => [...current, ...withIds([{ role: "user", text: trimmed }])]);
-    setQuestion("");
-    setPending(true);
+    setEditing(null);
+    speaker.stop();
+    const question: StoredMessage = {
+      role: "user",
+      text: trimmed,
+      ...(attachments.length ? { attachments } : {}),
+      at: Date.now(),
+    };
+    setMessages(withIds([...base, question]));
+    setPending(draw ? "image" : "answer");
     setStreaming(null);
+    setAtBottom(true);
     const controller = new AbortController();
     abort.current = controller;
 
     let reply: StoredMessage;
     try {
       const response: AskResponse = await askAssistant(
-        trimmed,
-        history,
-        mode,
+        {
+          question: trimmed,
+          history: turnsOf(base),
+          mode,
+          attachments: attachmentsToSend(base, attachments),
+          style: settings.style,
+          temperature: settings.temperature,
+          instructions: settings.instructions,
+          task: draw ? "image" : "answer",
+        },
         {
           onDelta: (piece) => setStreaming((current) => (current ?? "") + piece),
           onReset: () => setStreaming(null),
         },
         controller.signal,
       );
-      reply = { role: "assistant", response };
+      reply = { role: "assistant", response, at: Date.now() };
     } catch (error) {
       const stopped = error instanceof DOMException && error.name === "AbortError";
       reply = {
@@ -123,43 +211,70 @@ export function Chat() {
           : error instanceof Error
             ? error.message
             : "Request failed.",
+        at: Date.now(),
       };
     } finally {
       abort.current = null;
-      setPending(false);
+      setPending(null);
       setStreaming(null);
     }
-    setMessages((current) => [...current, ...withIds([reply])]);
-    remember(id, [...before, { role: "user", text: trimmed }, reply]);
+    const [shown] = withIds([reply]);
+    setMessages((current) => [...current, shown]);
+    remember(id, [...base, question, reply]);
+    if (reply.role === "assistant" && settings.speak) speaker.speak(`m-${shown.id}`, reply.response.answer);
   }
 
-  function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    void send(question);
+  function stored(): StoredMessage[] {
+    return messages.map(({ id: _id, ...message }) => message);
+  }
+
+  /** Asks the last question again (after an error, or for a different answer). */
+  function regenerate() {
+    const all = stored();
+    const index = all.map((m) => m.role).lastIndexOf("user");
+    if (index === -1) return;
+    const question = all[index];
+    if (question.role !== "user") return;
+    const after = all[index + 1];
+    const drew = after?.role === "assistant" && after.response.route === "image";
+    void send(question.text, question.attachments ?? [], drew, all.slice(0, index));
+  }
+
+  function resendEdited(messageId: number, text: string) {
+    const index = messages.findIndex((m) => m.id === messageId);
+    const original = messages[index];
+    if (index === -1 || original.role !== "user") return;
+    void send(text, original.attachments ?? [], false, stored().slice(0, index));
+  }
+
+  function editLast() {
+    const last = [...messages].reverse().find((m) => m.role === "user");
+    if (last && !pending) setEditing(last.id);
   }
 
   function openChat(chat: SavedChat) {
     if (pending) return;
+    speaker.stop();
     setChatId(chat.id);
     setMessages(withIds(chat.messages));
     setSelected(null);
+    setEditing(null);
     setShowChats(false);
   }
 
   function startNewChat() {
     if (pending) return;
+    speaker.stop();
     setChatId(null);
     setMessages([]);
     setSelected(null);
+    setEditing(null);
     setShowChats(false);
+    composer.current?.focus();
   }
 
   function deleteChat(id: string) {
-    setChats((current) => {
-      const next = current.filter((c) => c.id !== id);
-      saveChats(next);
-      return next;
-    });
+    updateChats((current) => current.filter((c) => c.id !== id));
     if (id === chatId) startNewChat();
   }
 
@@ -168,67 +283,113 @@ export function Chat() {
     saveMode(next);
   }
 
+  function changeSettings(next: ChatSettings) {
+    setSettings(next);
+    saveSettings(next);
+  }
+
+  async function importChats(file: File) {
+    try {
+      const imported = parseImportedChats(await file.text());
+      updateChats((current) => [...imported, ...current]);
+      flash(`Imported ${imported.length} ${imported.length === 1 ? "chat" : "chats"}`);
+    } catch {
+      flash("That file is not an Atlas chats export");
+    }
+  }
+
+  const copyAnswer = useCallback(
+    async (text: string) => {
+      await copyText(text);
+      flash("Copied to the clipboard");
+    },
+    [flash],
+  );
+
+  const current = chats.find((c) => c.id === chatId) ?? null;
+  const title = current?.title ?? (messages.length ? titleOf(stored()) : "New chat");
+
+  // Keyboard shortcuts for the whole page; the message box handles Enter and ↑.
+  const shortcuts = useRef<(event: KeyboardEvent) => void>(() => {});
+  shortcuts.current = (event: KeyboardEvent) => {
+    const mod = event.ctrlKey || event.metaKey;
+    const typing =
+      event.target instanceof HTMLElement &&
+      (event.target.isContentEditable || ["INPUT", "TEXTAREA"].includes(event.target.tagName));
+    if (event.key === "Escape" && pending && !dialog) {
+      abort.current?.abort();
+    } else if (mod && event.shiftKey && event.key.toLowerCase() === "o") {
+      event.preventDefault();
+      startNewChat();
+    } else if (mod && !event.shiftKey && event.key.toLowerCase() === "k") {
+      event.preventDefault();
+      setShowChats(true);
+      requestAnimationFrame(() => search.current?.focus());
+    } else if (mod && event.key === "/") {
+      event.preventDefault();
+      setDialog("shortcuts");
+    } else if (mod && event.shiftKey && event.key.toLowerCase() === "c") {
+      const last = [...messages].reverse().find((m) => m.role === "assistant");
+      if (last?.role === "assistant") {
+        event.preventDefault();
+        void copyAnswer(last.response.answer);
+      }
+    } else if (event.key === "/" && !typing && !mod && !dialog) {
+      event.preventDefault();
+      composer.current?.focus();
+    }
+  };
+  useEffect(() => {
+    const listener = (event: KeyboardEvent) => shortcuts.current(event);
+    window.addEventListener("keydown", listener);
+    return () => window.removeEventListener("keydown", listener);
+  }, []);
+
   const last = messages.at(-1);
-  const suggestions =
-    !pending && last?.role === "assistant" ? (last.response.suggestions ?? []) : [];
+  const lastAnswerId = last?.role === "assistant" ? last.id : null;
+  const suggestions = !pending && last?.role === "assistant" ? (last.response.suggestions ?? []) : [];
 
   return (
-    <div className="flex min-h-0 flex-1">
-      <aside
-        aria-label="Saved chats"
-        className={`${showChats ? "flex" : "hidden"} w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-50 md:flex`}
-      >
-        <div className="p-3">
-          <button
-            type="button"
-            onClick={startNewChat}
-            disabled={pending}
-            className="w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-50"
-          >
-            + New chat
-          </button>
-        </div>
-        <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto px-2 pb-3">
-          {chats.length === 0 && (
-            <li className="px-2 py-1 text-xs text-slate-500">Your chats are kept in this browser.</li>
-          )}
-          {chats.map((chat) => (
-            <li key={chat.id} className="group flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => openChat(chat)}
-                aria-current={chat.id === chatId ? "page" : undefined}
-                className={`min-w-0 flex-1 truncate rounded px-2 py-1.5 text-left text-sm ${
-                  chat.id === chatId
-                    ? "bg-indigo-100 text-indigo-900"
-                    : "text-slate-700 hover:bg-slate-200"
-                }`}
-              >
-                {chat.title}
-              </button>
-              <button
-                type="button"
-                onClick={() => deleteChat(chat.id)}
-                aria-label={`Delete chat ${chat.title}`}
-                className="rounded px-1.5 py-1 text-xs text-slate-400 opacity-0 hover:bg-slate-200 hover:text-red-700 focus:opacity-100 group-hover:opacity-100"
-              >
-                ✕
-              </button>
-            </li>
-          ))}
-        </ul>
-      </aside>
+    // Exactly the screen below the navigation bar: only the conversation scrolls.
+    <div className="relative flex h-[calc(100dvh-3.5rem)] min-h-0">
+      <ChatSidebar
+        ref={search}
+        chats={chats}
+        currentId={chatId}
+        open={showChats}
+        busy={pending !== null}
+        onOpen={openChat}
+        onNew={startNewChat}
+        onDelete={deleteChat}
+        onRename={(id, name) =>
+          updateChats((all) => all.map((c) => (c.id === id ? { ...c, title: name, renamed: true } : c)))
+        }
+        onPin={(id) => updateChats((all) => all.map((c) => (c.id === id ? { ...c, pinned: !c.pinned } : c)))}
+        onSettings={() => setDialog("settings")}
+        onShortcuts={() => setDialog("shortcuts")}
+      />
+      {showChats && (
+        <button
+          type="button"
+          aria-label="Close chats"
+          onClick={() => setShowChats(false)}
+          className="absolute inset-0 z-20 bg-black/60 md:hidden"
+        />
+      )}
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-2">
+        <div className="flex items-center gap-2 border-b border-line bg-ink/80 px-4 py-2">
           <button
             type="button"
             onClick={() => setShowChats((v) => !v)}
-            className="rounded border border-slate-300 px-2 py-1 text-xs text-slate-600 md:hidden"
+            className="label border border-line px-2 py-1 text-muted md:hidden"
           >
             Chats
           </button>
-          <div role="radiogroup" aria-label="Models" className="ml-auto flex rounded-md border border-slate-300 p-0.5">
+          <p className="min-w-0 flex-1 truncate font-display text-xs font-semibold uppercase tracking-[0.1em] text-soft">
+            {title}
+          </p>
+          <div role="radiogroup" aria-label="Models" className="flex border border-line-strong">
             {MODES.map((option) => (
               <button
                 key={option.value}
@@ -237,122 +398,380 @@ export function Chat() {
                 aria-checked={mode === option.value}
                 title={option.hint}
                 onClick={() => chooseMode(option.value)}
-                className={`rounded px-2.5 py-1 text-xs font-medium ${
-                  mode === option.value ? "bg-indigo-600 text-white" : "text-slate-600 hover:bg-slate-100"
+                className={`whitespace-nowrap px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
+                  mode === option.value ? "bg-paper text-ink" : "text-muted hover:text-paper"
                 }`}
               >
                 {option.label}
               </button>
             ))}
           </div>
+          <HeaderButton
+            label="Share"
+            disabled={!current || pending !== null}
+            onClick={() => setDialog("share")}
+          />
+          <HeaderButton
+            label="Export"
+            title="Save this chat as Markdown"
+            disabled={messages.length === 0}
+            onClick={() => download(fileNameOf(title, "md"), chatToMarkdown(title, stored()), "text/markdown")}
+          />
         </div>
 
         <div
+          ref={log}
           role="log"
           aria-label="Conversation"
-          className="mx-auto w-full max-w-3xl flex-1 space-y-6 overflow-y-auto px-4 py-6"
+          onScroll={(event) => {
+            const box = event.currentTarget;
+            setAtBottom(box.scrollHeight - box.scrollTop - box.clientHeight < 80);
+          }}
+          className="relative flex-1 overflow-y-auto"
         >
-          {messages.length === 0 && (
-            <div className="pt-16 text-center text-slate-500">
-              <h1 className="text-xl font-semibold text-slate-800">
-                Ask about the codebase — or anything else
-              </h1>
-              <p className="mt-2 text-sm">
-                Atlas answers from your sources first, citing the exact lines, then from the
-                web and general knowledge. Follow-up questions remember the conversation.
-              </p>
-            </div>
-          )}
+          <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
+            {messages.length === 0 && <EmptyState onPick={(text) => void send(text, [], text.startsWith("Draw"))} />}
 
-          {messages.map((message) => {
-            if (message.role === "user") {
+            {messages.map((message) => {
+              if (message.role === "user") {
+                return (
+                  <UserMessage
+                    key={message.id}
+                    message={message}
+                    editing={editing === message.id}
+                    busy={pending !== null}
+                    onEdit={() => setEditing(message.id)}
+                    onCancel={() => setEditing(null)}
+                    onResend={(text) => resendEdited(message.id, text)}
+                    onCopy={() => void copyAnswer(message.text)}
+                  />
+                );
+              }
+              if (message.role === "error") {
+                return (
+                  <div key={message.id} className="space-y-2">
+                    <p
+                      role="alert"
+                      className="border border-danger/40 bg-danger/10 p-3 text-sm text-danger"
+                    >
+                      {message.text}
+                    </p>
+                    {message.id === last?.id && !pending && (
+                      <button
+                        type="button"
+                        onClick={regenerate}
+                        className="label border border-line px-2.5 py-1 text-muted hover:border-line-strong hover:text-paper"
+                      >
+                        ↻ Try again
+                      </button>
+                    )}
+                  </div>
+                );
+              }
+              const speakingThis = speaker.speaking === `m-${message.id}`;
               return (
-                <div key={message.id} className="flex justify-end">
-                  <p className="max-w-[80%] whitespace-pre-wrap rounded-2xl bg-indigo-600 px-4 py-2 text-sm text-white">
-                    {message.text}
-                  </p>
+                <div key={message.id}>
+                  <Answer response={message.response} onCite={setSelected} />
+                  <div className="mt-1.5 flex items-center gap-1 pl-1">
+                    <ActionButton label="Copy answer" onClick={() => void copyAnswer(message.response.answer)}>
+                      ⧉ Copy
+                    </ActionButton>
+                    {speaker.supported && (
+                      <ActionButton
+                        label="Read aloud"
+                        pressed={speakingThis}
+                        onClick={() =>
+                          speakingThis
+                            ? speaker.stop()
+                            : speaker.speak(`m-${message.id}`, message.response.answer)
+                        }
+                      >
+                        {speakingThis ? "■ Silence" : "▶ Listen"}
+                      </ActionButton>
+                    )}
+                    {message.id === lastAnswerId && !pending && (
+                      <ActionButton label="Regenerate" onClick={regenerate}>
+                        ↻ Regenerate
+                      </ActionButton>
+                    )}
+                    <span className="label ml-auto text-faint">{timeOf(message.at)}</span>
+                  </div>
                 </div>
               );
-            }
-            if (message.role === "error") {
-              return (
-                <p
-                  key={message.id}
-                  role="alert"
-                  className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-800"
-                >
-                  {message.text}
+            })}
+
+            {pending && streaming && pending === "answer" && <StreamingAnswer text={streaming} />}
+
+            {pending && (!streaming || pending === "image") && (
+              <div role="status" className="slab py-2 pl-4 text-sm text-muted">
+                <p className="animate-pulse">
+                  {pending === "image"
+                    ? "Writing a description and drawing your picture…"
+                    : "Searching the knowledge base and writing an answer…"}
                 </p>
-              );
-            }
-            return <Answer key={message.id} response={message.response} onCite={setSelected} />;
-          })}
+                {slow && <p className="mt-1">{WAKING_HINT}</p>}
+              </div>
+            )}
 
-          {pending && streaming && <StreamingAnswer text={streaming} />}
-
-          {pending && !streaming && (
-            <div role="status" className="text-sm text-slate-500">
-              <p className="animate-pulse">Searching the knowledge base and writing an answer…</p>
-              {slow && <p className="mt-1">{WAKING_HINT}</p>}
-            </div>
-          )}
-
-          {suggestions.length > 0 && (
-            <div aria-label="Suggested questions" role="group" className="flex flex-wrap gap-2">
-              {suggestions.map((suggestion) => (
-                <button
-                  key={suggestion}
-                  type="button"
-                  onClick={() => void send(suggestion)}
-                  className="rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-left text-xs text-indigo-800 hover:bg-indigo-100"
-                >
-                  {suggestion}
-                </button>
-              ))}
-            </div>
-          )}
-          <div ref={end} />
+            {suggestions.length > 0 && (
+              <div aria-label="Suggested questions" role="group" className="flex flex-wrap gap-2">
+                {suggestions.map((suggestion) => (
+                  <button
+                    key={suggestion}
+                    type="button"
+                    onClick={() => void send(suggestion, [], false)}
+                    className="border border-line px-3 py-1.5 text-left text-xs text-soft transition-colors before:mr-1.5 before:text-acid before:content-['→'] hover:border-acid hover:text-acid"
+                  >
+                    {suggestion}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div ref={end} />
+          </div>
         </div>
 
-        <form
-          onSubmit={onSubmit}
-          className="sticky bottom-0 border-t border-slate-200 bg-white px-4 py-3"
-        >
-          <div className="mx-auto flex max-w-3xl gap-2">
-            <label htmlFor="question" className="sr-only">
-              Question
-            </label>
-            <input
-              id="question"
-              value={question}
-              onChange={(event) => setQuestion(event.target.value)}
-              placeholder="Ask anything…"
-              autoComplete="off"
-              maxLength={2000}
-              className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-2 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
-            />
-            {pending ? (
-              <button
-                type="button"
-                onClick={() => abort.current?.abort()}
-                className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
-              >
-                Stop
-              </button>
-            ) : (
-              <button
-                type="submit"
-                disabled={question.trim() === ""}
-                className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
-              >
-                Ask
-              </button>
-            )}
+        {!atBottom && (
+          <div className="pointer-events-none relative">
+            <button
+              type="button"
+              onClick={() => {
+                setAtBottom(true);
+                end.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+              }}
+              className="label pointer-events-auto absolute -top-12 left-1/2 -translate-x-1/2 border border-line-strong bg-panel px-3 py-1.5 text-soft shadow-block-acid hover:text-paper"
+            >
+              ↓ Jump to latest
+            </button>
           </div>
-        </form>
+        )}
+
+        <ChatComposer
+          ref={composer}
+          pending={pending !== null}
+          onSend={(text, attachments, draw) => void send(text, attachments, draw)}
+          onStop={() => abort.current?.abort()}
+          onEditLast={editLast}
+        />
+        <p aria-live="polite" className="sr-only">
+          {notice}
+        </p>
+        {notice && (
+          <p className="label pointer-events-none fixed bottom-24 left-1/2 z-40 -translate-x-1/2 bg-acid px-3 py-1.5 text-ink">
+            {notice}
+          </p>
+        )}
       </main>
 
       {selected && <CodePanel range={selected} onClose={() => setSelected(null)} />}
+
+      {dialog === "settings" && (
+        <SettingsDialog
+          settings={settings}
+          onChange={changeSettings}
+          onClose={() => setDialog(null)}
+          chatCount={chats.length}
+          onExportAll={() => exportAllChats(chats)}
+          onImport={(file) => void importChats(file)}
+          onDeleteAll={() => {
+            updateChats(() => []);
+            startNewChat();
+          }}
+        />
+      )}
+      {dialog === "share" && current && <ShareDialog chat={current} onClose={() => setDialog(null)} />}
+      {dialog === "shortcuts" && <ShortcutsDialog onClose={() => setDialog(null)} />}
     </div>
+  );
+}
+
+function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+  return (
+    <div className="pt-6 sm:pt-12">
+      <p className="label flex items-center gap-3 text-muted">
+        <span className="bg-signal px-1.5 py-0.5 text-ink">02</span>
+        Assistant
+        <span aria-hidden="true" className="h-px flex-1 bg-line" />
+      </p>
+      <h1 className="mt-6 font-display text-3xl font-extrabold uppercase leading-[1.08] tracking-tight sm:text-4xl">
+        Ask about the codebase <span className="text-signal">—</span>{" "}
+        <span className="chrome-text">or anything else</span>
+      </h1>
+      <p className="mt-4 max-w-xl text-sm text-soft">
+        Atlas answers from your sources first, citing the exact lines, then from the web and
+        general knowledge. Attach PDFs, code or images, have it draw a picture, and follow up:
+        it remembers the conversation.
+      </p>
+      <ul className="mt-8 grid gap-3 sm:grid-cols-2">
+        {STARTERS.map((starter, index) => (
+          <li key={starter.text}>
+            <button
+              type="button"
+              onClick={() => onPick(starter.text)}
+              className="group flex h-full w-full flex-col gap-2 border border-line bg-panel/70 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-paper/40 hover:shadow-block"
+            >
+              <span className="label flex items-center gap-2 text-muted">
+                <span className="text-signal">{String(index + 1).padStart(2, "0")}</span>
+                {starter.tag}
+              </span>
+              <span className="text-sm text-soft group-hover:text-paper">{starter.text}</span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+function UserMessage({
+  message,
+  editing,
+  busy,
+  onEdit,
+  onCancel,
+  onResend,
+  onCopy,
+}: {
+  message: Extract<StoredMessage, { role: "user" }> & { id: number };
+  editing: boolean;
+  busy: boolean;
+  onEdit: () => void;
+  onCancel: () => void;
+  onResend: (text: string) => void;
+  onCopy: () => void;
+}) {
+  const [draft, setDraft] = useState(message.text);
+  useEffect(() => {
+    if (editing) setDraft(message.text);
+  }, [editing, message.text]);
+
+  return (
+    <div className="group flex flex-col items-end">
+      {message.attachments && message.attachments.length > 0 && (
+        <ul className="mb-1.5 flex max-w-[85%] flex-wrap justify-end gap-1.5">
+          {message.attachments.map((attachment, index) => {
+            const source = imageSource(attachment);
+            return (
+              <li key={`${attachment.name}-${index}`} className="border border-line bg-panel text-xs text-soft">
+                {source ? (
+                  // eslint-disable-next-line @next/next/no-img-element -- the user's own image
+                  <img src={source} alt={attachment.name} className="h-24 max-w-[12rem] object-cover" />
+                ) : (
+                  <span className="flex items-center gap-1.5 px-2 py-1">
+                    <span className="font-mono text-[10px] text-acid">
+                      {attachment.kind === "image" ? "IMG" : "TXT"}
+                    </span>
+                    {attachment.name}
+                  </span>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      )}
+      {editing ? (
+        <form
+          className="w-full max-w-[85%]"
+          onSubmit={(event) => {
+            event.preventDefault();
+            if (draft.trim()) onResend(draft);
+          }}
+        >
+          <textarea
+            autoFocus
+            value={draft}
+            onChange={(event) => setDraft(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Escape") onCancel();
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                if (draft.trim()) onResend(draft);
+              }
+            }}
+            aria-label="Edit your message"
+            rows={Math.min(8, draft.split("\n").length + 1)}
+            className="w-full resize-y border border-signal bg-panel px-3 py-2 text-sm outline-none"
+          />
+          <div className="mt-1.5 flex justify-end gap-2">
+            <button type="button" onClick={onCancel} className="label px-2 py-1 text-muted hover:text-paper">
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={busy || !draft.trim()}
+              className="label bg-signal px-3 py-1 text-ink hover:bg-signal-hover disabled:opacity-50"
+            >
+              Send edit
+            </button>
+          </div>
+        </form>
+      ) : (
+        <>
+          <p className="max-w-[85%] whitespace-pre-wrap border border-line-strong bg-raised px-4 py-2.5 text-[15px] text-paper shadow-[3px_3px_0_0_#3d3d46]">
+            {message.text}
+          </p>
+          <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+            <span className="label mr-1 text-faint">{timeOf(message.at)}</span>
+            <ActionButton label="Copy message" onClick={onCopy}>
+              ⧉
+            </ActionButton>
+            {!busy && (
+              <ActionButton label="Edit message" onClick={onEdit}>
+                ✎ Edit
+              </ActionButton>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function ActionButton({
+  label,
+  pressed,
+  onClick,
+  children,
+}: {
+  label: string;
+  pressed?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={label}
+      className={`label px-2 py-1 transition-colors ${pressed ? "text-acid" : "text-muted hover:text-paper"}`}
+    >
+      {children}
+    </button>
+  );
+}
+
+function HeaderButton({
+  label,
+  title,
+  disabled,
+  onClick,
+}: {
+  label: string;
+  title?: string;
+  disabled: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      title={title ?? label}
+      className="label border border-line px-2 py-1.5 text-muted transition-colors hover:border-line-strong hover:text-paper disabled:opacity-40 sm:px-2.5"
+    >
+      {label}
+    </button>
   );
 }

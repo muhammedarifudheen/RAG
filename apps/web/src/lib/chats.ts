@@ -1,20 +1,44 @@
-import type { AskResponse, AssistantMode } from "@atlas/shared";
+import type { AnswerStyle, AskResponse, AssistantMode, Attachment } from "@atlas/shared";
 
-/** A message as kept in a saved conversation. */
+/** A file attached to a message. Images may lose `data` when storage runs short. */
+export type StoredAttachment = Attachment & { size?: number; truncated?: boolean };
+
+/** A message as kept in a saved conversation. `at` is when it was written (ms). */
 export type StoredMessage =
-  | { role: "user"; text: string }
-  | { role: "assistant"; response: AskResponse }
-  | { role: "error"; text: string };
+  | { role: "user"; text: string; attachments?: StoredAttachment[]; at?: number }
+  | { role: "assistant"; response: AskResponse; at?: number }
+  | { role: "error"; text: string; at?: number };
 
 export interface SavedChat {
   id: string;
   title: string;
   updatedAt: number;
   messages: StoredMessage[];
+  pinned?: boolean;
+  /** Set when the title was typed by the user, so it is not replaced. */
+  renamed?: boolean;
 }
+
+/** What the visitor chose for every question; kept in this browser. */
+export interface ChatSettings {
+  style: AnswerStyle;
+  /** Null: each model's own default. */
+  temperature: number | null;
+  instructions: string;
+  /** Read each new answer aloud. */
+  speak: boolean;
+}
+
+export const DEFAULT_SETTINGS: ChatSettings = {
+  style: "balanced",
+  temperature: null,
+  instructions: "",
+  speak: false,
+};
 
 const CHATS_KEY = "atlas-chats";
 const MODE_KEY = "atlas-mode";
+const SETTINGS_KEY = "atlas-settings";
 const MAX_CHATS = 50;
 
 /**
@@ -32,13 +56,40 @@ export function loadChats(): SavedChat[] {
   }
 }
 
+/** Pinned chats first, then the most recently used. */
+export function sortChats(chats: SavedChat[]): SavedChat[] {
+  return [...chats].sort(
+    (a, b) => Number(!!b.pinned) - Number(!!a.pinned) || b.updatedAt - a.updatedAt,
+  );
+}
+
 export function saveChats(chats: SavedChat[]): void {
-  const newest = [...chats].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CHATS);
+  const kept = [...chats].sort((a, b) => b.updatedAt - a.updatedAt).slice(0, MAX_CHATS);
   try {
-    window.localStorage.setItem(CHATS_KEY, JSON.stringify(newest));
+    window.localStorage.setItem(CHATS_KEY, JSON.stringify(kept));
   } catch {
-    // Not remembered; the conversation on screen is unaffected.
+    // Most likely full: attached images are the bulk, so keep the chats without them.
+    try {
+      window.localStorage.setItem(CHATS_KEY, JSON.stringify(kept.map(withoutImageData)));
+    } catch {
+      // Not remembered; the conversation on screen is unaffected.
+    }
   }
+}
+
+/** The chat without the bytes of attached images (their names stay). */
+export function withoutImageData(chat: SavedChat): SavedChat {
+  return {
+    ...chat,
+    messages: chat.messages.map((message) =>
+      message.role === "user" && message.attachments
+        ? {
+            ...message,
+            attachments: message.attachments.map(({ data: _data, ...rest }) => rest),
+          }
+        : message,
+    ),
+  };
 }
 
 export function loadMode(): AssistantMode {
@@ -57,6 +108,24 @@ export function saveMode(mode: AssistantMode): void {
   }
 }
 
+export function loadSettings(): ChatSettings {
+  try {
+    const raw = window.localStorage.getItem(SETTINGS_KEY);
+    const stored = raw ? (JSON.parse(raw) as Partial<ChatSettings>) : {};
+    return { ...DEFAULT_SETTINGS, ...stored };
+  } catch {
+    return DEFAULT_SETTINGS;
+  }
+}
+
+export function saveSettings(settings: ChatSettings): void {
+  try {
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+  } catch {
+    // Falls back to the defaults next time.
+  }
+}
+
 export function newChatId(): string {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
@@ -67,4 +136,21 @@ export function titleOf(messages: StoredMessage[]): string {
   const text = first && first.role === "user" ? first.text.replace(/\s+/g, " ").trim() : "";
   if (!text) return "New chat";
   return text.length > 60 ? `${text.slice(0, 57)}…` : text;
+}
+
+/** Chats from an exported file, given fresh ids so they never overwrite existing ones. */
+export function parseImportedChats(json: string): SavedChat[] {
+  const data = JSON.parse(json) as unknown;
+  const list = Array.isArray(data) ? data : [data];
+  return list
+    .filter(
+      (c): c is SavedChat =>
+        !!c && typeof c === "object" && Array.isArray((c as SavedChat).messages),
+    )
+    .map((c) => ({
+      ...c,
+      id: newChatId(),
+      title: typeof c.title === "string" && c.title ? c.title : titleOf(c.messages),
+      updatedAt: typeof c.updatedAt === "number" ? c.updatedAt : Date.now(),
+    }));
 }

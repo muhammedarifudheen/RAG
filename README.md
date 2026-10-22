@@ -118,10 +118,26 @@ The chat page answers any question, not only questions about your sources:
 - **A chatbot.** Answers stream as they are written, follow-ups remember the
   conversation, three follow-up questions are suggested, and past chats are kept in
   the browser's sidebar.
+- **Files and images.** Attach PDFs, EPUBs, web pages, code, CSV or text (read by
+  `POST /attachments`; nothing is stored) and images (sent to the models that can see
+  them). Drop or paste them into the message box; follow-ups still see them.
+- **Pictures.** "Draw a lighthouse at dusk", or the Draw switch: a fast model writes a
+  detailed prompt and [Pollinations](https://pollinations.ai) draws it (free, no key;
+  `IMAGE_URL_TEMPLATE` points elsewhere).
+- **Your settings.** Answer length (concise, balanced, detailed), creativity
+  (temperature) and custom instructions sent with every question; answers read aloud.
+- **Everything around it.** Copy, regenerate, edit a question and resend, copy code
+  blocks (highlighted), maths typeset with KaTeX, voice input, search, pin and rename
+  chats, export a chat as Markdown or all chats as JSON (and import them), share a
+  chat by link (`POST /shares`; on the free server the links last until it restarts),
+  and keyboard shortcuts (Ctrl+/ lists them).
 
 The API side is `apps/api/app/assistant` (router, providers, prompt). `/ask` uses it
 for streaming requests (`Accept: text/event-stream`) and for any request with
-`history`; a plain JSON question still gets the sources-only answer.
+`history`, `attachments`, `style`, `temperature`, `instructions` or `task`; a plain JSON
+question still gets the sources-only answer. Each service tries its best-suited models
+first; when all of those fail, the rest of every service's models are tried, since free
+quotas are counted per model.
 
 ## Deployment and CI
 
@@ -159,7 +175,8 @@ Postgres, the API and the embedding model in one container that fits in 512 MB.
    Render's deploy does. (Render's own auto-deploy needs its GitHub app.)
 
 To check the live site in a real browser (home, admin lock, chat with verified
-citations, the assistant with follow-ups and saved chats, graph, health), run `node live-check.mjs` in `apps/web`; set
+citations, the assistant with follow-ups and saved chats, attachments, pictures,
+sharing, graph, health), run `node live-check.mjs` in `apps/web`; set
 `SITE_URL` for a site other than this repository's.
 
 The free server sleeps after 15 idle minutes; the first visit afterwards waits

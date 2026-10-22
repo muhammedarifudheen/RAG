@@ -132,9 +132,9 @@ export function IngestForm() {
   return (
     <section className="mt-8">
       {adminRequired && (
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-muted">
           Signed in as admin.{" "}
-          <button type="button" onClick={lock} className="text-indigo-700 underline">
+          <button type="button" onClick={lock} className="text-cyan underline">
             Lock
           </button>
         </p>
@@ -154,25 +154,25 @@ export function IngestForm() {
             autoComplete="off"
             spellCheck={false}
             disabled={busy}
-            className="min-w-0 flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm shadow-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 disabled:bg-slate-100"
+            className="min-w-0 flex-1 border border-line-strong bg-ink px-3 py-2 text-sm shadow-sm outline-none focus:border-signal focus:ring-2 focus:ring-signal/30 disabled:bg-raised"
           />
           <button
             type="submit"
             disabled={busy || url.trim() === ""}
-            className="rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 disabled:cursor-not-allowed disabled:bg-slate-300"
+            className="bg-signal px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-signal-hover disabled:cursor-not-allowed disabled:bg-raised"
           >
             {busy ? "Adding…" : "Add"}
           </button>
         </div>
 
-        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-slate-600">
+        <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-soft">
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={crawl}
               onChange={(event) => setCrawl(event.target.checked)}
               disabled={busy}
-              className="h-4 w-4 rounded border-slate-300"
+              className="h-4 w-4 border-line-strong"
             />
             Follow links on the same site
           </label>
@@ -187,17 +187,17 @@ export function IngestForm() {
                 onChange={(event) => setPages(Number(event.target.value) || DEFAULT_CRAWL_PAGES)}
                 disabled={busy}
                 aria-label="Maximum pages"
-                className="w-16 rounded-md border border-slate-300 px-2 py-1 text-sm"
+                className="w-16 border border-line-strong bg-ink px-2 py-1 text-sm"
               />
               pages
             </label>
           )}
-          <span className="text-slate-300">|</span>
+          <span className="text-faint">|</span>
           <button
             type="button"
             onClick={() => fileInput.current?.click()}
             disabled={busy}
-            className="rounded-md border border-slate-300 bg-white px-3 py-1 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+            className="border border-line-strong bg-panel px-3 py-1 text-sm hover:bg-raised disabled:cursor-not-allowed disabled:text-faint"
           >
             Upload a file
           </button>
@@ -209,10 +209,10 @@ export function IngestForm() {
             aria-label="File to upload"
             className="hidden"
           />
-          <span className="text-xs text-slate-500">PDF, EPUB, text, Markdown or HTML</span>
+          <span className="text-xs text-muted">PDF, EPUB, text, Markdown or HTML</span>
         </div>
       </form>
-      <p className="mt-3 text-xs text-slate-500">
+      <p className="mt-3 text-xs text-muted">
         Sources are added to what is already here. Adding one again replaces just that source.
         Only add material you have the right to copy.
       </p>
@@ -228,10 +228,10 @@ export function IngestForm() {
                   aria-hidden
                   className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[11px] font-semibold ${
                     failed
-                      ? "bg-red-100 text-red-700"
+                      ? "bg-danger/15 text-danger"
                       : current
-                        ? "animate-pulse bg-indigo-100 text-indigo-700"
-                        : "bg-emerald-100 text-emerald-700"
+                        ? "animate-pulse bg-signal/20 text-cyan"
+                        : "bg-ok/15 text-ok"
                   }`}
                 >
                   {failed ? "!" : current ? step.step : "✓"}
@@ -239,12 +239,12 @@ export function IngestForm() {
                 <div className="min-w-0">
                   <p className="font-medium">
                     {step.label}
-                    <span className="ml-2 font-normal text-slate-400">
+                    <span className="ml-2 font-normal text-muted">
                       {step.step}/{step.total}
                     </span>
                   </p>
                   {step.details.map((detail, i) => (
-                    <p key={i} className="truncate text-xs text-slate-500">
+                    <p key={i} className="truncate text-xs text-muted">
                       {detail}
                     </p>
                   ))}
@@ -258,7 +258,7 @@ export function IngestForm() {
       {phase.name === "error" && (
         <p
           role="alert"
-          className="mt-6 whitespace-pre-line rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+          className="mt-6 whitespace-pre-line border border-danger/40 bg-danger/10 p-4 text-sm text-danger"
         >
           {phase.message}
         </p>
@@ -267,7 +267,7 @@ export function IngestForm() {
       {phase.name === "done" && (
         <div
           role="status"
-          className="mt-6 rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900"
+          className="mt-6 border border-ok/40 bg-ok/10 p-4 text-sm text-ok"
         >
           <p className="font-medium">
             Ingested {phase.result.files} files, {phase.result.symbols} symbols and{" "}

@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class CodeChunk(BaseModel):
@@ -29,6 +29,11 @@ class SearchResponse(BaseModel):
     results: list[CodeChunk]
 
 
+# Limits on what can be attached to one question.
+MAX_ATTACHMENT_TEXT = 400_000
+MAX_IMAGE_DATA = 12_000_000
+
+
 class ChatTurn(BaseModel):
     """One earlier message of the conversation, for follow-up questions."""
 
@@ -36,8 +41,32 @@ class ChatTurn(BaseModel):
     content: str = Field(max_length=20000)
 
 
+class Attachment(BaseModel):
+    """A file the user attached to a question: its text, or an image."""
+
+    name: str = Field(min_length=1, max_length=200, examples=["notes.pdf"])
+    kind: Literal["text", "image"]
+    text: str | None = Field(
+        default=None, max_length=MAX_ATTACHMENT_TEXT, description="The file's text (kind text)."
+    )
+    mime: Literal["image/png", "image/jpeg", "image/webp", "image/gif"] | None = None
+    data: str | None = Field(
+        default=None,
+        max_length=MAX_IMAGE_DATA,
+        description="The image, base64-encoded (kind image).",
+    )
+
+    @model_validator(mode="after")
+    def _has_content(self) -> "Attachment":
+        if self.kind == "text" and self.text is None:
+            raise ValueError("a text attachment needs its text")
+        if self.kind == "image" and not (self.mime and self.data):
+            raise ValueError("an image attachment needs mime and data")
+        return self
+
+
 class AskRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=2000, examples=["How are user names formatted?"])
+    question: str = Field(min_length=1, max_length=8000, examples=["How are user names formatted?"])
     top_k: int = Field(
         default=8, ge=1, le=20, description="How many search results to give Claude."
     )
@@ -48,6 +77,55 @@ class AskRequest(BaseModel):
         "the question goes to the assistant, which also answers from general knowledge and "
         "the web and suggests follow-up questions.",
     )
+    # The assistant only; any of these also sends the question to it.
+    attachments: list[Attachment] = Field(
+        default=[], max_length=10, description="Files to answer from, for this question."
+    )
+    style: Literal["balanced", "concise", "detailed"] = Field(
+        default="balanced", description="How long and detailed the answer should be."
+    )
+    temperature: float | None = Field(
+        default=None, ge=0, le=2, description="Sampling temperature; unset is each model's default."
+    )
+    instructions: str = Field(
+        default="",
+        max_length=4000,
+        description="The user's standing instructions to the assistant.",
+    )
+    task: Literal["answer", "image"] = Field(
+        default="answer", description="`image` draws a picture of the question."
+    )
+
+    @model_validator(mode="after")
+    def _attachments_fit(self) -> "AskRequest":
+        text = sum(len(a.text or "") for a in self.attachments)
+        images = sum(len(a.data or "") for a in self.attachments)
+        if text > MAX_ATTACHMENT_TEXT:
+            raise ValueError(f"attached text is limited to {MAX_ATTACHMENT_TEXT} characters in all")
+        if images > MAX_IMAGE_DATA:
+            raise ValueError("attached images are too large in all")
+        return self
+
+    @property
+    def for_assistant(self) -> bool:
+        """True if anything only the assistant handles was asked for."""
+        return bool(
+            self.history
+            or self.attachments
+            or self.style != "balanced"
+            or self.temperature is not None
+            or self.instructions.strip()
+            or self.task != "answer"
+        )
+
+
+class AttachmentText(BaseModel):
+    """A document's text, read from an uploaded file for attaching to a question."""
+
+    name: str
+    kind: Literal["text"] = "text"
+    text: str
+    truncated: bool = Field(description="True if the text was cut to the size limit.")
 
 
 class Citation(BaseModel):
@@ -67,6 +145,11 @@ class WebSource(BaseModel):
     url: str
 
 
+class GeneratedImage(BaseModel):
+    url: str = Field(description="Where the picture is drawn; the browser loads it from there.")
+    prompt: str = Field(description="What was asked of the image model.")
+
+
 class AskResponse(BaseModel):
     question: str
     answer: str = Field(description="Claude's answer with inline [path:start-end] citations.")
@@ -81,6 +164,7 @@ class AskResponse(BaseModel):
     )
     suggestions: list[str] = Field(default=[], description="Follow-up questions to offer.")
     web_sources: list[WebSource] = Field(default=[], description="Web pages a search found.")
+    images: list[GeneratedImage] = Field(default=[], description="Pictures drawn for the answer.")
 
 
 class SymbolRef(BaseModel):
@@ -225,3 +309,30 @@ class HealthReport(BaseModel):
 
 class Liveness(BaseModel):
     status: Literal["ok"]
+
+
+# --- shared chats ---------------------------------------------------------------
+
+MAX_SHARE_BYTES = 2_000_000
+
+
+class ShareRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    messages: list[dict] = Field(
+        min_length=1,
+        max_length=200,
+        description="The conversation as the web app keeps it; each has a `role`.",
+    )
+
+    @model_validator(mode="after")
+    def _messages_have_roles(self) -> "ShareRequest":
+        if any(m.get("role") not in ("user", "assistant", "error") for m in self.messages):
+            raise ValueError("every message needs a role of user, assistant or error")
+        return self
+
+
+class SharedChat(BaseModel):
+    id: str = Field(examples=["k3J9xQ2mZp"])
+    title: str
+    messages: list[dict]
+    created_at: datetime

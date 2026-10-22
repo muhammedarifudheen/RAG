@@ -38,17 +38,60 @@ export interface ChatTurn {
   content: string;
 }
 
+/** A file sent with a question: its text, or an image (base64). */
+export interface Attachment {
+  name: string;
+  kind: "text" | "image";
+  text?: string;
+  mime?: "image/png" | "image/jpeg" | "image/webp" | "image/gif";
+  data?: string;
+}
+
+/** How long and detailed answers should be. */
+export type AnswerStyle = "balanced" | "concise" | "detailed";
+
 export interface AskRequest {
   question: string;
   top_k?: number;
   /** Earlier messages, oldest first; sent, the assistant answers. */
   history?: ChatTurn[];
+  // The assistant only; each is left out when it has its default value.
+  attachments?: Attachment[];
+  style?: AnswerStyle;
+  /** 0 to 2; unset is each model's default. */
+  temperature?: number;
+  /** Standing instructions to the assistant. */
+  instructions?: string;
+  /** "image" draws a picture of the question. */
+  task?: "answer" | "image";
+}
+
+/** POST /attachments: a document's text, read for attaching to a question. */
+export interface AttachmentText {
+  name: string;
+  kind: "text";
+  text: string;
+  /** True if the text was cut to the size limit. */
+  truncated: boolean;
+}
+
+export interface GeneratedImage {
+  url: string;
+  prompt: string;
 }
 
 /** How the assistant picks models: by question type, or the strongest first. */
 export type AssistantMode = "auto" | "best";
 
-export type AssistantRoute = "sources" | "code" | "current" | "reasoning" | "chat" | "general";
+export type AssistantRoute =
+  | "sources"
+  | "code"
+  | "current"
+  | "reasoning"
+  | "chat"
+  | "general"
+  | "image"
+  | "vision";
 
 export interface WebSource {
   title: string;
@@ -80,6 +123,18 @@ export interface AskResponse {
   suggestions?: string[];
   /** Web pages a search found. */
   web_sources?: WebSource[];
+  /** Pictures drawn for the answer. */
+  images?: GeneratedImage[];
+}
+
+// --- /shares ----------------------------------------------------------------
+
+/** A conversation shared by link. `messages` are kept as the web app sent them. */
+export interface SharedChat<M = unknown> {
+  id: string;
+  title: string;
+  messages: M[];
+  created_at: string;
 }
 
 // --- /graph, /graph/files and /file -----------------------------------------

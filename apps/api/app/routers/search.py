@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.assistant import Assistant, AssistantError, get_assistant
+from app.assistant import Assistant, AssistantError, Options, get_assistant
 from app.config import settings
 from app.db import get_db
 from app.embedding import Embedder, get_embedder
@@ -94,31 +94,41 @@ def ask(
     base only. `chunks` holds the excerpts sent to the model; each citation is `verified`
     only if its lines lie inside one of them.
 
-    **The assistant** (`Accept: text/event-stream`, or any `history`): answers anything,
-    from the knowledge base (cited the same way), a web search, or general knowledge. It
-    picks the model by question type (or the strongest, with `X-Atlas-Mode: best`), falls
-    back to the next when one fails, remembers the conversation and suggests follow-ups."""
+    **The assistant** (`Accept: text/event-stream`, or any of `history`, `attachments`,
+    `style`, `temperature`, `instructions` or `task`): answers anything, from the knowledge
+    base (cited the same way), attached files and images, a web search, or general
+    knowledge. It picks the model by question type (or the strongest, with
+    `X-Atlas-Mode: best`), falls back to the next when one fails, remembers the
+    conversation and suggests follow-ups. With `task: image`, or a request such as "draw a
+    lighthouse", it draws a picture instead: `images` holds its address."""
     question = body.question.strip()
     if not question:
         raise HTTPException(422, "question must not be blank.")
 
     streaming = "text/event-stream" in request.headers.get("accept", "")
-    if streaming or body.history:
+    if streaming or body.for_assistant:
         assistant: Assistant = _resolve(request, get_assistant)
         # A follow-up such as "and in Go?" finds little on its own; search with the
         # previous question too.
         previous = next((t.content for t in reversed(body.history) if t.role == "user"), "")
         query = f"{previous[:500]}\n{question}" if previous else question
         chunks = search_symbols(db, embedder, query, body.top_k, settings.snippet_max_lines)
+        options = Options(
+            attachments=body.attachments,
+            style=body.style,
+            temperature=body.temperature,
+            instructions=body.instructions,
+            task=body.task,
+        )
         if streaming:
-            events = assistant.respond(question, chunks, body.history, mode)
+            events = assistant.respond(question, chunks, body.history, mode, options)
             return StreamingResponse(
                 _event_stream(events),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
         try:
-            return assistant.answer(question, chunks, body.history, mode)
+            return assistant.answer(question, chunks, body.history, mode, options)
         except AssistantError as error:
             raise HTTPException(error.status_code, error.detail) from error
 

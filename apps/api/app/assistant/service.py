@@ -8,19 +8,23 @@ is overloaded, out of quota or failing.
 from __future__ import annotations
 
 import logging
+import random
+import re
 import time
 from collections.abc import Iterator, Sequence
+from dataclasses import dataclass
 from functools import cache
+from urllib.parse import quote
 
 import anthropic
 import httpx2
 from fastapi import HTTPException
 
 from app.config import settings
-from app.schemas import AskResponse, ChatTurn, CodeChunk, WebSource
+from app.schemas import AskResponse, Attachment, ChatTurn, CodeChunk, GeneratedImage, WebSource
 from app.services.search import extract_citations
 
-from .prompt import FollowUpSplitter, conversation, system_prompt
+from .prompt import IMAGE_SYSTEM, FollowUpSplitter, conversation, system_prompt
 from .providers import (
     ClaudeProvider,
     GeminiProvider,
@@ -29,12 +33,30 @@ from .providers import (
     Provider,
     ProviderError,
 )
-from .router import Mode, classify, model_order, provider_order
+from .router import Mode, Route, classify, model_order, provider_order, wants_image
 
 logger = logging.getLogger("atlas.api.assistant")
 
 # (event name, data) pairs, sent to the browser as server-sent events.
 Event = tuple[str, dict]
+
+
+# How a picture answer begins; a short follow-up to one ("make it blue") draws again.
+PICTURE_ANSWER = "Here's your picture"
+_QUESTION = re.compile(
+    r"^\s*(what|why|how|who|when|where|which|is|are|does|do|can|could)\b|\?\s*$", re.IGNORECASE
+)
+
+
+@dataclass(frozen=True)
+class Options:
+    """What the user chose for this question, besides the question itself."""
+
+    attachments: Sequence[Attachment] = ()
+    style: str = "balanced"
+    temperature: float | None = None
+    instructions: str = ""
+    task: str = "answer"  # or "image"
 
 
 class AssistantError(Exception):
@@ -53,12 +75,14 @@ class Assistant:
         models_per_provider: int = 2,
         web_search: bool = True,
         min_score: float = 0.3,
+        image_url_template: str = "https://image.pollinations.ai/prompt/{prompt}?seed={seed}",
     ) -> None:
         self.providers = {p.name: p for p in providers}
         self.best_order = best_order
         self.models_per_provider = models_per_provider
         self.web_search = web_search
         self.min_score = min_score
+        self.image_url_template = image_url_template
 
     def respond(
         self,
@@ -66,12 +90,18 @@ class Assistant:
         chunks: Sequence[CodeChunk],
         history: Sequence[ChatTurn] = (),
         mode: Mode = "auto",
+        options: Options | None = None,
     ) -> Iterator[Event]:
         """Events: `route`, then `delta` pieces of text (a `reset` drops what came so far
         when a service fails mid-answer and the next one starts over), then `done` with
         the whole response, or `error`."""
+        options = options or Options()
+        images = any(a.kind == "image" for a in options.attachments)
+        if options.task == "image" or (not images and _wants_picture(question, history)):
+            yield from self._draw(question, history, mode)
+            return
         top = chunks[0].score if chunks else None
-        route = classify(question, top)
+        route = classify(question, top, images=images)
         shown = [c for c in chunks if c.score >= self.min_score]
         order = provider_order(mode, route, self.best_order, set(self.providers))
         if route == "current":
@@ -84,66 +114,119 @@ class Assistant:
             yield "error", {"status": 503, "detail": "No AI service is configured; add an API key."}
             return
 
-        system = system_prompt()
-        turns = conversation(question, shown, history)
+        system = system_prompt(style=options.style, instructions=options.instructions)
+        tuning = {} if options.temperature is None else {"temperature": options.temperature}
+        turns = conversation(question, shown, history, options.attachments)
         failures: list[str] = []
-        for name in order:
+        for name, model in self._attempts(order, route):
             provider = self.providers[name]
-            for model in model_order(provider.models, route)[: self.models_per_provider]:
-                web = self.web_search and route != "chat" and provider.searches(model)
-                outcome = Outcome()
-                splitter = FollowUpSplitter()
-                started, wrote = time.monotonic(), False
-                try:
-                    for piece in provider.stream(model, system, turns, outcome, web=web):
-                        text = splitter.feed(piece)
-                        if text:
-                            wrote = True
-                            yield "delta", {"text": text}
-                    rest, answer, suggestions = splitter.finish()
-                    if not answer:
-                        raise ProviderError(f"{provider.label} {model} returned an empty answer.")
-                    if rest:
-                        yield "delta", {"text": rest}
-                except (ProviderError, ValueError, KeyError) as error:
-                    detail = (
-                        str(error) if isinstance(error, ProviderError) else f"bad reply: {error}"
-                    )
-                    logger.info(
-                        "assistant %s %s: failed in %.1fs (%s)",
-                        name,
-                        model,
-                        time.monotonic() - started,
-                        detail,
-                    )
-                    failures.append(detail)
-                    if wrote:
-                        yield "reset", {"provider": provider.label}
-                    continue
+            web = self.web_search and route != "chat" and provider.searches(model)
+            outcome = Outcome()
+            splitter = FollowUpSplitter()
+            started, wrote = time.monotonic(), False
+            try:
+                for piece in provider.stream(model, system, turns, outcome, web=web, **tuning):
+                    text = splitter.feed(piece)
+                    if text:
+                        wrote = True
+                        yield "delta", {"text": text}
+                rest, answer, suggestions = splitter.finish()
+                if not answer:
+                    raise ProviderError(f"{provider.label} {model} returned an empty answer.")
+                if rest:
+                    yield "delta", {"text": rest}
+            except (ProviderError, ValueError, KeyError) as error:
+                detail = str(error) if isinstance(error, ProviderError) else f"bad reply: {error}"
                 logger.info(
-                    "assistant %s %s: answered %s in %.1fs",
+                    "assistant %s %s: failed in %.1fs (%s)",
                     name,
                     model,
-                    route,
                     time.monotonic() - started,
+                    detail,
                 )
-                response = AskResponse(
-                    question=question,
-                    answer=answer,
-                    citations=extract_citations(answer, list(shown)),
-                    chunks=list(shown),
-                    model=outcome.model or model,
-                    complete=outcome.complete,
-                    provider=provider.label,
-                    route=route,
-                    suggestions=suggestions,
-                    web_sources=_unique_sources(outcome.web_sources),
-                )
-                yield "done", response.model_dump()
-                return
+                failures.append(detail)
+                if wrote:
+                    yield "reset", {"provider": provider.label}
+                continue
+            logger.info(
+                "assistant %s %s: answered %s in %.1fs",
+                name,
+                model,
+                route,
+                time.monotonic() - started,
+            )
+            response = AskResponse(
+                question=question,
+                answer=answer,
+                citations=extract_citations(answer, list(shown)),
+                chunks=list(shown),
+                model=outcome.model or model,
+                complete=outcome.complete,
+                provider=provider.label,
+                route=route,
+                suggestions=suggestions,
+                web_sources=_unique_sources(outcome.web_sources),
+            )
+            yield "done", response.model_dump()
+            return
 
         last = failures[-1] if failures else "no answer"
         yield "error", {"status": 503, "detail": f"Every AI service failed; the last said: {last}"}
+
+    def _attempts(self, order: Sequence[str], route: Route) -> list[tuple[str, str]]:
+        """(service, model) pairs in the order to try them: each service's best-suited
+        models first, then, if all of those fail, the rest of every service's models.
+        Free quotas are per model, so a model not yet tried may still answer."""
+        ranked = {name: model_order(self.providers[name].models, route) for name in order}
+        first = [(n, m) for n in order for m in ranked[n][: self.models_per_provider]]
+        rest = [(n, m) for n in order for m in ranked[n][self.models_per_provider :]]
+        return first + rest
+
+    def _draw(self, question: str, history: Sequence[ChatTurn], mode: Mode) -> Iterator[Event]:
+        """A picture: a fast model turns the request into a detailed prompt, and the image
+        service draws it. Without a working model the request itself is the prompt."""
+        route: Route = "image"
+        order = provider_order(mode, route, self.best_order, set(self.providers))
+        yield "route", {"route": route, "mode": mode, "providers": order}
+        prompt, provider_label, model_name = _bare_request(question), None, "flux"
+        turns = conversation(question, [], history)
+        for name in order:
+            provider = self.providers[name]
+            model = provider.models[0]
+            outcome = Outcome()
+            try:
+                written = "".join(
+                    provider.stream(model, IMAGE_SYSTEM, turns, outcome, web=False)
+                ).strip()
+            except (ProviderError, ValueError, KeyError) as error:
+                logger.info("assistant %s %s: no image prompt (%s)", name, model, error)
+                continue
+            if written:
+                prompt = written.strip('"').strip()[:800]
+                provider_label = provider.label
+                break
+        url = self.image_url_template.format(
+            prompt=quote(prompt, safe=""), seed=random.randint(1, 1_000_000)
+        )
+        answer = f"{PICTURE_ANSWER}, drawn from this description:\n\n> {prompt}"
+        yield "delta", {"text": answer}
+        response = AskResponse(
+            question=question,
+            answer=answer,
+            citations=[],
+            chunks=[],
+            model=model_name,
+            complete=True,
+            provider=provider_label or "Pollinations",
+            route=route,
+            suggestions=[
+                "Draw another version",
+                "Draw it as a watercolour painting",
+                "Draw it at night",
+            ],
+            images=[GeneratedImage(url=url, prompt=prompt)],
+        )
+        yield "done", response.model_dump()
 
     def answer(
         self,
@@ -151,14 +234,42 @@ class Assistant:
         chunks: Sequence[CodeChunk],
         history: Sequence[ChatTurn] = (),
         mode: Mode = "auto",
+        options: Options | None = None,
     ) -> AskResponse:
         """The same as `respond`, collected into one response."""
-        for name, data in self.respond(question, chunks, history, mode):
+        for name, data in self.respond(question, chunks, history, mode, options):
             if name == "done":
                 return AskResponse(**data)
             if name == "error":
                 raise AssistantError(data["status"], data["detail"])
         raise AssistantError(503, "The assistant produced no answer.")
+
+
+_REQUEST = re.compile(
+    r"^\s*(please\s+|can you\s+|could you\s+)?"
+    r"(draw|paint|sketch|illustrate|generate|create|make|design|render|produce)\s+(me\s+)?"
+    r"((an?|the|some)\s+)?((image|picture|photo|drawing|illustration|painting)\s+(of\s+)?)?",
+    re.IGNORECASE,
+)
+
+
+def _bare_request(question: str) -> str:
+    """The description in a request to draw: "draw a fox" becomes "a fox"."""
+    bare = _REQUEST.sub("", question.strip(), count=1).strip().rstrip("?.!")
+    return bare or question.strip()
+
+
+def _wants_picture(question: str, history: Sequence[ChatTurn]) -> bool:
+    """A request to draw, or a short change to the picture just drawn ("make it blue")."""
+    if wants_image(question):
+        return True
+    last = next((t for t in reversed(history) if t.role == "assistant"), None)
+    return (
+        last is not None
+        and last.content.startswith(PICTURE_ANSWER)
+        and len(question) < 200
+        and not _QUESTION.search(question)
+    )
 
 
 def _unique_sources(sources: list[dict[str, str]]) -> list[WebSource]:
@@ -236,6 +347,7 @@ def _build() -> Assistant:
         models_per_provider=settings.assistant_models_per_provider,
         web_search=settings.assistant_web_search,
         min_score=settings.assistant_min_score,
+        image_url_template=settings.image_url_template,
     )
 
 

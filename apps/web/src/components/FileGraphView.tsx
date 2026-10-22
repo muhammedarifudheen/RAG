@@ -90,25 +90,25 @@ export function FileGraphView() {
   return (
     <div className="flex min-h-0 flex-1">
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-slate-200 bg-white px-4 py-2 text-xs text-slate-600">
-          <h1 className="text-sm font-semibold text-slate-900">File dependencies</h1>
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-1 border-b border-line bg-panel px-4 py-2 text-xs text-soft">
+          <h1 className="text-sm font-semibold text-paper">File dependencies</h1>
           <p data-testid="graph-summary">
             {files.length} files · {dependencies.length} dependencies ·{" "}
-            <span className={cycles.length > 0 ? "font-semibold text-red-700" : ""}>
+            <span className={cycles.length > 0 ? "font-semibold text-danger" : ""}>
               {cycles.length} {cycles.length === 1 ? "cycle" : "cycles"}
             </span>
           </p>
           <ul className="ml-auto flex gap-4">
             <li>
-              <span className="mr-1 inline-block w-5 border-t-2 border-slate-400 align-middle" />
+              <span className="mr-1 inline-block w-5 border-t-2 border-line-strong align-middle" />
               calls
             </li>
             <li>
-              <span className="mr-1 inline-block w-5 border-t-2 border-dashed border-slate-400 align-middle" />
+              <span className="mr-1 inline-block w-5 border-t-2 border-dashed border-line-strong align-middle" />
               imports only
             </li>
             <li>
-              <span className="mr-1 inline-block w-5 border-t-2 border-red-600 align-middle" />
+              <span className="mr-1 inline-block w-5 border-t-2 border-danger align-middle" />
               in a cycle
             </li>
           </ul>
@@ -138,12 +138,12 @@ export function FileGraphView() {
       {/* Always present, so selecting a file does not resize the graph under the pointer. */}
       <aside
         aria-label="File symbols"
-        className="flex h-[calc(100vh-3.5rem)] w-80 shrink-0 flex-col border-l border-slate-200 bg-white"
+        className="flex h-[calc(100vh-3.5rem)] w-80 shrink-0 flex-col border-l border-line bg-panel"
       >
         {selected ? (
           <FilePanel file={selected} onClose={() => setSelected(null)} />
         ) : (
-          <p className="p-4 text-sm text-slate-500">Click a file to see its symbols.</p>
+          <p className="p-4 text-sm text-muted">Click a file to see its symbols.</p>
         )}
       </aside>
     </div>
@@ -155,45 +155,45 @@ function FilePanel({ file, onClose }: { file: FileNode; onClose: () => void }) {
 
   return (
     <>
-      <header className="flex items-start justify-between gap-3 border-b border-slate-200 px-4 py-3">
+      <header className="flex items-start justify-between gap-3 border-b border-line px-4 py-3">
         <div className="min-w-0">
           <h2 className="break-all font-mono text-xs font-semibold">{file.path}</h2>
-          <p className="mt-1 text-xs text-slate-500">
+          <p className="mt-1 text-xs text-muted">
             {file.language} · {file.loc} lines
-            {file.in_cycle && <span className="ml-2 font-semibold text-red-700">in a cycle</span>}
+            {file.in_cycle && <span className="ml-2 font-semibold text-danger">in a cycle</span>}
           </p>
         </div>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close file panel"
-          className="rounded px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+          className="px-2 py-1 text-sm text-muted hover:bg-raised hover:text-paper"
         >
           ✕
         </button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto p-4">
-        {detail.status === "loading" && <p className="text-sm text-slate-500">Loading symbols…</p>}
+        {detail.status === "loading" && <p className="text-sm text-muted">Loading symbols…</p>}
         {detail.status === "error" && (
-          <p role="alert" className="text-sm text-red-700">
+          <p role="alert" className="text-sm text-danger">
             {detail.message}
           </p>
         )}
         {detail.status === "ready" && detail.data.symbols.length === 0 && (
-          <p className="text-sm text-slate-500">This file defines no symbols.</p>
+          <p className="text-sm text-muted">This file defines no symbols.</p>
         )}
         {detail.status === "ready" && detail.data.symbols.length > 0 && (
           <ul className="space-y-2">
             {detail.data.symbols.map((symbol) => (
               <li key={symbol.id} className="text-sm">
                 <p className="flex items-baseline gap-2">
-                  <span className="w-14 shrink-0 text-[10px] uppercase tracking-wide text-slate-400">
+                  <span className="w-14 shrink-0 text-[10px] uppercase tracking-wide text-muted">
                     {symbol.kind}
                   </span>
                   <span className="break-all font-mono text-xs font-medium">{symbol.name}</span>
                 </p>
-                <p className="pl-16 text-[11px] text-slate-400">
+                <p className="pl-16 text-[11px] text-muted">
                   lines {symbol.start_line}–{symbol.end_line}
                 </p>
               </li>

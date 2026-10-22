@@ -30,13 +30,13 @@ export function AdminUnlock({ onUnlock }: { onUnlock: () => void }) {
   }
 
   return (
-    <section aria-labelledby="public-heading" className="mt-8 rounded-lg border border-slate-200 bg-white p-4">
-      <h2 id="public-heading" className="text-sm font-semibold text-slate-900">
+    <section aria-labelledby="public-heading" className="mt-8 border border-line bg-panel p-4">
+      <h2 id="public-heading" className="text-sm font-semibold text-paper">
         This is a public Atlas
       </h2>
-      <p className="mt-1 text-sm text-slate-600">
+      <p className="mt-1 text-sm text-soft">
         Anyone can{" "}
-        <Link href="/chat" className="text-indigo-700 underline">
+        <Link href="/chat" className="text-cyan underline">
           ask questions
         </Link>{" "}
         about the sources below, and browse the graph and health pages. Adding or removing
@@ -53,18 +53,18 @@ export function AdminUnlock({ onUnlock }: { onUnlock: () => void }) {
           onChange={(event) => setPassword(event.target.value)}
           placeholder="Admin password"
           autoComplete="current-password"
-          className="min-w-0 flex-1 rounded-md border border-slate-300 px-3 py-1.5 text-sm outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200"
+          className="min-w-0 flex-1 border border-line-strong bg-ink px-3 py-1.5 text-sm outline-none focus:border-signal focus:ring-2 focus:ring-signal/30"
         />
         <button
           type="submit"
           disabled={checking || password === ""}
-          className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:text-slate-400"
+          className="border border-line-strong bg-panel px-3 py-1.5 text-sm hover:bg-raised disabled:cursor-not-allowed disabled:text-faint"
         >
           {checking ? "Checking…" : "Unlock"}
         </button>
       </form>
       {error && (
-        <p role="alert" className="mt-2 text-sm text-red-700">
+        <p role="alert" className="mt-2 text-sm text-danger">
           {error}
         </p>
       )}

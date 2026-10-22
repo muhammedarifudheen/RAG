@@ -6,6 +6,9 @@ Two modes:
   that suit it, and within a service its coding or reasoning models come first
   when the question calls for them.
 - "best" ignores the type and starts with the strongest service configured.
+Two types are set by what comes with the question rather than its wording: a
+picture to draw ("image", whose prompt a fast model writes) and attached images
+("vision", for the services that can see them); "best" keeps those orders too.
 Either way, a service that is not configured is skipped, and one that fails
 hands over to the next.
 """
@@ -16,7 +19,7 @@ import re
 from typing import Literal
 
 Mode = Literal["auto", "best"]
-Route = Literal["sources", "code", "current", "reasoning", "chat", "general"]
+Route = Literal["sources", "code", "current", "reasoning", "chat", "general", "image", "vision"]
 
 # Strongest-suited first. Gemini leads where a web search helps, since only it
 # can search; Groq leads small talk because it answers fastest.
@@ -27,7 +30,14 @@ ROUTE_ORDER: dict[str, tuple[str, ...]] = {
     "reasoning": ("claude", "openrouter", "gemini", "groq", "mistral"),
     "chat": ("groq", "gemini", "mistral", "openrouter", "claude"),
     "general": ("gemini", "claude", "openrouter", "mistral", "groq"),
+    # Writing a picture's prompt is quick work: the fastest first.
+    "image": ("groq", "gemini", "mistral", "openrouter", "claude"),
+    # Services whose models see images reliably first.
+    "vision": ("gemini", "claude", "mistral", "openrouter", "groq"),
 }
+
+# Routes that keep their own order in "best" mode too.
+FIXED_ROUTES = ("image", "vision")
 
 # A knowledge-base excerpt at least this similar means the question is about the sources.
 SOURCES_SCORE = 0.45
@@ -49,6 +59,20 @@ _REASONING = re.compile(
     r"step by step|logic|puzzle|riddle|how many|optimi[sz]e|estimate)\b|[0-9]\s*[-+*/^]\s*[0-9]",
     re.IGNORECASE,
 )
+_IMAGE = re.compile(
+    r"^\s*(please\s+|can you\s+|could you\s+)?("
+    r"(draw|paint|sketch|illustrate)\b|"
+    r"(generate|create|make|design|render|produce)\s+(me\s+)?(an?\s+|some\s+|the\s+)?"
+    r"(\w+\s+){0,3}(image|picture|photo|drawing|illustration|painting|logo|icon|artwork|"
+    r"wallpaper|portrait|poster)s?\b|"
+    r"(an?\s+)?(image|picture|photo|drawing|illustration|painting)\s+of\b)",
+    re.IGNORECASE,
+)
+# "image" in the software sense: a Docker image, a disk image.
+_SOFTWARE_IMAGE = re.compile(
+    r"\b(docker|container|disk|iso|vm|machine|system|base|boot|os|kernel)\s+images?\b",
+    re.IGNORECASE,
+)
 _CHAT = re.compile(
     r"^\s*(hi|hello|hey|thanks|thank you|good (morning|afternoon|evening)|how are you|"
     r"who are you|what can you do)\b",
@@ -61,8 +85,16 @@ _REASONING_MODELS = ("r1", "reason", "think", "gpt-oss", "qwq", "magistral")
 _SEARCH_MODELS = ("compound",)
 
 
-def classify(question: str, top_score: float | None) -> Route:
-    """The question's type, from its wording and how well the knowledge base matches it."""
+def wants_image(question: str) -> bool:
+    """True if the question asks for a picture to be drawn."""
+    return bool(_IMAGE.match(question)) and not _SOFTWARE_IMAGE.search(question)
+
+
+def classify(question: str, top_score: float | None, *, images: bool = False) -> Route:
+    """The question's type, from its wording and how well the knowledge base matches it.
+    With images attached it is "vision", so the services that can see them answer."""
+    if images:
+        return "vision"
     if _CHAT.match(question) and len(question) < 60:
         return "chat"
     if top_score is not None and top_score >= SOURCES_SCORE:
@@ -78,7 +110,7 @@ def classify(question: str, top_score: float | None) -> Route:
 
 def provider_order(mode: Mode, route: Route, best_order: str, available: set[str]) -> list[str]:
     """The configured services to try, first choice first."""
-    if mode == "best":
+    if mode == "best" and route not in FIXED_ROUTES:
         order = [name.strip() for name in best_order.split(",") if name.strip()]
     else:
         order = list(ROUTE_ORDER[route])

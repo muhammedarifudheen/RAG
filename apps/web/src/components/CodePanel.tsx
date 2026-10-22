@@ -41,15 +41,15 @@ export function CodePanel({ range, onClose }: Props) {
   return (
     <aside
       aria-label="Cited code"
-      className="sticky top-0 flex h-[calc(100vh-3.5rem)] w-[min(46rem,50vw)] shrink-0 flex-col border-l border-slate-200 bg-white"
+      className="sticky top-0 flex h-[calc(100vh-3.5rem)] w-[min(46rem,50vw)] shrink-0 flex-col border-l border-line bg-panel"
     >
-      <header className="flex items-center justify-between gap-3 border-b border-slate-200 px-4 py-2">
+      <header className="flex items-center justify-between gap-3 border-b border-line px-4 py-2">
         <h2 className="truncate font-mono text-xs font-semibold">{formatRange(range)}</h2>
         <button
           type="button"
           onClick={onClose}
           aria-label="Close code panel"
-          className="rounded px-2 py-1 text-sm text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+          className="px-2 py-1 text-sm text-muted hover:bg-raised hover:text-paper"
         >
           ✕
         </button>
@@ -57,12 +57,12 @@ export function CodePanel({ range, onClose }: Props) {
 
       <div ref={container} className="min-h-0 flex-1 overflow-auto">
         {file.status === "error" && (
-          <p role="alert" className="p-4 text-sm text-red-700">
+          <p role="alert" className="p-4 text-sm text-danger">
             {file.message}
           </p>
         )}
         {file.status !== "error" && html === null && (
-          <p role="status" className="p-4 text-sm text-slate-500">
+          <p role="status" className="p-4 text-sm text-muted">
             Loading {range.file}…
           </p>
         )}

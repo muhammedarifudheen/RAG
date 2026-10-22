@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     # Knowledge-base excerpts less similar than this are not shown to the model.
     assistant_min_score: float = 0.3
     assistant_max_tokens: int = 8000
+    # Pictures are drawn by Pollinations (free, no key); {prompt} and {seed} are filled in.
+    image_url_template: str = (
+        "https://image.pollinations.ai/prompt/{prompt}"
+        "?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
+    )
 
     # When set, adding and removing sources needs `Authorization: Bearer <token>`;
     # searching and asking stay open. Unset, everything is open (local use).

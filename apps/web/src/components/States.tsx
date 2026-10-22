@@ -22,7 +22,7 @@ export function useTakingLong(active: boolean, afterMs = 12_000): boolean {
 export function Loading({ label }: { label: string }) {
   const long = useTakingLong(true);
   return (
-    <div role="status" className="p-6 text-sm text-slate-500">
+    <div role="status" className="p-6 text-sm text-muted">
       <p>{label}</p>
       {long && <p className="mt-2">{WAKING_HINT}</p>}
     </div>
@@ -33,7 +33,7 @@ export function ErrorMessage({ message }: { message: string }) {
   return (
     <p
       role="alert"
-      className="m-6 rounded-md border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+      className="m-6 border border-danger/40 bg-danger/10 p-4 text-sm text-danger"
     >
       {message}
     </p>
@@ -42,9 +42,9 @@ export function ErrorMessage({ message }: { message: string }) {
 
 export function NothingIngested() {
   return (
-    <p className="p-6 text-sm text-slate-600">
+    <p className="p-6 text-sm text-soft">
       No repository has been ingested yet.{" "}
-      <Link href="/" className="text-indigo-700 underline">
+      <Link href="/" className="text-cyan underline">
         Ingest one
       </Link>{" "}
       to see it here.

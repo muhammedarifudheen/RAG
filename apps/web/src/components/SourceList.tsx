@@ -39,23 +39,23 @@ export function SourceList({ revision, canManage }: { revision: number; canManag
 
   return (
     <section aria-labelledby="sources-heading" className="mt-10">
-      <h2 id="sources-heading" className="text-sm font-semibold text-slate-900">
+      <h2 id="sources-heading" className="text-sm font-semibold text-paper">
         In the knowledge base
       </h2>
       {error && (
-        <p role="alert" className="mt-2 text-sm text-red-700">
+        <p role="alert" className="mt-2 text-sm text-danger">
           {error}
         </p>
       )}
       {sources.data.length === 0 ? (
-        <p className="mt-2 text-sm text-slate-500">
+        <p className="mt-2 text-sm text-muted">
           {canManage ? "Nothing yet. Add a link or a file above." : "Nothing has been added yet."}
         </p>
       ) : (
-        <ul className="mt-3 divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+        <ul className="mt-3 divide-y divide-line border border-line bg-panel">
           {sources.data.map((source) => (
             <li key={source.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-              <span className="w-20 shrink-0 text-[10px] uppercase tracking-wide text-slate-400">
+              <span className="w-20 shrink-0 text-[10px] uppercase tracking-wide text-muted">
                 {KIND_LABELS[source.kind]}
               </span>
               <div className="min-w-0 flex-1">
@@ -64,14 +64,14 @@ export function SourceList({ revision, canManage }: { revision: number; canManag
                     href={source.url}
                     target="_blank"
                     rel="noreferrer"
-                    className="block truncate font-medium text-slate-900 hover:underline"
+                    className="block truncate font-medium text-paper hover:underline"
                   >
                     {source.title}
                   </a>
                 ) : (
-                  <span className="block truncate font-medium text-slate-900">{source.title}</span>
+                  <span className="block truncate font-medium text-paper">{source.title}</span>
                 )}
-                <span className="text-xs text-slate-500">
+                <span className="text-xs text-muted">
                   {source.files} {source.files === 1 ? "file" : "files"} · {source.symbols}{" "}
                   searchable items
                 </span>
@@ -82,7 +82,7 @@ export function SourceList({ revision, canManage }: { revision: number; canManag
                   onClick={() => void remove(source)}
                   disabled={removing !== null}
                   aria-label={`Remove ${source.title}`}
-                  className="rounded px-2 py-1 text-xs text-slate-500 hover:bg-red-50 hover:text-red-700 disabled:cursor-not-allowed disabled:text-slate-300"
+                  className="px-2 py-1 text-xs text-muted hover:bg-danger/10 hover:text-danger disabled:cursor-not-allowed disabled:text-faint"
                 >
                   {removing === source.id ? "Removing…" : "Remove"}
                 </button>

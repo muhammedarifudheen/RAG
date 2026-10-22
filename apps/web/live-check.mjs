@@ -87,6 +87,50 @@ await check("a suggested follow-up is answered with the conversation", async () 
   return `asked "${question}"; answer: "${second.slice(0, 120)}…"`;
 });
 
+await check("an attached document is read and answered from", async () => {
+  await page.getByRole("button", { name: "+ New chat" }).click();
+  await page.getByLabel("Files to attach").setInputFiles({
+    name: "team-notes.md",
+    mimeType: "text/markdown",
+    buffer: Buffer.from("# Team notes\n\nThe product launch moved to Thursday 5 November."),
+  });
+  await page.getByRole("list", { name: "Attached files" }).getByText("TXT").waitFor({ timeout: 120_000 });
+  await page.getByLabel("Question").fill("According to my notes, what day is the launch?");
+  await page.getByRole("button", { name: "Ask" }).click();
+  const text = (await (await answer()).innerText()).replace(/\s+/g, " ");
+  if (!/thursday/i.test(text)) throw new Error(`no Thursday in: ${text.slice(0, 200)}`);
+  return `"${text.slice(0, 100)}"`;
+});
+
+await check("a picture is drawn", async () => {
+  await page.getByRole("button", { name: "Draw a picture" }).click();
+  await page.getByLabel("Question").fill("a red bicycle leaning on a blue wall");
+  await page.getByRole("button", { name: "Ask" }).click();
+  const picture = (await answer(1)).getByRole("img");
+  await picture.waitFor({ timeout: 60_000 });
+  await page.waitForFunction(
+    (img) => img && img.complete && img.naturalWidth > 0,
+    await picture.elementHandle(),
+    { timeout: 180_000 },
+  );
+  const size = await picture.evaluate((img) => `${img.naturalWidth}×${img.naturalHeight}`);
+  return `${size} picture of "${await picture.getAttribute("alt")}"`;
+});
+
+await check("a chat is shared by link and opens for anyone", async () => {
+  await page.getByRole("button", { name: "Share" }).click();
+  const link = page.getByRole("dialog", { name: "Share chat" }).getByLabel("Link to the shared chat");
+  await link.waitFor({ timeout: 60_000 });
+  const url = await link.inputValue();
+  const visitor = await browser.newPage();
+  await visitor.goto(url);
+  await visitor.getByRole("button", { name: "Continue this chat" }).waitFor({ timeout: 120_000 });
+  const answers = await visitor.getByRole("article", { name: "Answer", exact: true }).count();
+  await visitor.close();
+  await page.keyboard.press("Escape");
+  return `${url} shows ${answers} answers`;
+});
+
 await check("chats are kept in the sidebar", async () => {
   await page.reload();
   const saved = page.getByRole("complementary", { name: "Saved chats" }).getByRole("listitem");
