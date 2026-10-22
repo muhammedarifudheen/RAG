@@ -55,6 +55,10 @@ services:
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       GEMINI_MODELS: ${GEMINI_MODELS:-}
+      # More AI services for the chat's assistant; each is used once its key is set.
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       # Only for ingesting private repositories.
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports:

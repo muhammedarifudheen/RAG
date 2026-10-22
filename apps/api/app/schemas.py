@@ -29,19 +29,42 @@ class SearchResponse(BaseModel):
     results: list[CodeChunk]
 
 
+class ChatTurn(BaseModel):
+    """One earlier message of the conversation, for follow-up questions."""
+
+    role: Literal["user", "assistant"]
+    content: str = Field(max_length=20000)
+
+
 class AskRequest(BaseModel):
     question: str = Field(min_length=1, max_length=2000, examples=["How are user names formatted?"])
-    top_k: int = Field(default=8, ge=1, le=20, description="How many search results to give Claude.")
+    top_k: int = Field(
+        default=8, ge=1, le=20, description="How many search results to give Claude."
+    )
+    history: list[ChatTurn] = Field(
+        default=[],
+        max_length=40,
+        description="Earlier messages, oldest first. Given, or with `Accept: text/event-stream`, "
+        "the question goes to the assistant, which also answers from general knowledge and "
+        "the web and suggests follow-up questions.",
+    )
 
 
 class Citation(BaseModel):
-    ref: str = Field(description="The citation as written in the answer.", examples=["[pkg/models.py:20-21]"])
+    ref: str = Field(
+        description="The citation as written in the answer.", examples=["[pkg/models.py:20-21]"]
+    )
     file: str
     start_line: int
     end_line: int
     verified: bool = Field(
         description="True if the cited lines lie inside one of the chunks sent to the model."
     )
+
+
+class WebSource(BaseModel):
+    title: str
+    url: str
 
 
 class AskResponse(BaseModel):
@@ -51,6 +74,13 @@ class AskResponse(BaseModel):
     chunks: list[CodeChunk] = Field(description="The code given to the model, most similar first.")
     model: str = Field(description="The model that produced the answer.")
     complete: bool = Field(description="False if the answer was cut off at the token limit.")
+    # Set by the assistant only.
+    provider: str | None = Field(default=None, description="The service that answered.")
+    route: str | None = Field(
+        default=None, description="The question type the assistant routed by.", examples=["code"]
+    )
+    suggestions: list[str] = Field(default=[], description="Follow-up questions to offer.")
+    web_sources: list[WebSource] = Field(default=[], description="Web pages a search found.")
 
 
 class SymbolRef(BaseModel):
@@ -137,7 +167,9 @@ class IngestRequest(BaseModel):
 
 
 class SiteConfig(BaseModel):
-    admin_required: bool = Field(description="Adding and removing sources needs the admin password.")
+    admin_required: bool = Field(
+        description="Adding and removing sources needs the admin password."
+    )
     chat_configured: bool = Field(description="A model provider key is set, so /ask can answer.")
 
 

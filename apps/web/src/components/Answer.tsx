@@ -1,6 +1,6 @@
 "use client";
 
-import type { AskResponse } from "@atlas/shared";
+import type { AskResponse, AssistantRoute } from "@atlas/shared";
 import { useMemo } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -74,6 +74,34 @@ export function Answer({ response, onCite }: Props) {
         </p>
       )}
 
+      {response.web_sources && response.web_sources.length > 0 && (
+        <div className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
+          <p className="font-medium text-slate-700">From the web</p>
+          <ul className="mt-1 space-y-0.5">
+            {response.web_sources.map((source) => (
+              <li key={source.url}>
+                <a
+                  href={source.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-indigo-700 hover:underline"
+                >
+                  {source.title}
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {response.provider && (
+        <p className="mt-3 text-[11px] text-slate-400">
+          Answered by {response.provider} ({response.model})
+          {response.route ? ` · ${ROUTE_LABELS[response.route]}` : ""}
+        </p>
+      )}
+
+      {response.chunks.length > 0 && (
       <details className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-600">
         <summary className="cursor-pointer select-none">
           {response.chunks.length} code excerpts were given to {response.model}
@@ -103,6 +131,32 @@ export function Answer({ response, onCite }: Props) {
           ))}
         </ul>
       </details>
+      )}
+    </article>
+  );
+}
+
+const ROUTE_LABELS: Record<AssistantRoute, string> = {
+  sources: "from your sources",
+  code: "coding question",
+  current: "recent events",
+  reasoning: "reasoning question",
+  chat: "conversation",
+  general: "general question",
+};
+
+/** An answer while it is being written: plain Markdown, citations not yet checked. */
+export function StreamingAnswer({ text }: { text: string }) {
+  return (
+    <article
+      aria-label="Writing the answer"
+      aria-busy="true"
+      className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+    >
+      <div className="markdown text-sm leading-relaxed">
+        <ReactMarkdown remarkPlugins={[remarkGfm]}>{text}</ReactMarkdown>
+      </div>
+      <span className="ml-0.5 inline-block h-4 w-1.5 animate-pulse bg-indigo-400 align-middle" />
     </article>
   );
 }

@@ -216,7 +216,8 @@ function Send-Source {
 }
 
 # The only settings copied from the local .env to the VM.
-$syncedSettings = "LLM_PROVIDER", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GEMINI_MODELS", "GITHUB_TOKEN"
+$syncedSettings = "LLM_PROVIDER", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "GEMINI_MODELS",
+    "GROQ_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY", "GITHUB_TOKEN"
 
 $keyScript = @'
 set -euo pipefail

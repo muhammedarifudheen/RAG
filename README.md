@@ -100,6 +100,29 @@ proxies `/api/*` to the API, which runs the ingestion itself.
 `apps/worker` has its own venv and a CLI for ingesting without the UI; see
 [apps/worker/README.md](apps/worker/README.md).
 
+## The chat assistant
+
+The chat page answers any question, not only questions about your sources:
+
+- **Sources first.** It searches your knowledge base and cites the exact lines it
+  used, as `[path:start-end]`, each checked against what the model was shown.
+- **Then the web and general knowledge.** When your sources do not cover a question,
+  it says so and answers anyway; for recent events it searches the web (Gemini's
+  Google search when the key has that quota, or Groq's compound models).
+- **Several AI services.** Gemini, Groq, OpenRouter, Mistral and Claude: each is used
+  once its key is set (`GEMINI_API_KEY`, `GROQ_API_KEY`, `OPENROUTER_API_KEY`,
+  `MISTRAL_API_KEY`, `ANTHROPIC_API_KEY`). The **Auto** mode routes each question by
+  type (your sources, code, recent events, reasoning, small talk, general) to the
+  services and models that suit it; **Best model** always starts with the strongest.
+  Either way, a busy or failing service hands over to the next one.
+- **A chatbot.** Answers stream as they are written, follow-ups remember the
+  conversation, three follow-up questions are suggested, and past chats are kept in
+  the browser's sidebar.
+
+The API side is `apps/api/app/assistant` (router, providers, prompt). `/ask` uses it
+for streaming requests (`Accept: text/event-stream`) and for any request with
+`history`; a plain JSON question still gets the sources-only answer.
+
 ## Deployment and CI
 
 Staging runs on Google Cloud (Cloud Run and Cloud SQL), deployed by GitHub

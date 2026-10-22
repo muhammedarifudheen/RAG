@@ -21,11 +21,7 @@ router = APIRouter(
 @router.get("/sources", response_model=list[SourceItem], summary="List what has been ingested")
 def list_sources(db: Annotated[Session, Depends(get_db)]) -> list[SourceItem]:
     """Returns every source in the knowledge base, newest first, with its size."""
-    files = (
-        select(File.source_id, func.count().label("files"))
-        .group_by(File.source_id)
-        .subquery()
-    )
+    files = select(File.source_id, func.count().label("files")).group_by(File.source_id).subquery()
     symbols = (
         select(File.source_id, func.count().label("symbols"))
         .join(Symbol, Symbol.file_id == File.id)
@@ -56,8 +52,15 @@ def list_sources(db: Annotated[Session, Depends(get_db)]) -> list[SourceItem]:
 def config() -> SiteConfig:
     """Tells the web app whether managing sources needs the admin password, and whether
     a model provider is configured for answering questions."""
-    key = settings.gemini_api_key if settings.llm_provider == "gemini" else settings.anthropic_api_key
-    return SiteConfig(admin_required=bool(settings.admin_token), chat_configured=bool(key))
+    key = (
+        settings.gemini_api_key if settings.llm_provider == "gemini" else settings.anthropic_api_key
+    )
+    # The chat page's assistant can use any of the services with a key.
+    assistant_keys = (settings.groq_api_key, settings.openrouter_api_key, settings.mistral_api_key)
+    return SiteConfig(
+        admin_required=bool(settings.admin_token),
+        chat_configured=bool(key) or any(assistant_keys),
+    )
 
 
 @router.post(

@@ -2,6 +2,9 @@ import type {
   ApiErrorBody,
   AskRequest,
   AskResponse,
+  AssistantMode,
+  AssistantRoute,
+  ChatTurn,
   FileDetail,
   FileGraph,
   HealthParams,
@@ -107,6 +110,62 @@ export function ask(body: AskRequest): Promise<AskResponse> {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+}
+
+export interface AssistantHandlers {
+  /** The question type and the services the assistant will try, in order. */
+  onRoute?: (route: AssistantRoute, providers: string[]) => void;
+  /** The next piece of the answer as it is written. */
+  onDelta?: (text: string) => void;
+  /** A service failed partway; drop the text so far, the next one starts over. */
+  onReset?: () => void;
+}
+
+/**
+ * Asks the assistant, which answers anything and streams its answer.
+ *
+ * The first question of a conversation is sent on its own; later ones carry the
+ * earlier messages. The API streams server-sent events; a plain JSON answer (an
+ * older API) is accepted too.
+ */
+export async function askAssistant(
+  question: string,
+  history: ChatTurn[],
+  mode: AssistantMode,
+  handlers: AssistantHandlers = {},
+  signal?: AbortSignal,
+): Promise<AskResponse> {
+  const body: AskRequest = history.length > 0 ? { question, history } : { question };
+  const response = await fetch(`${API_BASE}/ask`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "text/event-stream, application/json",
+      "X-Atlas-Mode": mode,
+    },
+    body: JSON.stringify(body),
+    signal,
+  });
+  if (!response.ok) throw await errorFrom(response);
+  if (!(response.headers.get("content-type") ?? "").includes("text/event-stream")) {
+    return (await response.json()) as AskResponse;
+  }
+
+  for await (const event of readServerSentEvents(response)) {
+    const data = JSON.parse(event.data) as Record<string, unknown>;
+    if (event.event === "route") {
+      handlers.onRoute?.(data.route as AssistantRoute, (data.providers as string[]) ?? []);
+    } else if (event.event === "delta") {
+      handlers.onDelta?.(data.text as string);
+    } else if (event.event === "reset") {
+      handlers.onReset?.();
+    } else if (event.event === "done") {
+      return data as unknown as AskResponse;
+    } else if (event.event === "error") {
+      throw new ApiError(Number(data.status) || 500, String(data.detail));
+    }
+  }
+  throw new ApiError(502, "The answer stopped before it was finished.");
 }
 
 export function getFile(path: string): Promise<FileDetail> {

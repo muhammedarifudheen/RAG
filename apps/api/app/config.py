@@ -29,6 +29,30 @@ class Settings(BaseSettings):
     anthropic_effort: str = "medium"
     anthropic_max_tokens: int = 16000
 
+    # --- The assistant: the chat that answers anything (see app/assistant) ---------
+    # More providers: each one is used once its key is set. All but Claude have
+    # free tiers. Model lists are tried in order; the router reorders them per
+    # question type (coding models for code, reasoning models for reasoning).
+    groq_api_key: str | None = None
+    groq_models: str = "openai/gpt-oss-120b,groq/compound,llama-3.3-70b-versatile,qwen/qwen3-32b"
+    openrouter_api_key: str | None = None
+    openrouter_models: str = (
+        "deepseek/deepseek-chat-v3.1:free,deepseek/deepseek-r1-0528:free,"
+        "qwen/qwen3-coder:free,meta-llama/llama-3.3-70b-instruct:free"
+    )
+    mistral_api_key: str | None = None
+    mistral_models: str = "mistral-large-latest,mistral-medium-latest,codestral-latest"
+    # How many of one provider's models to try before moving to the next provider.
+    assistant_models_per_provider: int = 2
+    # "Best model + fallbacks" order, strongest first.
+    assistant_best_order: str = "claude,gemini,openrouter,mistral,groq"
+    # Let models search the web for recent facts: Gemini through Google (its search
+    # quota is separate; refused, it answers without), Groq through its compound models.
+    assistant_web_search: bool = True
+    # Knowledge-base excerpts less similar than this are not shown to the model.
+    assistant_min_score: float = 0.3
+    assistant_max_tokens: int = 8000
+
     # When set, adding and removing sources needs `Authorization: Bearer <token>`;
     # searching and asking stay open. Unset, everything is open (local use).
     admin_token: str | None = None

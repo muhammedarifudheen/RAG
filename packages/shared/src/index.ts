@@ -32,9 +32,27 @@ export interface SearchResponse {
   results: CodeChunk[];
 }
 
+/** One earlier message of a conversation, sent along for follow-up questions. */
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export interface AskRequest {
   question: string;
   top_k?: number;
+  /** Earlier messages, oldest first; sent, the assistant answers. */
+  history?: ChatTurn[];
+}
+
+/** How the assistant picks models: by question type, or the strongest first. */
+export type AssistantMode = "auto" | "best";
+
+export type AssistantRoute = "sources" | "code" | "current" | "reasoning" | "chat" | "general";
+
+export interface WebSource {
+  title: string;
+  url: string;
 }
 
 export interface Citation {
@@ -55,6 +73,13 @@ export interface AskResponse {
   model: string;
   /** False if the answer was cut off at the token limit. */
   complete: boolean;
+  /** Set by the assistant: the service that answered ("Gemini", "Groq", …). */
+  provider?: string | null;
+  route?: AssistantRoute | null;
+  /** Follow-up questions to offer. */
+  suggestions?: string[];
+  /** Web pages a search found. */
+  web_sources?: WebSource[];
 }
 
 // --- /graph, /graph/files and /file -----------------------------------------

@@ -62,7 +62,7 @@ $settings = [ordered]@{
     CORS_ORIGINS = (ConvertTo-Json @($SiteOrigin.TrimEnd("/")) -Compress)
     SEED_SOURCES = $SeedSources
 }
-foreach ($key in "GEMINI_API_KEY", "GEMINI_MODELS", "ANTHROPIC_API_KEY") {
+foreach ($key in "GEMINI_API_KEY", "GEMINI_MODELS", "ANTHROPIC_API_KEY", "GROQ_API_KEY", "OPENROUTER_API_KEY", "MISTRAL_API_KEY") {
     $value = Read-DotEnv $key
     if ($value) { $settings[$key] = $value }
 }
