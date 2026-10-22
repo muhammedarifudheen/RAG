@@ -25,8 +25,11 @@
   Requires the gcloud CLI, signed in (`gcloud auth login`), and Windows' OpenSSH
   client.
 
+  The source is uploaded again, and the containers rebuilt, whenever the code on
+  this machine differs from the copy on the VM.
+
 .PARAMETER Upload
-  Upload the source even if the VM already has a copy. Use after changing code.
+  Upload the source even if the VM's copy looks current.
 #>
 param([switch]$Upload)
 
@@ -164,15 +167,39 @@ if [ "${1:-}" = "extract" ]; then
   # Replace the source but keep .env, which holds the user's API key.
   find ~/atlas -mindepth 1 -maxdepth 1 ! -name .env -exec rm -rf {} +
   tar -xzf ~/atlas-src.tgz -C ~/atlas
+  # Which version of the source this is, so the runner can tell when it is stale.
+  echo "${2:-}" > ~/atlas/.source-stamp
 fi
 cd ~/atlas
 nohup docker compose up --build -d > ~/atlas-up.log 2>&1 &
 echo STARTED
 '@
 
+$stampScript = @'
+cat ~/atlas/.source-stamp 2>/dev/null || echo NONE
+'@
+
 $logScript = @'
 tail -c 4000 ~/atlas-up.log 2>/dev/null | tr '\r' '\n' | grep -v '^\s*$' | tail -n 12
 '@
+
+function Get-SourceStamp {
+    # A fingerprint of the source: each file's path, size and modification time.
+    # git lists the files (tracked, plus new ones it does not ignore), which keeps
+    # dependencies, build output and .env out of it. No git: no fingerprint, so
+    # the source is uploaded every time.
+    $git = (Get-Command git.exe -ErrorAction SilentlyContinue).Source
+    if (-not $git) { return $null }
+    $files = & $git -C $repo ls-files --cached --others --exclude-standard 2>$null
+    if ($LASTEXITCODE -ne 0 -or -not $files) { return $null }
+    $lines = foreach ($file in ($files | Sort-Object -Unique)) {
+        $item = Get-Item -LiteralPath (Join-Path $repo $file) -ErrorAction SilentlyContinue
+        if ($item) { "$file|$($item.Length)|$($item.LastWriteTimeUtc.Ticks)" }
+    }
+    $bytes = [Text.Encoding]::UTF8.GetBytes(($lines -join "`n"))
+    $hash = [Security.Cryptography.SHA256]::Create().ComputeHash($bytes)
+    return ([BitConverter]::ToString($hash) -replace "-", "").Substring(0, 16).ToLower()
+}
 
 function Send-Source {
     $archive = "$work\atlas-src.tgz"
@@ -292,11 +319,22 @@ try {
         $state = Invoke-Remote "state" $stateScript
         if ($null -eq $state) { Say "Connection dropped; reconnecting."; continue }
 
+        # The VM keeps the source between runs; replace it when the code here changed.
+        $sourceStamp = Get-SourceStamp
+        if ($state -ne "MISSING" -and -not $uploadPending) {
+            $vmStamp = Invoke-Remote "stamp" $stampScript
+            if ($null -eq $vmStamp) { Say "Connection dropped; reconnecting."; continue }
+            if (-not $sourceStamp -or $vmStamp.Trim() -ne $sourceStamp) {
+                Say "The code on this machine differs from the copy on Cloud Shell."
+                $uploadPending = $true
+            }
+        }
+
         if ($state -eq "MISSING" -or $uploadPending) {
             Say "Uploading the source..."
             if (-not (Send-Source)) { Say "Upload failed; reconnecting."; continue }
             [void](Sync-ApiKey -NoRestart)
-            if ($null -eq (Invoke-Remote "start" $startScript "extract")) { Say "Connection dropped; reconnecting."; continue }
+            if ($null -eq (Invoke-Remote "start" $startScript ("extract $sourceStamp".Trim()))) { Say "Connection dropped; reconnecting."; continue }
             $uploadPending = $false
             Say "Building and starting the containers. The first build takes about eight minutes."
         }

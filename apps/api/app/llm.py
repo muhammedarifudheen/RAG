@@ -1,3 +1,4 @@
+import logging
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -10,6 +11,8 @@ from fastapi import HTTPException
 
 from app.config import settings
 from app.schemas import CodeChunk
+
+logger = logging.getLogger("atlas.api.llm")
 
 SYSTEM_PROMPT = """\
 You answer questions from a knowledge base that someone has assembled out of source code \
@@ -165,10 +168,20 @@ class GeminiAnswerer:
             if attempt:
                 time.sleep(self.pause)
             for model in self.models:
+                # One line per attempt: which model, how it ended, how long it took.
+                started = time.monotonic()
+                outcome = "error"
                 try:
-                    return self._ask(model, payload)
+                    result = self._ask(model, payload)
+                    outcome = "answered"
+                    return result
                 except _TryNextModel as skipped:
                     failure = skipped.error
+                    outcome = f"skipped ({skipped.error.detail})"
+                finally:
+                    logger.info(
+                        "gemini %s: %s in %.1fs", model, outcome, time.monotonic() - started
+                    )
         raise failure
 
     def _ask(self, model: str, payload: dict) -> LLMAnswer:
