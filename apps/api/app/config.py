@@ -34,7 +34,7 @@ class Settings(BaseSettings):
     # lists are comma-separated and tried in order; the router puts coding models
     # first for code and reasoning models for reasoning.
     groq_api_key: str | None = None  # console.groq.com/keys
-    groq_models: str = "openai/gpt-oss-120b,groq/compound,llama-3.3-70b-versatile,qwen/qwen3-32b"
+    groq_models: str = "openai/gpt-oss-120b,qwen/qwen3.8-27b,openai/gpt-oss-20b"
     openrouter_api_key: str | None = None  # openrouter.ai/keys
     # "auto": every free model in OpenRouter's public catalogue (it changes often).
     openrouter_models: str = "auto"
@@ -58,7 +58,7 @@ class Settings(BaseSettings):
         "meta-llama/Llama-3.3-70B-Instruct,Qwen/Qwen2.5-72B-Instruct,deepseek-ai/DeepSeek-V3-0324"
     )
     sambanova_api_key: str | None = None  # cloud.sambanova.ai
-    sambanova_models: str = "Meta-Llama-3.3-70B-Instruct,DeepSeek-V3-0324"
+    sambanova_models: str = "DeepSeek-V3.2,gpt-oss-120b,Meta-Llama-3.3-70B-Instruct,MiniMax-M3"
     nvidia_api_key: str | None = None  # build.nvidia.com
     nvidia_models: str = "meta/llama-3.3-70b-instruct,deepseek-ai/deepseek-r1"
     cohere_api_key: str | None = None  # dashboard.cohere.com/api-keys
