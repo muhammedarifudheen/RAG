@@ -60,7 +60,10 @@ class Settings(BaseSettings):
     sambanova_api_key: str | None = None  # cloud.sambanova.ai
     sambanova_models: str = "DeepSeek-V3.2,gpt-oss-120b,Meta-Llama-3.3-70B-Instruct,MiniMax-M3"
     nvidia_api_key: str | None = None  # build.nvidia.com
-    nvidia_models: str = "meta/llama-3.3-70b-instruct,deepseek-ai/deepseek-r1"
+    nvidia_models: str = (
+        "nvidia/nemotron-3.5-super-vl-120b-a12b,deepseek-ai/deepseek-v4.1-flash,"
+        "moonshotai/kimi-k2.6,z-ai/glm-5.3"
+    )
     cohere_api_key: str | None = None  # dashboard.cohere.com/api-keys
     cohere_models: str = "command-a-03-2025"
     together_api_key: str | None = None  # api.together.ai
