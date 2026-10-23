@@ -106,7 +106,9 @@ await check("a picture is drawn", async () => {
   await page.getByRole("button", { name: "Draw a picture" }).click();
   await page.getByLabel("Question", { exact: true }).fill("a red bicycle leaning on a blue wall");
   await page.getByRole("button", { name: "Ask", exact: true }).click();
-  const picture = (await answer(1)).getByRole("img");
+  // A gallery draws several pictures; the first to load is enough.
+  const pictures = (await answer(1)).getByRole("img");
+  const picture = pictures.first();
   await picture.waitFor({ timeout: 60_000 });
   await page.waitForFunction(
     (img) => img && img.complete && img.naturalWidth > 0,
@@ -114,7 +116,7 @@ await check("a picture is drawn", async () => {
     { timeout: 180_000 },
   );
   const size = await picture.evaluate((img) => `${img.naturalWidth}×${img.naturalHeight}`);
-  return `${size} picture of "${await picture.getAttribute("alt")}"`;
+  return `${await pictures.count()} pictures, the first ${size} of "${await picture.getAttribute("alt")}"`;
 });
 
 await check("a chat is shared by link and opens for anyone", async () => {

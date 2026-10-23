@@ -169,12 +169,10 @@ def gallery(
     services: Sequence[ImageService], prompt: str, size: int, max_wait: float
 ) -> Iterator[Drawn]:
     """Draws `prompt` on up to `size` services in parallel, yielding each picture as it
-    is ready, until all are done or `max_wait` seconds pass. With fewer services than
-    `size`, Pollinations draws the rest with other seeds."""
+    is ready, until all are done or `max_wait` seconds pass. Each service draws once:
+    free Pollinations gives a visitor one picture every 45 seconds, and a second one
+    would only show its "free limit reached" card."""
     chosen = list(services[:size])
-    pollinations = [s for s in services if isinstance(s, PollinationsImages)]
-    while pollinations and len(chosen) < size:
-        chosen.append(pollinations[0])
     if not chosen:
         return
     results: queue.Queue = queue.Queue()

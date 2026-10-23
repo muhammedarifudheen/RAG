@@ -289,8 +289,8 @@ def test_the_gallery_draws_on_several_services_and_skips_failures():
     ]
     drawn = list(gallery(painters, "a fox", size=4, max_wait=2))
     services = sorted(d.service for d in drawn)
-    # Pollinations fills the fourth place with another seed.
-    assert services == ["Cloudflare FLUX", "Pollinations", "Pollinations"]
+    # Each service draws once; Pollinations is not asked twice (it allows one a visitor).
+    assert services == ["Cloudflare FLUX", "Pollinations"]
     assert all(isinstance(d, Drawn) for d in drawn)
 
 
