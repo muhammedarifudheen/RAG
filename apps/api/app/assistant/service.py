@@ -84,10 +84,17 @@ SLOW_SERVICES = ("horde",)
 PROMPT_WRITING_SECONDS = 20.0
 
 # How long a model sits out after failing: out of credit (the account needs paying),
-# over quota (a per-minute limit), or merely busy (worth one more try soon).
+# over quota (a per-minute limit), or merely busy (worth one more try soon). A model this
+# account cannot use at all (withdrawn, kept for certain apps, or asked for more than its
+# plan allows in one go) sits out for hours.
+_UNUSABLE = re.compile(
+    r"only available on|not found for account|model.?not.?found|does not exist|request too large",
+    re.IGNORECASE,
+)
 _BILLING = re.compile(r"credit|billing|payment|insufficient.?(funds|balance)", re.IGNORECASE)
 _QUOTA = re.compile(r"quota|rate.?limit|too many requests|\b429\b", re.IGNORECASE)
 _BUSY = re.compile(r"high demand|overloaded|unavailable|\b50[234]\b|try again", re.IGNORECASE)
+UNUSABLE_REST = 6 * 3600.0
 BILLING_REST = 1800.0
 QUOTA_REST = 60.0
 RETRY_PAUSE = 2.0
@@ -95,7 +102,9 @@ RETRY_PAUSE = 2.0
 
 def rest_after(detail: str) -> float:
     """Seconds a model should sit out after failing with `detail`."""
-    # Quota first: Gemini's quota message also mentions "billing details".
+    if _UNUSABLE.search(detail):
+        return UNUSABLE_REST
+    # Quota before billing: Gemini's quota message also mentions "billing details".
     if _QUOTA.search(detail):
         return QUOTA_REST
     if _BILLING.search(detail):

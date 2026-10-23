@@ -428,6 +428,9 @@ def test_the_merge_goes_to_a_model_that_just_answered():
         ("Groq q: Rate limit reached for model", 60),
         ("Gemini g: This model is currently experiencing high demand.", 0),
         ("Mistral m: could not be reached", 0),
+        ("OpenRouter i: i is only available on agentic harnesses.", 6 * 3600),
+        ("NVIDIA k: Function 'f': Not found for account 'a'", 6 * 3600),
+        ("Groq q: Request too large for model on output tokens per minute (OTPM)", 6 * 3600),
     ],
 )
 def test_failures_set_how_long_a_model_rests(detail, rest):
