@@ -415,3 +415,66 @@ def test_the_merge_goes_to_a_model_that_just_answered():
     assert events[-1][0] == "done"
     merges = [c.model for c in gemini.calls if "Several independent" in c.system]
     assert merges == ["g3"]
+
+
+@pytest.mark.parametrize(
+    ("detail", "rest"),
+    [
+        (
+            "Gemini g: You exceeded your current quota, please check your plan and billing details.",
+            60,
+        ),
+        ("Claude c: Your credit balance is too low to access the Anthropic API.", 1800),
+        ("Groq q: Rate limit reached for model", 60),
+        ("Gemini g: This model is currently experiencing high demand.", 0),
+        ("Mistral m: could not be reached", 0),
+    ],
+)
+def test_failures_set_how_long_a_model_rests(detail, rest):
+    from app.assistant.service import rest_after
+
+    assert rest_after(detail) == rest
+
+
+def test_a_model_out_of_quota_sits_out_the_next_question():
+    gemini = Agent(
+        "gemini", {"g1": ProviderError("You exceeded your current quota"), "g2": "Draft."}
+    )
+    groq = Agent("groq", {"q1": "Groq's draft."})
+    assistant = council(gemini, groq)
+    events_of(assistant)
+    first = [c.model for c in gemini.calls if "Several independent" not in c.system]
+    assert first[0] == "g1"
+
+    gemini.calls.clear()
+    events = events_of(assistant)
+    seated = [d["model"] for name, d in events if name == "agent" and d["state"] == "thinking"]
+    # g1 rests: it is seated last, after every other model.
+    assert seated[-1] == "g1"
+    assert seated[0] != "g1"
+
+
+def test_a_busy_model_gets_one_more_try():
+    tries = {"n": 0}
+    gemini = Agent("gemini", {"g1": "unused"})
+    original = gemini.stream
+
+    def stream(model, system, turns, outcome, *, web, temperature=None):
+        if "Several independent" not in system:
+            tries["n"] += 1
+            if tries["n"] == 1:
+                raise ProviderError("This model is currently experiencing high demand.")
+        gemini.replies[model] = "Second try worked."
+        yield from original(model, system, turns, outcome, web=web)
+
+    gemini.stream = stream
+    from app.assistant import service
+
+    service.RETRY_PAUSE, saved = 0.0, service.RETRY_PAUSE
+    try:
+        done = events_of(council(gemini, Agent("groq", {"q1": ProviderError("down")})))[-1]
+    finally:
+        service.RETRY_PAUSE = saved
+    assert done[0] == "done"
+    assert done[1]["answer"] == "Second try worked."
+    assert tries["n"] == 2

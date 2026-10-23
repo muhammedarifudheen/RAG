@@ -53,7 +53,7 @@ await check("a wrong admin password is refused", async () => {
 await check("chat answers with verified citations", async () => {
   await page.goto(new URL("chat/", SITE).href);
   await page.getByLabel("Question", { exact: true }).fill("How does itsdangerous check that a signature is valid?");
-  await page.getByRole("button", { name: "Ask" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const reply = await answer();
   const text = (await reply.innerText()).replace(/\s+/g, " ");
   const citations = reply.locator("button[data-verified]");
@@ -70,7 +70,7 @@ await check("chat answers with verified citations", async () => {
 await check("the assistant answers a general question and offers follow-ups", async () => {
   await page.getByRole("button", { name: "+ New chat" }).click();
   await page.getByLabel("Question", { exact: true }).fill("What is the capital of Japan? One sentence.");
-  await page.getByRole("button", { name: "Ask" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const text = (await (await answer()).innerText()).replace(/\s+/g, " ");
   if (!/tokyo/i.test(text)) throw new Error(`no Tokyo in: ${text.slice(0, 200)}`);
   if (/Answered by/.test(text)) throw new Error("the answer names the AI service that wrote it");
@@ -96,7 +96,7 @@ await check("an attached document is read and answered from", async () => {
   });
   await page.getByRole("list", { name: "Attached files" }).getByText("TXT").waitFor({ timeout: 120_000 });
   await page.getByLabel("Question", { exact: true }).fill("According to my notes, what day is the launch?");
-  await page.getByRole("button", { name: "Ask" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const text = (await (await answer()).innerText()).replace(/\s+/g, " ");
   if (!/thursday/i.test(text)) throw new Error(`no Thursday in: ${text.slice(0, 200)}`);
   return `"${text.slice(0, 100)}"`;
@@ -105,7 +105,7 @@ await check("an attached document is read and answered from", async () => {
 await check("a picture is drawn", async () => {
   await page.getByRole("button", { name: "Draw a picture" }).click();
   await page.getByLabel("Question", { exact: true }).fill("a red bicycle leaning on a blue wall");
-  await page.getByRole("button", { name: "Ask" }).click();
+  await page.getByRole("button", { name: "Ask", exact: true }).click();
   const picture = (await answer(1)).getByRole("img");
   await picture.waitFor({ timeout: 60_000 });
   await page.waitForFunction(

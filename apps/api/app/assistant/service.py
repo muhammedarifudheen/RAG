@@ -14,7 +14,7 @@ import queue
 import re
 import threading
 import time
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from functools import cache
 
@@ -83,6 +83,26 @@ class Options:
 SLOW_SERVICES = ("horde",)
 PROMPT_WRITING_SECONDS = 20.0
 
+# How long a model sits out after failing: out of credit (the account needs paying),
+# over quota (a per-minute limit), or merely busy (worth one more try soon).
+_BILLING = re.compile(r"credit|billing|payment|insufficient.?(funds|balance)", re.IGNORECASE)
+_QUOTA = re.compile(r"quota|rate.?limit|too many requests|\b429\b", re.IGNORECASE)
+_BUSY = re.compile(r"high demand|overloaded|unavailable|\b50[234]\b|try again", re.IGNORECASE)
+BILLING_REST = 1800.0
+QUOTA_REST = 60.0
+RETRY_PAUSE = 2.0
+
+
+def rest_after(detail: str) -> float:
+    """Seconds a model should sit out after failing with `detail`."""
+    # Quota first: Gemini's quota message also mentions "billing details".
+    if _QUOTA.search(detail):
+        return QUOTA_REST
+    if _BILLING.search(detail):
+        return BILLING_REST
+    return 0.0
+
+
 # Services that cannot see attached images (they would answer without them).
 NO_VISION = ("horde", "pollinations")
 
@@ -136,6 +156,9 @@ class Assistant:
         self.council_size = council_size
         self.council_grace = council_grace
         self.council_max_wait = council_max_wait
+        # (service, model) -> when it may be asked again, after running out of quota.
+        self.resting: dict[tuple[str, str], float] = {}
+        self.clock = time.monotonic
         self.best_order = best_order
         self.models_per_provider = models_per_provider
         self.web_search = web_search
@@ -244,7 +267,17 @@ class Assistant:
         names = [n for n in order if not (images and n in NO_VISION)]
         ranked = {n: model_order(self.providers[n].models, route) for n in names}
         depth = max((len(models) for models in ranked.values()), default=0)
-        return [(n, ranked[n][i]) for i in range(depth) for n in names if i < len(ranked[n])]
+        every = [(n, ranked[n][i]) for i in range(depth) for n in names if i < len(ranked[n])]
+        # Models resting after a quota or billing failure wait at the back.
+        return [p for p in every if not self._resting(p)] + [p for p in every if self._resting(p)]
+
+    def _resting(self, pair: tuple[str, str]) -> bool:
+        return self.resting.get(pair, 0.0) > self.clock()
+
+    def _note_failure(self, pair: tuple[str, str], detail: str) -> None:
+        rest = rest_after(detail)
+        if rest:
+            self.resting[pair] = self.clock() + rest
 
     def _council(
         self,
@@ -262,7 +295,9 @@ class Assistant:
         seats = candidates[: self.council_size]
         reserve = candidates[self.council_size :]
 
-        def run(agent: int, name: str, model: str) -> None:
+        def run(agent: int, name: str, model: str, pause: float = 0.0) -> None:
+            if pause:
+                time.sleep(pause)
             provider = self.providers[name]
             web = self.web_search and route != "chat" and provider.searches(model)
             outcome = Outcome()
@@ -294,11 +329,14 @@ class Assistant:
                     ("failed", agent, f"{type(error).__name__}", time.monotonic() - started)
                 )
 
-        def seat(agent: int, name: str, model: str) -> Event:
-            threading.Thread(target=run, args=(agent, name, model), daemon=True).start()
+        def seat(agent: int, name: str, model: str, pause: float = 0.0) -> Event:
+            seated[agent] = (name, model)
+            threading.Thread(target=run, args=(agent, name, model, pause), daemon=True).start()
             label = self.providers[name].label
             return "agent", {"id": agent, "service": label, "model": model, "state": "thinking"}
 
+        seated: dict[int, tuple[str, str]] = {}
+        retried: set[tuple[str, str]] = set()
         for agent, (name, model) in enumerate(seats):
             yield seat(agent, name, model)
         running = set(range(len(seats)))
@@ -328,11 +366,18 @@ class Assistant:
                 yield "agent", {"id": agent, "state": "done", "seconds": round(seconds, 1)}
                 continue
             failures.append(detail)
+            pair = seated[agent]
+            self._note_failure(pair, detail)
             logger.info("assistant agent %d failed in %.1fs (%s)", agent, seconds, detail)
             yield "agent", {"id": agent, "state": "failed", "seconds": round(seconds, 1)}
+            # A model that was only busy gets one more try, after the untried ones.
+            if _BUSY.search(detail) and pair not in retried:
+                retried.add(pair)
+                reserve.append(pair)
             if reserve:
                 name, model = reserve.pop(0)
-                yield seat(next_agent, name, model)
+                pause = RETRY_PAUSE if (name, model) in retried else 0.0
+                yield seat(next_agent, name, model, pause)
                 running.add(next_agent)
                 next_agent += 1
         for agent in sorted(running):
@@ -370,7 +415,7 @@ class Assistant:
         yield "merging", {"drafts": len(drafts)}
         merge_turns = with_drafts(turns, [d.answer for d in drafts])
         merge_system = f"{system}\n\n{MERGE}"
-        for name, model in _merge_order(drafts, order, self._attempts(order, route)):
+        for name, model in _merge_order(drafts, order, self._attempts(order, route), self._resting):
             provider = self.providers[name]
             outcome = Outcome()
             splitter = FollowUpSplitter()
@@ -560,14 +605,18 @@ def _bare_request(question: str) -> str:
 
 
 def _merge_order(
-    drafts: Sequence[Draft], order: Sequence[str], attempts: Sequence[tuple[str, str]]
+    drafts: Sequence[Draft],
+    order: Sequence[str],
+    attempts: Sequence[tuple[str, str]],
+    resting: Callable[[tuple[str, str]], bool] = lambda _: False,
 ) -> list[tuple[str, str]]:
     """Who merges: the models that just answered (so known to be working), the
     strongest service first, then everything else in the usual order."""
     rank = {name: i for i, name in enumerate(order)}
     ranked = sorted(drafts, key=lambda d: (rank.get(d.service, len(rank)), d.agent))
     answered = [(d.service, d.seat) for d in ranked]
-    return answered + [pair for pair in attempts if pair not in answered]
+    rest = [pair for pair in attempts if pair not in answered]
+    return answered + [p for p in rest if not resting(p)] + [p for p in rest if resting(p)]
 
 
 def _wants_picture(question: str, history: Sequence[ChatTurn]) -> bool:
