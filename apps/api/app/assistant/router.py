@@ -26,6 +26,7 @@ Route = Literal["sources", "code", "current", "reasoning", "chat", "general", "i
 ALL_SERVICES = (
     "claude",
     "gemini",
+    "deepseek",
     "openrouter",
     "github",
     "mistral",
@@ -50,9 +51,11 @@ def _prefer(*first: str) -> tuple[str, ...]:
 # lead small talk and picture prompts because they answer fastest.
 ROUTE_ORDER: dict[str, tuple[str, ...]] = {
     "sources": _prefer("gemini", "claude", "openrouter", "github", "mistral"),
-    "code": _prefer("claude", "openrouter", "github", "gemini", "mistral", "cerebras"),
+    "code": _prefer("claude", "deepseek", "openrouter", "github", "gemini", "mistral", "cerebras"),
     "current": _prefer("gemini", "claude", "openrouter", "github", "mistral", "groq"),
-    "reasoning": _prefer("claude", "openrouter", "gemini", "github", "groq", "cerebras"),
+    "reasoning": _prefer(
+        "claude", "deepseek", "openrouter", "gemini", "github", "groq", "cerebras"
+    ),
     "chat": _prefer("groq", "cerebras", "gemini", "mistral", "openrouter"),
     "general": _prefer("gemini", "claude", "openrouter", "github", "mistral", "groq"),
     "image": _prefer("groq", "cerebras", "gemini", "mistral", "openrouter"),

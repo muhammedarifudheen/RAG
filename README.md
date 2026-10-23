@@ -116,7 +116,7 @@ The chat page answers any question, not only questions about your sources:
   slow. An agent that fails (out of quota, overloaded) is replaced by the next model in
   line, and slow agents are not waited for once two have answered.
 - **Every free AI service.** Gemini, OpenRouter (every free model in its catalogue),
-  GitHub Models, Mistral, Cerebras, Groq, SambaNova, NVIDIA, Cohere, Hugging Face,
+  GitHub Models, Mistral, Cerebras, Groq, DeepSeek, SambaNova, NVIDIA, Cohere, Hugging Face,
   Cloudflare Workers AI, Together and Claude join the council once their key is set
   (see `.env.example`); Pollinations and AI Horde need no key and are always there. The
   **Auto** mode orders agents by question type (your sources, code, recent events,

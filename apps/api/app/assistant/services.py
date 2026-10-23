@@ -37,6 +37,9 @@ SERVICES: tuple[Service, ...] = (
         "openrouter_models",
         extra_headers={"X-Title": "Atlas"},
     ),
+    Service(
+        "deepseek", "DeepSeek", "https://api.deepseek.com/v1", "deepseek_api_key", "deepseek_models"
+    ),
     Service("mistral", "Mistral", "https://api.mistral.ai/v1", "mistral_api_key", "mistral_models"),
     Service(
         "cerebras", "Cerebras", "https://api.cerebras.ai/v1", "cerebras_api_key", "cerebras_models"

@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     )
     sambanova_api_key: str | None = None  # cloud.sambanova.ai
     sambanova_models: str = "DeepSeek-V3.2,gpt-oss-120b,Meta-Llama-3.3-70B-Instruct,MiniMax-M3"
+    deepseek_api_key: str | None = None  # platform.deepseek.com (paid, very cheap)
+    deepseek_models: str = "deepseek-chat,deepseek-reasoner"
     nvidia_api_key: str | None = None  # build.nvidia.com
     nvidia_models: str = (
         "nvidia/nemotron-3.5-super-vl-120b-a12b,nvidia/nemotron-3-ultra-550b-a55b,"
@@ -81,7 +83,7 @@ class Settings(BaseSettings):
     assistant_models_per_provider: int = 2
     # "Best model + fallbacks" order, strongest first.
     assistant_best_order: str = (
-        "claude,gemini,openrouter,github,mistral,cerebras,groq,sambanova,nvidia,"
+        "claude,gemini,deepseek,openrouter,github,mistral,cerebras,groq,sambanova,nvidia,"
         "cohere,huggingface,cloudflare,together,pollinations,horde"
     )
     # The council: this many agents answer each question in parallel and one model
