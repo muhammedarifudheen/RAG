@@ -199,7 +199,7 @@ export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatCompo
                 : "Ask anything…"
           }
           autoComplete="off"
-          maxLength={8000}
+          maxLength={32000}
           className="block max-h-60 min-h-[3rem] w-full resize-none bg-transparent px-4 py-3 text-[15px] outline-none placeholder:text-faint"
         />
 

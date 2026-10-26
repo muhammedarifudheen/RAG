@@ -225,3 +225,31 @@ test("an answer can be stopped", async ({ page }) => {
   await expect(alerts(page)).toHaveText("You stopped this answer.");
   await expect(page.getByRole("button", { name: "Ask" })).toBeVisible();
 });
+
+test("an answer searched on the web first still streams and links its sources", async ({ page }) => {
+  const news = { title: "Python 3.15 released", url: "https://news.example/python-3-15" };
+  await page.route("**/api/ask", (route) =>
+    fulfillStream(route, [
+      ["route", { route: "current", mode: "auto", providers: ["gemini"] }],
+      ["searching", {}],
+      ["web", { sources: [news] }],
+      ["delta", { text: "Python **3.15** came out on 10 October 2026." }],
+      [
+        "done",
+        reply("latest python?", "Python **3.15** came out on 10 October 2026.", {
+          route: "current",
+          web_sources: [news],
+        }),
+      ],
+    ]),
+  );
+  await page.goto("/chat");
+  await ask(page, "latest python?");
+
+  const answer = page.getByRole("article", { name: "Answer" });
+  await expect(answer).toContainText("Python 3.15 came out on 10 October 2026.");
+  await expect(answer.getByRole("link", { name: "Python 3.15 released" })).toHaveAttribute(
+    "href",
+    news.url,
+  );
+});

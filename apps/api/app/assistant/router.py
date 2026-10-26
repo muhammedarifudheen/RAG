@@ -75,6 +75,7 @@ _CODE = re.compile(
     r"react|docker|git|npm|pip|script|refactor|debug|algorithm|implement)\b|\w+\(\)",
     re.IGNORECASE,
 )
+_CODE_TEXT = re.compile(r"```|\w+\(\)|\b(def|function|class|import|return)\s+\w")
 _CURRENT = re.compile(
     r"\b(today|tonight|yesterday|tomorrow|now|currently|current|latest|recent|recently|news|"
     r"this (week|month|year)|right now|price|prices|stock|weather|score|who won|election|"
@@ -126,10 +127,12 @@ def classify(question: str, top_score: float | None, *, images: bool = False) ->
         return "chat"
     if top_score is not None and top_score >= SOURCES_SCORE:
         return "sources"
+    # "What is the latest Python?" asks about now, not about code; code in the
+    # question itself ("fix this: ```...```") is about code whatever else it says.
+    if _CURRENT.search(question) and not _CODE_TEXT.search(question):
+        return "current"
     if _CODE.search(question):
         return "code"
-    if _CURRENT.search(question):
-        return "current"
     if _REASONING.search(question):
         return "reasoning"
     return "general"

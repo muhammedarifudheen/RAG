@@ -67,6 +67,8 @@ services:
       SAMBANOVA_API_KEY: ${SAMBANOVA_API_KEY:-}
       NVIDIA_API_KEY: ${NVIDIA_API_KEY:-}
       DEEPSEEK_API_KEY: ${DEEPSEEK_API_KEY:-}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
       COHERE_API_KEY: ${COHERE_API_KEY:-}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
       # Only for ingesting private repositories.

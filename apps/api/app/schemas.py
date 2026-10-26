@@ -38,7 +38,7 @@ class ChatTurn(BaseModel):
     """One earlier message of the conversation, for follow-up questions."""
 
     role: Literal["user", "assistant"]
-    content: str = Field(max_length=20000)
+    content: str = Field(max_length=60000)
 
 
 class Attachment(BaseModel):
@@ -66,7 +66,9 @@ class Attachment(BaseModel):
 
 
 class AskRequest(BaseModel):
-    question: str = Field(min_length=1, max_length=8000, examples=["How are user names formatted?"])
+    question: str = Field(
+        min_length=1, max_length=32000, examples=["How are user names formatted?"]
+    )
     top_k: int = Field(
         default=8, ge=1, le=20, description="How many search results to give Claude."
     )

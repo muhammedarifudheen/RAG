@@ -7,11 +7,12 @@ import type {
   ChatTurn,
   CouncilAgent,
   GeneratedImage,
+  WebSource,
 } from "@atlas/shared";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { askAssistant } from "@/lib/api";
+import { askAssistant, wakeServer } from "@/lib/api";
 import { attachmentsToSend, imageSource } from "@/lib/attachments";
 import {
   loadChats,
@@ -68,12 +69,21 @@ type DialogName = "settings" | "share" | "shortcuts" | null;
 /** What the server has said about the answer being prepared. */
 interface Progress {
   route: AssistantRoute | null;
+  searching: boolean;
+  web: WebSource[] | null;
   agents: CouncilAgent[];
   merging: number | null;
   images: GeneratedImage[];
 }
 
-const NO_PROGRESS: Progress = { route: null, agents: [], merging: null, images: [] };
+const NO_PROGRESS: Progress = {
+  route: null,
+  searching: false,
+  web: null,
+  agents: [],
+  merging: null,
+  images: [],
+};
 
 function turnsOf(messages: StoredMessage[]): ChatTurn[] {
   return messages
@@ -128,6 +138,7 @@ export function Chat() {
   // Saved chats and settings live in this browser; read them once mounted, and open
   // the chat named in the address (?c=…), as the share page does after an import.
   useEffect(() => {
+    wakeServer();
     const saved = loadChats();
     setChats(saved);
     setMode(loadMode());
@@ -218,6 +229,8 @@ export function Chat() {
           onDelta: (piece) => setStreaming((current) => (current ?? "") + piece),
           onReset: () => setStreaming(null),
           onRoute: (route) => setProgress((p) => ({ ...p, route })),
+          onSearching: () => setProgress((p) => ({ ...p, searching: true })),
+          onWeb: (web) => setProgress((p) => ({ ...p, searching: false, web })),
           onAgent: (agent) =>
             setProgress((p) => {
               const known = p.agents.find((a) => a.id === agent.id);
@@ -544,8 +557,15 @@ export function Chat() {
                       ? `Merging the best points of ${progress.merging} answers…`
                       : progress.agents.length
                         ? `The council is answering: ${progress.agents.filter((a) => a.state === "done").length} of ${progress.agents.length} agents done…`
-                        : "Searching the knowledge base and writing an answer…"}
+                        : progress.searching
+                          ? "Searching the web for the latest information…"
+                          : progress.web
+                            ? `Read ${progress.web.length} web results; the council is starting…`
+                            : "Searching the knowledge base and writing an answer…"}
                 </p>
+                {!drawing && progress.web && progress.web.length > 0 && (
+                  <WebPanel sources={progress.web} />
+                )}
                 {!drawing && progress.agents.length > 0 && <CouncilPanel agents={progress.agents} />}
                 {drawing && progress.images.length > 0 && <Gallery images={progress.images} />}
                 {slow && <p className="mt-1">{WAKING_HINT}</p>}
@@ -632,6 +652,36 @@ const AGENT_STATES: Record<CouncilAgent["state"], { mark: string; tone: string; 
 };
 
 /** The council's agents and how each is getting on. */
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+/** Where the agents' fresh facts come from, while they answer. */
+function WebPanel({ sources }: { sources: WebSource[] }) {
+  return (
+    <ul aria-label="Web results" className="mt-2 flex flex-wrap gap-1.5">
+      {sources.slice(0, 8).map((source) => (
+        <li key={source.url}>
+          <a
+            href={source.url}
+            target="_blank"
+            rel="noreferrer"
+            title={source.title}
+            className="inline-block max-w-[14rem] truncate border border-cyan/30 px-2 py-0.5 font-mono text-[10.5px] text-cyan hover:border-cyan/70"
+          >
+            {source.title.length > 48 ? `${source.title.slice(0, 47)}…` : source.title}
+            <span className="ml-1 text-faint">{hostOf(source.url)}</span>
+          </a>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
 function CouncilPanel({ agents }: { agents: CouncilAgent[] }) {
   return (
     <ul aria-label="Council agents" className="mt-2 flex flex-wrap gap-1.5">

@@ -90,12 +90,25 @@ class Settings(BaseSettings):
     # merges their best points. 1 turns the council off (one model answers).
     assistant_council_size: int = 12
     # Once two agents have answered, wait this many more seconds for the rest.
-    assistant_council_grace: float = 12.0
+    assistant_council_grace: float = 4.0
     # And never wait longer than this for the panel (the first answer is waited for).
-    assistant_council_max_wait: float = 60.0
-    # Let models search the web for recent facts: Gemini through Google (its search
-    # quota is separate; refused, it answers without), Groq through its compound models.
+    assistant_council_max_wait: float = 35.0
+    # Services that merge the drafts first when one of their models answered: the quickest,
+    # since the merged answer is what the user waits for.
+    assistant_fast_mergers: str = "groq,cerebras,sambanova,nvidia,gemini"
+    # At most this many drafts go to the merge (the best-suited agents' first).
+    assistant_merge_drafts: int = 6
+    # Search the web before every answer (except small talk) and give every agent the
+    # results, so answers carry today's facts. Gemini also searches Google itself (its
+    # search quota is separate; refused, it answers without).
     assistant_web_search: bool = True
+    # Google News and Wikipedia need no key; Tavily (1,000 free searches a month) and
+    # Brave Search add whole-web results when their key is set.
+    web_news: bool = True
+    web_wikipedia: bool = True
+    tavily_api_key: str | None = None  # https://app.tavily.com
+    brave_api_key: str | None = None  # https://brave.com/search/api
+    web_max_wait: float = 5.0
     # Knowledge-base excerpts less similar than this are not shown to the model.
     assistant_min_score: float = 0.3
     assistant_max_tokens: int = 8000
@@ -119,7 +132,7 @@ class Settings(BaseSettings):
     # Requests per client IP per minute; 0 disables. /ask has its own, lower limit
     # because every call is billed.
     rate_limit_per_minute: int = 60
-    ask_rate_limit_per_minute: int = 10
+    ask_rate_limit_per_minute: int = 30
     ingest_rate_limit_per_minute: int = 5
 
 

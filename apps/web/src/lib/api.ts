@@ -22,6 +22,7 @@ import type {
   SharedChat,
   SiteConfig,
   SourceItem,
+  WebSource,
 } from "@atlas/shared";
 
 import { readServerSentEvents } from "./sse";
@@ -32,6 +33,11 @@ import { readServerSentEvents } from "./sse";
  * with NEXT_PUBLIC_API_URL set to the API's own address instead.
  */
 export const API_BASE = (process.env.NEXT_PUBLIC_API_URL ?? "").replace(/\/+$/, "") || "/api";
+
+/** Starts waking a sleeping server (free hosting sleeps when idle) while the user types. */
+export function wakeServer(): void {
+  fetch(`${API_BASE}/healthz`, { cache: "no-store" }).catch(() => undefined);
+}
 
 const ADMIN_KEY = "atlas-admin-token";
 
@@ -125,6 +131,10 @@ export interface AssistantHandlers {
   onDelta?: (text: string) => void;
   /** A service failed partway; drop the text so far, the next one starts over. */
   onReset?: () => void;
+  /** The web is being searched for the latest information. */
+  onSearching?: () => void;
+  /** What the web search found; every agent reads it. */
+  onWeb?: (sources: WebSource[]) => void;
   /** A council agent was seated, answered, failed or was not waited for. */
   onAgent?: (agent: CouncilAgent) => void;
   /** The agents' drafts are being merged into one answer. */
@@ -196,6 +206,10 @@ export async function askAssistant(
       handlers.onDelta?.(data.text as string);
     } else if (event.event === "reset") {
       handlers.onReset?.();
+    } else if (event.event === "searching") {
+      handlers.onSearching?.();
+    } else if (event.event === "web") {
+      handlers.onWeb?.((data.sources as WebSource[]) ?? []);
     } else if (event.event === "agent") {
       handlers.onAgent?.(data as unknown as CouncilAgent);
     } else if (event.event === "merging") {

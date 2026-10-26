@@ -26,10 +26,14 @@ from an excerpt, cite it inline in exactly this form: [path:start-end], for exam
 numbers shown, one range per citation. Cite only lines shown in the excerpts; citations are \
 checked against them. Whenever you use an excerpt, cite it: the user relies on the \
 citations to open the exact lines.
-2. A web search, when you have one, for anything recent or that you are unsure of.
-3. Your own knowledge, for everything else. Do not decline a question because the excerpts \
-do not cover it: say in one short sentence that the user's sources do not cover it, then \
-answer from what you know.
+2. Web results, when the message includes them in <web_results>: they were searched just \
+now, so they are newer than your training. For anything that can change (versions and \
+releases, news, prices, scores, who holds a role, laws, schedules), trust them over your \
+memory, give the date of what you report, and link the result you used in Markdown, for \
+example ([Python 3.15 released](https://...)). Some results may be off-topic; ignore those.
+3. Your own knowledge, for everything else. Never decline because the excerpts or web \
+results do not cover a question, and do not remark that they don't (unless the user asked \
+about their own sources): answer from what you know.
 
 Files the user attached come in <file> tags in their message, and images they attached are \
 shown to you; when the question is about them, answer from them. Refer to an attached file by its name in words ("your notes.md says…"), never in the [path:start-end] form, which is only for excerpts.
@@ -82,10 +86,11 @@ def conversation(
     history: Sequence[ChatTurn],
     attachments: Sequence[Attachment] = (),
     keep: int = 12,
+    web: str = "",
 ) -> list[Turn]:
     """The earlier messages (the most recent `keep`), then the question with any attached
-    files and excerpts."""
-    turns = [Turn(t.role, t.content[:6000]) for t in history[-keep:] if t.content.strip()]
+    files, excerpts and web results."""
+    turns = [Turn(t.role, t.content[:12000]) for t in history[-keep:] if t.content.strip()]
     # Providers expect the conversation to start with the user.
     while turns and turns[0].role != "user":
         turns.pop(0)
@@ -96,6 +101,8 @@ def conversation(
             f'<file name="{a.name.replace(chr(34), "")}">\n{a.text}\n</file>' for a in files
         )
         last = f"{attached}\n\n{last}"
+    if web:
+        last = f"{web}\n\n{last}"
     images = [Image(a.mime, a.data) for a in attachments if a.kind == "image" and a.mime and a.data]
     return [*turns, Turn("user", last, images)]
 
@@ -156,7 +163,7 @@ repetition. Do not mention the drafts, the assistants or this merging. Follow ev
 above, including the citation form and the follow-up questions."""
 
 
-def with_drafts(turns: list[Turn], drafts: Sequence[str], limit: int = 6000) -> list[Turn]:
+def with_drafts(turns: list[Turn], drafts: Sequence[str], limit: int = 5000) -> list[Turn]:
     """The conversation with the agents' drafts added to the latest message."""
     shown = "\n\n".join(
         f'<draft n="{n}">\n{draft[:limit]}\n</draft>' for n, draft in enumerate(drafts, 1)

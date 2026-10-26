@@ -106,15 +106,20 @@ The chat page answers any question, not only questions about your sources:
 
 - **Sources first.** It searches your knowledge base and cites the exact lines it
   used, as `[path:start-end]`, each checked against what the model was shown.
-- **Then the web and general knowledge.** When your sources do not cover a question,
-  it says so and answers anyway; for recent events it searches the web (Gemini's
-  Google search when the key has that quota, or Groq's compound models).
+- **Today's facts, every time.** Before answering (anything but small talk) it searches
+  the web and gives every agent the results, so versions, news, prices, scores and
+  who-holds-what come from today, with dates and links: Google News and Wikipedia (no
+  key needed), plus Tavily or Brave Search when `TAVILY_API_KEY` or `BRAVE_API_KEY` is
+  set. Gemini also searches Google itself when its key has that quota. You see the
+  results it found while the council works, and the answer links them.
 - **A council of AI agents.** Up to 12 agents on different services answer each
   question in parallel; one model (the strongest that just answered) then merges their
-  best points into the answer you see, settling disagreements and dropping mistakes.
+  best points into the answer you see, settling disagreements and dropping mistakes
+  (the quickest service that answered merges, so the answer starts within seconds).
   You watch the council work: each agent shows as thinking, answered, failed or too
   slow. An agent that fails (out of quota, overloaded) is replaced by the next model in
-  line, and slow agents are not waited for once two have answered.
+  line, and slow agents are not waited for: four seconds after two have answered, the
+  merge starts.
 - **Every free AI service.** Gemini, OpenRouter (every free model in its catalogue),
   GitHub Models, Mistral, Cerebras, Groq, DeepSeek, SambaNova, NVIDIA, Cohere, Hugging Face,
   Cloudflare Workers AI, Together and Claude join the council once their key is set
@@ -187,8 +192,10 @@ citations, the assistant with follow-ups and saved chats, attachments, pictures,
 sharing, graph, health), run `node live-check.mjs` in `apps/web`; set
 `SITE_URL` for a site other than this repository's.
 
-The free server sleeps after 15 idle minutes; the first visit afterwards waits
-about a minute while it starts, and the site says so. It keeps no data across
+The free server sleeps after 15 idle minutes, and waking it takes about a minute.
+The "Keep the server awake" workflow ([keep-awake.yml](.github/workflows/keep-awake.yml))
+calls it every ten minutes so it rarely sleeps (GitHub may run it late), and the chat
+page starts waking it as soon as it opens; if it is asleep anyway, the site says so. It keeps no data across
 restarts, so the starter sources in its `SEED_SOURCES` setting are built into
 the server's image ([deploy/server/bake.sh](deploy/server/bake.sh)) and are there
 as soon as it starts. Sources an admin adds later are lost at the next restart;

@@ -1,0 +1,22 @@
+# Render's free plan puts the server to sleep after 15 minutes without a request, and
+# waking it takes about a minute. A request every ten minutes keeps it awake (one free
+# service running all month fits in Render's 750 free hours).
+name: Keep the server awake
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    if: ${{ vars.PUBLIC_API_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Ping the server
+        run: curl -fsS --max-time 120 --retry 2 --retry-delay 10 -o /dev/null "$API/healthz"
+        env:
+          API: ${{ vars.PUBLIC_API_URL }}

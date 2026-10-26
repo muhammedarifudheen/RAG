@@ -16,6 +16,7 @@ import threading
 import time
 from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from functools import cache
 
 import anthropic
@@ -54,6 +55,7 @@ from .providers import (
 )
 from .router import Mode, Route, classify, model_order, provider_order, wants_image
 from .services import configured, openrouter_free_models
+from .web import WebResult, WebSearch, search_query, web_block
 
 logger = logging.getLogger("atlas.api.assistant")
 
@@ -93,7 +95,12 @@ _UNUSABLE = re.compile(
 )
 _BILLING = re.compile(r"credit|billing|payment|insufficient.?(funds|balance)", re.IGNORECASE)
 _QUOTA = re.compile(r"quota|rate.?limit|too many requests|\b429\b", re.IGNORECASE)
-_BUSY = re.compile(r"high demand|overloaded|unavailable|\b50[234]\b|try again", re.IGNORECASE)
+# Also the occasional glitch of one reply: a stray tool call, unparsable output.
+_BUSY = re.compile(
+    r"high demand|overloaded|unavailable|\b50[234]\b|try again|tool_use_failed|"
+    r"parsing failed|could not be parsed|provider returned error",
+    re.IGNORECASE,
+)
 UNUSABLE_REST = 6 * 3600.0
 BILLING_REST = 1800.0
 QUOTA_REST = 60.0
@@ -153,6 +160,9 @@ class Assistant:
         council_size: int = 1,
         council_grace: float = 15.0,
         council_max_wait: float = 60.0,
+        web: WebSearch | None = None,
+        fast_mergers: Sequence[str] = (),
+        merge_drafts: int = 12,
     ) -> None:
         self.providers = {p.name: p for p in providers}
         self.image_services = (
@@ -165,6 +175,10 @@ class Assistant:
         self.council_size = council_size
         self.council_grace = council_grace
         self.council_max_wait = council_max_wait
+        self.web = web
+        # Services that merge first (the quickest), when one of their models answered.
+        self.fast_mergers = tuple(fast_mergers)
+        self.merge_drafts = merge_drafts
         # (service, model) -> when it may be asked again, after running out of quota.
         self.resting: dict[tuple[str, str], float] = {}
         self.clock = time.monotonic
@@ -204,12 +218,31 @@ class Assistant:
             yield "error", {"status": 503, "detail": "No AI service is configured; add an API key."}
             return
 
+        found: list[WebResult] = []
+        if self.web is not None and route != "chat":
+            yield "searching", {}
+            previous = next((t.content for t in reversed(history) if t.role == "user"), None)
+            started = time.monotonic()
+            found = self.web.search(search_query(question, previous), recent=route == "current")
+            logger.info("web search: %d results in %.1fs", len(found), time.monotonic() - started)
+            yield "web", {"sources": [{"title": r.title, "url": r.url} for r in found[:12]]}
+        searched = [{"title": r.title, "url": r.url} for r in found]
+
         system = system_prompt(style=options.style, instructions=options.instructions)
         tuning = {} if options.temperature is None else {"temperature": options.temperature}
-        turns = conversation(question, shown, history, options.attachments)
+        today = datetime.now(UTC).date()
+        turns = conversation(
+            question,
+            shown,
+            history,
+            options.attachments,
+            web=web_block(found, today) if found else "",
+        )
         panel = self._candidates(order, route, images)
         if self.council_size > 1 and len(panel) > 1:
-            yield from self._council(question, route, panel, order, shown, system, turns, tuning)
+            yield from self._council(
+                question, route, panel, order, shown, system, turns, tuning, searched
+            )
             return
         failures: list[str] = []
         for name, model in self._attempts(order, route):
@@ -259,7 +292,7 @@ class Assistant:
                 provider=provider.label,
                 route=route,
                 suggestions=suggestions,
-                web_sources=_unique_sources(outcome.web_sources),
+                web_sources=_unique_sources(outcome.web_sources + searched),
             )
             yield "done", response.model_dump()
             return
@@ -298,6 +331,7 @@ class Assistant:
         system: str,
         turns: list[Turn],
         tuning: dict,
+        searched: Sequence[dict[str, str]] = (),
     ) -> Iterator[Event]:
         """Seats up to `council_size` agents, collects their drafts, then merges them."""
         results: queue.Queue = queue.Queue()
@@ -360,7 +394,7 @@ class Assistant:
             elif drafts:
                 until = started + self.council_max_wait
             else:
-                until = started + max(self.council_max_wait, 150.0)
+                until = started + max(self.council_max_wait, 90.0)
             try:
                 state, agent, detail, seconds = results.get(
                     timeout=max(0.0, until - time.monotonic())
@@ -400,7 +434,7 @@ class Assistant:
             )
             return
         drafts.sort(key=lambda d: d.agent)  # the best-suited agents first
-        sources = [source for d in drafts for source in d.web_sources]
+        sources = [source for d in drafts for source in d.web_sources] + list(searched)
         if len(drafts) == 1:
             only = drafts[0]
             yield "delta", {"text": only.answer}
@@ -422,9 +456,14 @@ class Assistant:
             return
 
         yield "merging", {"drafts": len(drafts)}
-        merge_turns = with_drafts(turns, [d.answer for d in drafts])
+        merge_turns = with_drafts(turns, [d.answer for d in drafts[: self.merge_drafts]])
         merge_system = f"{system}\n\n{MERGE}"
-        for name, model in _merge_order(drafts, order, self._attempts(order, route), self._resting):
+        merge_order = _merge_order(drafts, order, self._attempts(order, route), self._resting)
+        # The quickest services merge first: the merged answer is what the user waits for.
+        answered = {(d.service, d.seat) for d in drafts}
+        fast = [p for f in self.fast_mergers for p in merge_order if p[0] == f and p in answered]
+        merge_order = fast + [p for p in merge_order if p not in fast]
+        for name, model in merge_order:
             provider = self.providers[name]
             outcome = Outcome()
             splitter = FollowUpSplitter()
@@ -645,7 +684,7 @@ def _unique_sources(sources: list[dict[str, str]]) -> list[WebSource]:
     seen: dict[str, WebSource] = {}
     for source in sources:
         seen.setdefault(source["url"], WebSource(title=source["title"], url=source["url"]))
-    return list(seen.values())[:8]
+    return list(seen.values())[:12]
 
 
 def _models(setting: str) -> list[str]:
@@ -732,6 +771,18 @@ def _build() -> Assistant:
         council_size=settings.assistant_council_size,
         council_grace=settings.assistant_council_grace,
         council_max_wait=settings.assistant_council_max_wait,
+        web=WebSearch(
+            http,
+            tavily_key=settings.tavily_api_key,
+            brave_key=settings.brave_api_key,
+            news=settings.web_news,
+            wikipedia=settings.web_wikipedia,
+            max_wait=settings.web_max_wait,
+        )
+        if settings.assistant_web_search
+        else None,
+        fast_mergers=[n.strip() for n in settings.assistant_fast_mergers.split(",") if n.strip()],
+        merge_drafts=settings.assistant_merge_drafts,
     )
 
 
