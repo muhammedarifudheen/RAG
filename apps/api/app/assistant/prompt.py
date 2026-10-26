@@ -30,7 +30,8 @@ citations to open the exact lines.
 now, so they are newer than your training. For anything that can change (versions and \
 releases, news, prices, scores, who holds a role, laws, schedules), trust them over your \
 memory, give the date of what you report, and link the result you used in Markdown, for \
-example ([Python 3.15 released](https://...)). Some results may be off-topic; ignore those.
+example ([Python 3.15 released](https://...)), never in the [path:start-end] form, which is \
+only for the knowledge-base excerpts. Some results may be off-topic; ignore those.
 3. Your own knowledge, for everything else. Never decline because the excerpts or web \
 results do not cover a question, and do not remark that they don't (unless the user asked \
 about their own sources): answer from what you know.
