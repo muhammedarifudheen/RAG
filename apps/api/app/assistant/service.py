@@ -135,6 +135,7 @@ class Draft:
     answer: str
     suggestions: list[str]
     web_sources: list[dict[str, str]]
+    seconds: float = 0.0  # how long it took to write
 
 
 class AssistantError(Exception):
@@ -162,6 +163,7 @@ class Assistant:
         council_max_wait: float = 60.0,
         web: WebSearch | None = None,
         fast_mergers: Sequence[str] = (),
+        merge_by_speed: bool = False,
         merge_drafts: int = 12,
     ) -> None:
         self.providers = {p.name: p for p in providers}
@@ -178,6 +180,8 @@ class Assistant:
         self.web = web
         # Services that merge first (the quickest), when one of their models answered.
         self.fast_mergers = tuple(fast_mergers)
+        # Then the agents that answered, quickest first (their draft's time predicts it).
+        self.merge_by_speed = merge_by_speed
         self.merge_drafts = merge_drafts
         # (service, model) -> when it may be asked again, after running out of quota.
         self.resting: dict[tuple[str, str], float] = {}
@@ -240,8 +244,17 @@ class Assistant:
         )
         panel = self._candidates(order, route, images)
         if self.council_size > 1 and len(panel) > 1:
+            # The merger needs the web results' links, not their text: a smaller request
+            # is quicker and fits free per-minute limits.
+            merge_base = conversation(
+                question,
+                shown,
+                history,
+                options.attachments,
+                web=web_block(found, today, brief=True) if found else "",
+            )
             yield from self._council(
-                question, route, panel, order, shown, system, turns, tuning, searched
+                question, route, panel, order, shown, system, turns, tuning, searched, merge_base
             )
             return
         failures: list[str] = []
@@ -332,6 +345,7 @@ class Assistant:
         turns: list[Turn],
         tuning: dict,
         searched: Sequence[dict[str, str]] = (),
+        merge_base: list[Turn] | None = None,
     ) -> Iterator[Event]:
         """Seats up to `council_size` agents, collects their drafts, then merges them."""
         results: queue.Queue = queue.Queue()
@@ -361,8 +375,9 @@ class Assistant:
                     answer,
                     suggestions,
                     outcome.web_sources,
+                    time.monotonic() - started,
                 )
-                results.put(("done", agent, draft, time.monotonic() - started))
+                results.put(("done", agent, draft, draft.seconds))
             except (ProviderError, ValueError, KeyError) as error:
                 detail = str(error) if isinstance(error, ProviderError) else f"bad reply: {error}"
                 results.put(("failed", agent, detail, time.monotonic() - started))
@@ -456,12 +471,19 @@ class Assistant:
             return
 
         yield "merging", {"drafts": len(drafts)}
-        merge_turns = with_drafts(turns, [d.answer for d in drafts[: self.merge_drafts]])
+        merge_turns = with_drafts(
+            merge_base or turns, [d.answer for d in drafts[: self.merge_drafts]]
+        )
         merge_system = f"{system}\n\n{MERGE}"
         merge_order = _merge_order(drafts, order, self._attempts(order, route), self._resting)
         # The quickest services merge first: the merged answer is what the user waits for.
         answered = {(d.service, d.seat) for d in drafts}
         fast = [p for f in self.fast_mergers for p in merge_order if p[0] == f and p in answered]
+        if self.merge_by_speed:
+            quickest = sorted(
+                (d for d in drafts if d.service not in SLOW_SERVICES), key=lambda d: d.seconds
+            )
+            fast += [(d.service, d.seat) for d in quickest if (d.service, d.seat) not in fast]
         merge_order = fast + [p for p in merge_order if p not in fast]
         for name, model in merge_order:
             provider = self.providers[name]
@@ -782,6 +804,7 @@ def _build() -> Assistant:
         if settings.assistant_web_search
         else None,
         fast_mergers=[n.strip() for n in settings.assistant_fast_mergers.split(",") if n.strip()],
+        merge_by_speed=settings.assistant_merge_by_speed,
         merge_drafts=settings.assistant_merge_drafts,
     )
 

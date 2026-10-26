@@ -319,13 +319,17 @@ class WebSearch:
         ]
 
 
-def web_block(results: Sequence[WebResult], today: date, limit: int = 9000) -> str:
-    """The results as the agents see them, numbered, within `limit` characters."""
+def web_block(
+    results: Sequence[WebResult], today: date, limit: int = 9000, *, brief: bool = False
+) -> str:
+    """The results as the agents see them, numbered, within `limit` characters. `brief`
+    leaves out their text (for the merge: the drafts already used it, and the links stay)."""
     lines = [f'<web_results searched="{today.isoformat()}">']
     used = len(lines[0])
     for n, result in enumerate(results, 1):
         dated = f", {result.published}" if result.published else ""
-        entry = f"[{n}] {result.title} ({result.source}{dated})\n{result.url}\n{result.text}\n"
+        text = "" if brief else f"{result.text}\n"
+        entry = f"[{n}] {result.title} ({result.source}{dated})\n{result.url}\n{text}"
         if used + len(entry) > limit:
             break
         lines.append(entry)

@@ -163,7 +163,7 @@ repetition. Do not mention the drafts, the assistants or this merging. Follow ev
 above, including the citation form and the follow-up questions."""
 
 
-def with_drafts(turns: list[Turn], drafts: Sequence[str], limit: int = 5000) -> list[Turn]:
+def with_drafts(turns: list[Turn], drafts: Sequence[str], limit: int = 3500) -> list[Turn]:
     """The conversation with the agents' drafts added to the latest message."""
     shown = "\n\n".join(
         f'<draft n="{n}">\n{draft[:limit]}\n</draft>' for n, draft in enumerate(drafts, 1)

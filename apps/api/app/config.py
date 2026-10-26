@@ -95,9 +95,12 @@ class Settings(BaseSettings):
     assistant_council_max_wait: float = 35.0
     # Services that merge the drafts first when one of their models answered: the quickest,
     # since the merged answer is what the user waits for.
-    assistant_fast_mergers: str = "groq,cerebras,sambanova,nvidia,gemini"
+    assistant_fast_mergers: str = "groq,cerebras"
+    # After those, the agents that answered merge in order of how quickly they wrote
+    # their own draft.
+    assistant_merge_by_speed: bool = True
     # At most this many drafts go to the merge (the best-suited agents' first).
-    assistant_merge_drafts: int = 6
+    assistant_merge_drafts: int = 5
     # Search the web before every answer (except small talk) and give every agent the
     # results, so answers carry today's facts. Gemini also searches Google itself (its
     # search quota is separate; refused, it answers without).

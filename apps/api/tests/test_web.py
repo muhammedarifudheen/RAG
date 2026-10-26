@@ -267,3 +267,37 @@ def test_a_glitch_in_one_reply_is_retried_not_rested():
         from app.assistant.service import _BUSY
 
         assert _BUSY.search(detail)
+
+
+class SlowAgent(Agent):
+    def __init__(self, name, replies, delay):
+        super().__init__(name, replies)
+        self.delay = delay
+
+    def stream(self, model, system, turns, outcome, *, web, temperature=None):
+        if "Several independent" not in system:
+            time.sleep(self.delay)
+        yield from super().stream(model, system, turns, outcome, web=web)
+
+
+def test_the_agent_that_answered_quickest_merges():
+    gemini = SlowAgent("gemini", {"g1": "Gemini's draft."}, delay=0.3)
+    nvidia = SlowAgent("nvidia", {"n1": "NVIDIA's draft."}, delay=0.0)
+    assistant = Assistant([gemini, nvidia], council_size=12, council_grace=1.0, merge_by_speed=True)
+    events = list(assistant.respond("What is HMAC?", [], ()))
+    assert events[-1][0] == "done"
+    assert [c.model for c in nvidia.calls if "Several independent" in c.system] == ["n1"]
+
+
+def test_the_merger_gets_the_web_results_links_but_not_their_text():
+    searcher = Searcher()
+    gemini = Agent("gemini", {"g1": "Draft one."})
+    groq = Agent("groq", {"q1": "Draft two."})
+    assistant = Assistant([gemini, groq], web=searcher, council_size=12, council_grace=0.2)
+    list(assistant.respond("What is the latest Python?", [], ()))
+    merges = [c for a in (gemini, groq) for c in a.calls if "Several independent" in c.system]
+    asked = merges[0].turns[-1].content
+    assert "https://news/315" in asked
+    assert "Out now." not in asked
+    # The agents themselves read the full results.
+    assert "Out now." in gemini.calls[0].turns[-1].content
