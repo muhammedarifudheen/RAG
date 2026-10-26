@@ -195,7 +195,7 @@ sharing, graph, health), run `node live-check.mjs` in `apps/web`; set
 The free server sleeps after 15 idle minutes, and waking it takes about a minute.
 The "Keep the server awake" workflow ([keep-awake.yml](.github/workflows/keep-awake.yml))
 calls it every ten minutes so it rarely sleeps (GitHub may run it late), and the chat
-page starts waking it as soon as it opens; if it is asleep anyway, the site says so. It keeps no data across
+page starts waking it as soon as it opens. It keeps no data across
 restarts, so the starter sources in its `SEED_SOURCES` setting are built into
 the server's image ([deploy/server/bake.sh](deploy/server/bake.sh)) and are there
 as soon as it starts. Sources an admin adds later are lost at the next restart;

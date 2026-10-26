@@ -2,13 +2,12 @@ import { expect, test } from "@playwright/test";
 
 import { ANSWER, HEALTH, HEALTH_RANKING, mockHealth } from "./fixtures";
 
-// The public server sleeps when idle and takes about a minute to wake. The
-// page's clock is controlled here, so these tests do not wait that long.
-const HINT = /its server takes about a minute to wake up/;
+// However long the server takes, the page never says it may be asleep: it shows the
+// usual progress until the answer arrives. The page's clock is controlled here, so
+// these tests do not wait that long.
+const HINT = /wake up|waking|asleep|Still working/i;
 
-test("a slow answer says the server may be waking up, and the answer still arrives", async ({
-  page,
-}) => {
+test("a slow answer shows only its progress, never a waking-up hint", async ({ page }) => {
   await page.clock.install();
   let answer: () => void = () => {};
   const answered = new Promise<void>((resolve) => (answer = resolve));
@@ -23,30 +22,16 @@ test("a slow answer says the server may be waking up, and the answer still arriv
 
   const status = page.getByRole("status");
   await expect(status).toContainText("Searching the knowledge base and writing an answer…");
-  await expect(status).not.toContainText(HINT);
-
-  await page.clock.runFor(13_000);
-  await expect(status).toContainText(HINT);
+  await page.clock.runFor(90_000);
+  await expect(status).toContainText("Searching the knowledge base and writing an answer…");
+  await expect(page.getByText(HINT)).toHaveCount(0);
 
   answer();
   await expect(page.getByRole("article", { name: "Answer" })).toBeVisible();
   await expect(page.getByText(HINT)).toHaveCount(0);
 });
 
-test("a quick answer shows no waking-up hint", async ({ page }) => {
-  await page.clock.install();
-  await page.route("**/api/ask", (route) => route.fulfill({ json: ANSWER }));
-
-  await page.goto("/chat");
-  await page.getByLabel("Question").fill(ANSWER.question);
-  await page.getByRole("button", { name: "Ask" }).click();
-  await expect(page.getByRole("article", { name: "Answer" })).toBeVisible();
-
-  await page.clock.runFor(13_000);
-  await expect(page.getByText(HINT)).toHaveCount(0);
-});
-
-test("a slow page load says the server may be waking up", async ({ page }) => {
+test("a slow page load shows only its loading message", async ({ page }) => {
   await page.clock.install();
   let respond: () => void = () => {};
   const responded = new Promise<void>((resolve) => (respond = resolve));
@@ -59,9 +44,9 @@ test("a slow page load says the server may be waking up", async ({ page }) => {
 
   await page.goto("/health");
   await expect(page.getByText("Computing code health…")).toBeVisible();
-  await page.clock.runFor(13_000);
-  await expect(page.getByText(HINT)).toBeVisible();
+  await page.clock.runFor(90_000);
+  await expect(page.getByText(HINT)).toHaveCount(0);
 
   respond();
-  await expect(page.getByText(HINT)).toHaveCount(0);
+  await expect(page.getByText("Computing code health…")).toHaveCount(0);
 });

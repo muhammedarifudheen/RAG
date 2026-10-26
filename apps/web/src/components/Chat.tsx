@@ -38,7 +38,6 @@ import { Answer, Gallery, StreamingAnswer } from "./Answer";
 import { ChatComposer, type ComposerHandle } from "./ChatComposer";
 import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
 import { ChatSidebar } from "./ChatSidebar";
-import { useTakingLong, WAKING_HINT } from "./States";
 
 // Loaded in the browser on first use. Next.js will not bundle Shiki for the server,
 // which makes any module importing it asynchronous there and breaks server rendering
@@ -110,7 +109,6 @@ export function Chat() {
   const [pending, setPending] = useState<null | "answer" | "image">(null);
   const [streaming, setStreaming] = useState<string | null>(null);
   const [progress, setProgress] = useState<Progress>(NO_PROGRESS);
-  const slow = useTakingLong(pending !== null && !streaming);
   const [selected, setSelected] = useState<CodeRange | null>(null);
   const [chats, setChats] = useState<SavedChat[]>([]);
   const [chatId, setChatId] = useState<string | null>(null);
@@ -568,7 +566,6 @@ export function Chat() {
                 )}
                 {!drawing && progress.agents.length > 0 && <CouncilPanel agents={progress.agents} />}
                 {drawing && progress.images.length > 0 && <Gallery images={progress.images} />}
-                {slow && <p className="mt-1">{WAKING_HINT}</p>}
               </div>
             )}
 
