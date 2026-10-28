@@ -27,6 +27,9 @@ interface Props {
   onStop: () => void;
   /** ↑ in an empty box: the last question, to edit. */
   onEditLast: () => void;
+  /** Strict sources only, a setting kept in this browser. */
+  strict?: boolean;
+  onStrict?: (strict: boolean) => void;
 }
 
 const ACCEPT =
@@ -40,7 +43,7 @@ interface Pending {
 }
 
 export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatComposer(
-  { pending, onSend, onStop, onEditLast },
+  { pending, onSend, onStop, onEditLast, strict = false, onStrict },
   ref,
 ) {
   const [text, setText] = useState("");
@@ -196,7 +199,9 @@ export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatCompo
               ? "Describe the picture to draw…"
               : dictation.listening
                 ? "Listening… speak now"
-                : "Ask anything…"
+                : strict
+                  ? "Ask your sources (strict: cited answers only)…"
+                  : "Ask anything…"
           }
           autoComplete="off"
           maxLength={32000}
@@ -222,6 +227,15 @@ export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatCompo
           <ToolButton label="Draw a picture" pressed={draw} onClick={() => setDraw((on) => !on)}>
             <span aria-hidden="true">◐</span> Draw
           </ToolButton>
+          {onStrict && (
+            <ToolButton
+              label="Strict sources only"
+              pressed={strict}
+              onClick={() => onStrict(!strict)}
+            >
+              <span aria-hidden="true">◇</span> Strict
+            </ToolButton>
+          )}
           {dictation.supported && (
             <ToolButton
               label="Voice input"

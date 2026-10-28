@@ -246,6 +246,7 @@ export function Chat() {
           maxTokens: settings.maxTokens,
           format: settings.format,
           includeDrafts: settings.showDrafts,
+          strict: settings.strict,
         },
         {
           onDelta: (piece) => setStreaming((current) => (current ?? "") + piece),
@@ -641,6 +642,8 @@ export function Chat() {
           ref={composer}
           pending={pending !== null}
           onSend={(text, attachments, draw) => void send(text, attachments, draw)}
+          strict={settings.strict}
+          onStrict={(strict) => changeSettings({ ...settings, strict })}
           onStop={() => abort.current?.abort()}
           onEditLast={editLast}
         />

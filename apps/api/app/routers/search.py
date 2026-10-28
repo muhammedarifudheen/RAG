@@ -131,6 +131,7 @@ def ask(
             max_tokens=body.max_tokens,
             format=body.format,
             include_drafts=body.include_drafts,
+            strict=body.strict,
         )
         if streaming:
             events = assistant.respond(question, chunks, body.history, mode, options)

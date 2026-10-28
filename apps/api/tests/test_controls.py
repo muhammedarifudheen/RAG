@@ -159,3 +159,64 @@ def test_each_agents_draft_comes_back_when_asked_for():
 def test_every_control_sends_the_question_to_the_assistant(field):
     assert AskRequest(question="q", **field).for_assistant
     assert not AskRequest(question="q").for_assistant
+
+
+# --- Strict sources only -----------------------------------------------------------------
+
+
+def chunk_about(name="sign", score=0.8):
+    return CodeChunk(
+        symbol_id=7,
+        name=name,
+        kind="function",
+        file="itsdangerous/signer.py",
+        language="python",
+        start_line=40,
+        end_line=52,
+        signature=f"def {name}(value)",
+        score=score,
+        snippet=f"def {name}(value):\n    return value",
+        snippet_end_line=52,
+        truncated=False,
+        citation="[itsdangerous/signer.py:40-52]",
+    )
+
+
+def test_strict_mode_answers_from_the_sources_with_the_users_rules():
+    searcher = Searcher()
+    gemini = Agent("gemini", {"g1": "It signs [itsdangerous/signer.py:40-52]."})
+    events = ask(
+        Assistant([gemini], web=searcher), "How is a value signed?", [chunk_about()], strict=True
+    )
+    system = gemini.calls[0].system
+    assert system.startswith("You are Atlas, a retrieval-grounded research assistant.")
+    assert "Answer ONLY from the retrieved context" in system
+    assert 'path="itsdangerous/signer.py" lines="40-52"' in gemini.calls[0].turns[-1].content
+    assert searcher.queries == []  # never the web
+    assert events[0][1]["route"] == "sources"
+    assert events[-1][1]["answer"] == "It signs [itsdangerous/signer.py:40-52]."
+
+
+def test_strict_mode_with_nothing_retrieved_says_so_without_asking_a_model():
+    gemini = Agent("gemini", {"g1": "A guess."})
+    events = ask(
+        Assistant([gemini], min_score=0.3),
+        "Who won the cup?",
+        [chunk_about(score=0.1)],
+        strict=True,
+    )
+    assert gemini.calls == []
+    done = events[-1][1]
+    assert done["answer"] == "I don't have that in the knowledge base."
+    assert done["chunks"] == []
+
+
+def test_strict_mode_keeps_the_users_instructions_after_the_rules():
+    gemini = Agent("gemini", {"g1": "x"})
+    ask(Assistant([gemini]), "q", [chunk_about()], strict=True, instructions="Reply in French.")
+    system = gemini.calls[0].system
+    assert system.index("RULES:") < system.index("Reply in French.")
+
+
+def test_strict_sends_the_question_to_the_assistant():
+    assert AskRequest(question="q", strict=True).for_assistant

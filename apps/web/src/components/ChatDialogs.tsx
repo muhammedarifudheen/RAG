@@ -531,6 +531,12 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
       <section>
         <h3 className="label text-muted">Your knowledge base</h3>
         <Toggle
+          label="Strict sources only"
+          hint="Answer only from your sources and attached files, citing every claim; otherwise say it is not in the knowledge base. No web, no general knowledge."
+          checked={settings.strict}
+          onChange={(strict) => set({ strict })}
+        />
+        <Toggle
           label="Search your sources"
           hint="Answer from the ingested repositories, pages and documents, citing exact lines."
           checked={settings.useSources}
@@ -577,6 +583,7 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
             topK: DEFAULT_SETTINGS.topK,
             minScore: DEFAULT_SETTINGS.minScore,
             webSearch: DEFAULT_SETTINGS.webSearch,
+            strict: DEFAULT_SETTINGS.strict,
           })
         }
         className="mt-4 text-xs text-cyan hover:underline"

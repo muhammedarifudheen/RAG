@@ -50,6 +50,8 @@ export interface ChatSettings {
   /** The relevance threshold for excerpts; null is the server's (0.3). */
   minScore: number | null;
   webSearch: boolean;
+  /** Strict sources only: answers from the knowledge base alone, citing every claim. */
+  strict: boolean;
   /** Show each agent's own draft under the merged answer. */
   showDrafts: boolean;
 }
@@ -69,6 +71,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   topK: 8,
   minScore: null,
   webSearch: true,
+  strict: false,
   showDrafts: false,
 };
 

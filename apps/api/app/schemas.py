@@ -115,6 +115,11 @@ class AskRequest(BaseModel):
         default=None, ge=0, le=1, description="Excerpts less similar than this are left out."
     )
     web_search: bool = Field(default=True, description="Search the web before answering.")
+    strict: bool = Field(
+        default=False,
+        description="Strict sources only: answer from the knowledge base (and attached files) "
+        "alone, citing every claim, or say it is not there. No web search, no general knowledge.",
+    )
     # Generation.
     max_tokens: int | None = Field(
         default=None, ge=64, le=16000, description="The longest answer, in tokens."
@@ -159,6 +164,7 @@ class AskRequest(BaseModel):
             or not self.use_sources
             or self.min_score is not None
             or not self.web_search
+            or self.strict
             or self.max_tokens is not None
             or self.format != "markdown"
             or self.include_drafts

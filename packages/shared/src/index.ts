@@ -81,6 +81,8 @@ export interface AskRequest {
   format?: AnswerFormat;
   /** Return each council agent's own draft. */
   include_drafts?: boolean;
+  /** Strict sources only: the knowledge base and attached files, cited, or "not there". */
+  strict?: boolean;
 }
 
 export type AnswerFormat = "markdown" | "plain" | "json";

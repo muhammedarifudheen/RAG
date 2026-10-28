@@ -53,9 +53,11 @@ from .prompt import (
     FORMATS,
     IMAGE_SYSTEM,
     MERGE,
+    NOT_IN_SOURCES,
     REVIEW,
     FollowUpSplitter,
     conversation,
+    strict_prompt,
     system_prompt,
     with_drafts,
 )
@@ -106,6 +108,7 @@ class Options:
     max_tokens: int | None = None
     format: str = "markdown"  # or "plain", "json"
     include_drafts: bool = False
+    strict: bool = False  # sources only, with the user's strict rules
 
 
 # Services too slow to wait for when a quick reply is all that is needed.
@@ -266,6 +269,8 @@ class Assistant:
                     return
         top = chunks[0].score if chunks else None
         route: Route = "review" if review else classify(question, top, images=images)
+        if options.strict and not review:
+            route = "sources"
         min_score = self.min_score if options.min_score is None else options.min_score
         shown = [c for c in chunks if c.score >= min_score]
         available = set(self.providers)
@@ -289,7 +294,29 @@ class Assistant:
             return
 
         found: list[WebResult] = []
-        if self.web is not None and options.web_search and route not in ("chat", "review"):
+        if (
+            options.strict
+            and not shown
+            and not any(a.kind == "text" and a.text for a in options.attachments)
+        ):
+            # Nothing retrieved: the rules' answer, without asking a model to invent one.
+            yield "delta", {"text": NOT_IN_SOURCES}
+            response = AskResponse(
+                question=question,
+                answer=NOT_IN_SOURCES,
+                citations=[],
+                chunks=[],
+                model="none",
+                complete=True,
+                provider="Atlas",
+                route=route,
+                suggestions=[],
+            )
+            yield "done", response.model_dump()
+            return
+
+        uses_web = options.web_search and not options.strict
+        if self.web is not None and uses_web and route not in ("chat", "review"):
             yield "searching", {}
             previous = next((t.content for t in reversed(history) if t.role == "user"), None)
             started = time.monotonic()
@@ -298,7 +325,11 @@ class Assistant:
             yield "web", {"sources": [{"title": r.title, "url": r.url} for r in found[:12]]}
         searched = [{"title": r.title, "url": r.url} for r in found]
 
-        system = system_prompt(style=options.style, instructions=options.instructions)
+        system = (
+            strict_prompt(options.instructions)
+            if options.strict
+            else system_prompt(style=options.style, instructions=options.instructions)
+        )
         if review:
             system = f"{system}\n\n{REVIEW}"
         if FORMATS.get(options.format):

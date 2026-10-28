@@ -169,6 +169,7 @@ export interface AssistantQuestion {
   maxTokens?: number | null;
   format?: AnswerFormat;
   includeDrafts?: boolean;
+  strict?: boolean;
 }
 
 const DEFAULT_TOP_K = 8;
@@ -194,6 +195,7 @@ export function askBody(asked: AssistantQuestion): AskRequest {
   if (asked.maxTokens) body.max_tokens = asked.maxTokens;
   if (asked.format && asked.format !== "markdown") body.format = asked.format;
   if (asked.includeDrafts) body.include_drafts = true;
+  if (asked.strict) body.strict = true;
   return body;
 }
 

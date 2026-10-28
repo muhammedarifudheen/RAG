@@ -108,3 +108,37 @@ test("models, retrieval, generation and transparency choices go with every quest
   );
   await expect(answer.getByRole("region", { name: "Draft by Groq · gpt-oss" })).toContainText("0.8s");
 });
+
+test("the strict switch asks for cited answers from the sources only, and is remembered", async ({
+  page,
+}) => {
+  const sent = await mock(page, [
+    reply("I don't have that in the knowledge base.", { provider: "Atlas", route: "sources" }),
+    reply("Again."),
+  ]);
+  await page.goto("/chat");
+  const strict = page.getByRole("button", { name: "Strict sources only" });
+  await expect(strict).toHaveAttribute("aria-pressed", "false");
+  await strict.click();
+  await expect(strict).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByLabel("Question", { exact: true })).toHaveAttribute(
+    "placeholder",
+    /strict/,
+  );
+  await ask(page, "Who won the cup?");
+  await expect(page.getByRole("article", { name: "Answer" })).toContainText(
+    "I don't have that in the knowledge base.",
+  );
+  expect(sent[0]).toEqual({ question: "Who won the cup?", strict: true });
+
+  // Kept after a reload, and shown in Settings → Retrieval.
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Strict sources only" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await page.getByRole("button", { name: "⚙ Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("tab", { name: "Retrieval" }).click();
+  await expect(settings.getByRole("switch", { name: /Strict sources only/ })).toBeChecked();
+});

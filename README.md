@@ -157,10 +157,13 @@ The chat page answers any question, not only questions about your sources:
   custom instructions and reading answers aloud. *Models*: which AI services may answer,
   how many agents sit on the council (1 is a single, fastest model) and which service
   merges. *Retrieval*: search your sources or not, how many excerpts (top-k), the
-  relevance threshold, and web search on or off. *Transparency*: each agent's own draft
+  relevance threshold, web search on or off, and **Strict sources only** (also a switch
+  by the message box): your own retrieval-grounded rules, so every claim is cited from the
+  knowledge base or attached files, or Atlas says "I don't have that in the knowledge
+  base." (no model is asked when nothing was retrieved). *Transparency*: each agent's own draft
   and time under the merged answer. Only changed settings are sent (`services`,
   `council_size`, `merger`, `use_sources`, `top_k`, `min_score`, `web_search`,
-  `max_tokens`, `format`, `include_drafts` on `/ask`).
+  `max_tokens`, `format`, `include_drafts`, `strict` on `/ask`).
 - **Liquid light.** A calm, airy design: pastel waves drift behind floating glass panels.
 - **Everything around it.** Copy, regenerate, edit a question and resend, copy code
   blocks (highlighted), maths typeset with KaTeX, voice input, search, pin and rename
