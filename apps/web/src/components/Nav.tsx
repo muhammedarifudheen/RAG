@@ -8,6 +8,7 @@ const LINKS = [
   { href: "/chat", label: "Chat" },
   { href: "/graph", label: "Graph" },
   { href: "/health", label: "Health" },
+  { href: "/analyze", label: "Analyse" },
 ];
 
 export function Nav() {

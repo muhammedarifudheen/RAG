@@ -77,7 +77,9 @@ class Settings(BaseSettings):
     horde_enabled: bool = True
     horde_api_key: str = "0000000000"
     horde_text_models: str = "google/gemma-4-31b"
-    horde_image_models: str = "Deliberate,stable_diffusion"
+    # One picture agent per model, drawn in parallel. Anonymous requests wait behind
+    # everyone with kudos; a free key from https://aihorde.net/register moves them up.
+    horde_image_models: str = "AlbedoBase XL (SDXL),Juggernaut XL,Deliberate"
 
     # How many of one provider's models to try before moving to the next provider.
     assistant_models_per_provider: int = 2
@@ -123,10 +125,15 @@ class Settings(BaseSettings):
         "https://image.pollinations.ai/prompt/{prompt}"
         "?width=1024&height=1024&seed={seed}&model=flux&nologo=true"
     )
-    image_gallery_size: int = 4
-    image_max_wait: float = 75.0
+    image_gallery_size: int = 8
+    image_max_wait: float = 90.0
     cloudflare_image_model: str = "@cf/black-forest-labs/flux-1-schnell"
     huggingface_image_model: str = "black-forest-labs/FLUX.1-schnell"
+    # Together's free FLUX endpoint, used once TOGETHER_API_KEY is set.
+    together_image_model: str = "black-forest-labs/FLUX.1-schnell-Free"
+    # Gemini's image model has no free quota: on only for a key with billing.
+    gemini_images: bool = False
+    gemini_image_model: str = "gemini-2.5-flash-image"
 
     # When set, adding and removing sources needs `Authorization: Bearer <token>`;
     # searching and asking stay open. Unset, everything is open (local use).

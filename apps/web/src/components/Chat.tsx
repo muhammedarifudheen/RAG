@@ -5,6 +5,7 @@ import type {
   AssistantMode,
   AssistantRoute,
   ChatTurn,
+  CodeAnalysis,
   CouncilAgent,
   GeneratedImage,
   WebSource,
@@ -68,6 +69,9 @@ type DialogName = "settings" | "share" | "shortcuts" | null;
 /** What the server has said about the answer being prepared. */
 interface Progress {
   route: AssistantRoute | null;
+  /** The code analyser's latest step, for a code review. */
+  analysing: string | null;
+  analysis: CodeAnalysis | null;
   searching: boolean;
   web: WebSource[] | null;
   agents: CouncilAgent[];
@@ -77,6 +81,8 @@ interface Progress {
 
 const NO_PROGRESS: Progress = {
   route: null,
+  analysing: null,
+  analysis: null,
   searching: false,
   web: null,
   agents: [],
@@ -227,6 +233,8 @@ export function Chat() {
           onDelta: (piece) => setStreaming((current) => (current ?? "") + piece),
           onReset: () => setStreaming(null),
           onRoute: (route) => setProgress((p) => ({ ...p, route })),
+          onAnalysing: (message) => setProgress((p) => ({ ...p, analysing: message })),
+          onAnalysis: (analysis) => setProgress((p) => ({ ...p, analysis })),
           onSearching: () => setProgress((p) => ({ ...p, searching: true })),
           onWeb: (web) => setProgress((p) => ({ ...p, searching: false, web })),
           onAgent: (agent) =>
@@ -555,7 +563,11 @@ export function Chat() {
                       ? `Merging the best points of ${progress.merging} answers…`
                       : progress.agents.length
                         ? `The council is answering: ${progress.agents.filter((a) => a.state === "done").length} of ${progress.agents.length} agents done…`
-                        : progress.searching
+                        : progress.analysis
+                          ? `Code analysed: grade ${progress.analysis.grade}, ${progress.analysis.counts.high} high and ${progress.analysis.counts.medium} medium findings. The council is reviewing…`
+                          : progress.analysing
+                            ? `${progress.analysing}…`
+                            : progress.searching
                           ? "Searching the web for the latest information…"
                           : progress.web
                             ? `Read ${progress.web.length} web results; the council is starting…`

@@ -23,6 +23,9 @@ import anthropic
 import httpx2
 from fastapi import HTTPException
 
+from app.analysis.repo import RepoReport, RepoTooLarge, analyse_repo, summary_for_agents
+from app.analysis.review import code_files, files_summary, repo_url, to_schema, wants_review
+from app.analysis.static import analyse_files
 from app.config import settings
 from app.schemas import AskResponse, Attachment, ChatTurn, CodeChunk, GeneratedImage, WebSource
 from app.services.search import extract_citations
@@ -30,15 +33,18 @@ from app.services.search import extract_citations
 from .horde import HordeTextProvider
 from .images import (
     CloudflareImages,
+    GeminiImages,
     HordeImages,
     HuggingFaceImages,
     ImageService,
     PollinationsImages,
+    TogetherImages,
     gallery,
 )
 from .prompt import (
     IMAGE_SYSTEM,
     MERGE,
+    REVIEW,
     FollowUpSplitter,
     conversation,
     system_prompt,
@@ -58,6 +64,10 @@ from .services import configured, openrouter_free_models
 from .web import WebResult, WebSearch, search_query, web_block
 
 logger = logging.getLogger("atlas.api.assistant")
+
+# A repository is cloned and analysed one at a time (memory), and given this long.
+_REPO_ANALYSIS = threading.Lock()
+REPO_ANALYSIS_SECONDS = 300.0
 
 # (event name, data) pairs, sent to the browser as server-sent events.
 Event = tuple[str, dict]
@@ -165,8 +175,13 @@ class Assistant:
         fast_mergers: Sequence[str] = (),
         merge_by_speed: bool = False,
         merge_drafts: int = 12,
+        analyse_repo: Callable[[str, Callable[[str], None]], RepoReport] = analyse_repo,
+        fetch_text: Callable[[str], str] | None = None,
     ) -> None:
         self.providers = {p.name: p for p in providers}
+        self.analyse_repo = analyse_repo
+        # Reads a GitHub file linked in a review request; None leaves such links out.
+        self.fetch_text = fetch_text
         self.image_services = (
             list(image_services)
             if image_services is not None
@@ -202,14 +217,38 @@ class Assistant:
     ) -> Iterator[Event]:
         """Events: `route`, then `delta` pieces of text (a `reset` drops what came so far
         when a service fails mid-answer and the next one starts over), then `done` with
-        the whole response, or `error`."""
+        the whole response, or `error`. A code review first sends `analysing` progress and
+        the code analyser's `analysis`, which the `done` response carries too."""
+        review: dict = {}
+        for name, data in self._respond(question, chunks, history, mode, options, review):
+            if name == "done" and review.get("schema") is not None:
+                data = {**data, "analysis": review["schema"].model_dump()}
+            yield name, data
+
+    def _respond(
+        self,
+        question: str,
+        chunks: Sequence[CodeChunk],
+        history: Sequence[ChatTurn],
+        mode: Mode,
+        options: Options | None,
+        review: dict,
+    ) -> Iterator[Event]:
         options = options or Options()
         images = any(a.kind == "image" for a in options.attachments)
         if options.task == "image" or (not images and _wants_picture(question, history)):
             yield from self._draw(question, history, mode)
             return
+        if not images and (options.task == "review" or wants_review(question, True)):
+            files = code_files(question, options.attachments, self.fetch_text)
+            repo = None if files else repo_url(question)
+            if files or repo:
+                yield from self._analyse(files, repo, review)
+                if "error" in review:
+                    yield "error", review["error"]
+                    return
         top = chunks[0].score if chunks else None
-        route = classify(question, top, images=images)
+        route: Route = "review" if review else classify(question, top, images=images)
         shown = [c for c in chunks if c.score >= self.min_score]
         order = provider_order(mode, route, self.best_order, set(self.providers))
         if route == "current":
@@ -223,7 +262,7 @@ class Assistant:
             return
 
         found: list[WebResult] = []
-        if self.web is not None and route != "chat":
+        if self.web is not None and route not in ("chat", "review"):
             yield "searching", {}
             previous = next((t.content for t in reversed(history) if t.role == "user"), None)
             started = time.monotonic()
@@ -233,14 +272,18 @@ class Assistant:
         searched = [{"title": r.title, "url": r.url} for r in found]
 
         system = system_prompt(style=options.style, instructions=options.instructions)
+        if review:
+            system = f"{system}\n\n{REVIEW}"
         tuning = {} if options.temperature is None else {"temperature": options.temperature}
         today = datetime.now(UTC).date()
+        findings = review.get("text", "")
         turns = conversation(
             question,
             shown,
             history,
             options.attachments,
             web=web_block(found, today) if found else "",
+            analysis=findings,
         )
         panel = self._candidates(order, route, images)
         if self.council_size > 1 and len(panel) > 1:
@@ -252,9 +295,21 @@ class Assistant:
                 history,
                 options.attachments,
                 web=web_block(found, today, brief=True) if found else "",
+                analysis=findings,
             )
             yield from self._council(
-                question, route, panel, order, shown, system, turns, tuning, searched, merge_base
+                question,
+                route,
+                panel,
+                order,
+                shown,
+                system,
+                turns,
+                tuning,
+                searched,
+                merge_base,
+                # A review's drafts carry code blocks with fixes: keep more of each.
+                draft_limit=6000 if review else 3500,
             )
             return
         failures: list[str] = []
@@ -346,6 +401,7 @@ class Assistant:
         tuning: dict,
         searched: Sequence[dict[str, str]] = (),
         merge_base: list[Turn] | None = None,
+        draft_limit: int = 3500,
     ) -> Iterator[Event]:
         """Seats up to `council_size` agents, collects their drafts, then merges them."""
         results: queue.Queue = queue.Queue()
@@ -472,7 +528,7 @@ class Assistant:
 
         yield "merging", {"drafts": len(drafts)}
         merge_turns = with_drafts(
-            merge_base or turns, [d.answer for d in drafts[: self.merge_drafts]]
+            merge_base or turns, [d.answer for d in drafts[: self.merge_drafts]], draft_limit
         )
         merge_system = f"{system}\n\n{MERGE}"
         merge_order = _merge_order(drafts, order, self._attempts(order, route), self._resting)
@@ -551,6 +607,68 @@ class Assistant:
                 drafts,
             ).model_dump(),
         )
+
+    def _analyse(self, files: dict[str, str], repo: str | None, review: dict) -> Iterator[Event]:
+        """Runs the code analyser on `files`, or on the GitHub repository `repo`, sending
+        its progress; leaves `schema` and `text` (or `error`) in `review`."""
+        if not repo:
+            yield "analysing", {"message": f"Running the code analyser on {len(files)} file(s)"}
+            analysis = analyse_files(files)
+            review["schema"], review["text"] = to_schema(analysis), files_summary(analysis)
+            yield "analysis", review["schema"].model_dump()
+            return
+        if not _REPO_ANALYSIS.acquire(blocking=False):
+            review["error"] = {
+                "status": 409,
+                "detail": "Another repository is being analysed; try again in a minute.",
+            }
+            return
+        progress: queue.Queue = queue.Queue()
+
+        def work() -> None:
+            try:
+                report = self.analyse_repo(
+                    repo, lambda message: progress.put(("progress", message))
+                )
+                progress.put(("report", report))
+            except RepoTooLarge as error:
+                progress.put(("error", {"status": 413, "detail": str(error)}))
+            except Exception as error:  # noqa: BLE001 - any failure ends the review politely
+                logger.warning("analysis of %s failed: %s", repo, error)
+                progress.put(
+                    (
+                        "error",
+                        {
+                            "status": 422,
+                            "detail": f"{repo} could not be analysed; is it a public GitHub "
+                            f"repository? ({type(error).__name__})",
+                        },
+                    )
+                )
+            finally:
+                _REPO_ANALYSIS.release()
+
+        threading.Thread(target=work, daemon=True).start()
+        yield "analysing", {"message": f"Analysing {repo}"}
+        while True:
+            try:
+                kind, value = progress.get(timeout=REPO_ANALYSIS_SECONDS)
+            except queue.Empty:
+                review["error"] = {
+                    "status": 504,
+                    "detail": "The repository took too long to analyse.",
+                }
+                return
+            if kind == "progress":
+                yield "analysing", {"message": value}
+            elif kind == "error":
+                review["error"] = value
+                return
+            else:
+                review["schema"] = to_schema(value.analysis, value)
+                review["text"] = summary_for_agents(value)
+                yield "analysis", review["schema"].model_dump()
+                return
 
     def _response(
         self,
@@ -702,6 +820,12 @@ def _wants_picture(question: str, history: Sequence[ChatTurn]) -> bool:
     )
 
 
+def _read_text(http: httpx2.Client, url: str, limit: int = 400_000) -> str:
+    response = http.get(url, timeout=20.0, follow_redirects=True)
+    response.raise_for_status()
+    return response.text[:limit]
+
+
 def _unique_sources(sources: list[dict[str, str]]) -> list[WebSource]:
     seen: dict[str, WebSource] = {}
     for source in sources:
@@ -772,8 +896,17 @@ def _build() -> Assistant:
         images.append(
             HuggingFaceImages(http, settings.huggingface_api_key, settings.huggingface_image_model)
         )
+    if settings.together_api_key:
+        images.append(
+            TogetherImages(http, settings.together_api_key, settings.together_image_model)
+        )
+    if settings.gemini_images and settings.gemini_api_key:
+        images.append(GeminiImages(http, settings.gemini_api_key, settings.gemini_image_model))
     if settings.horde_enabled:
-        images.append(HordeImages(http, settings.horde_api_key, _models("horde_image_models")))
+        images += [
+            HordeImages(http, settings.horde_api_key, [model], label=f"AI Horde · {model}")
+            for model in _models("horde_image_models")
+        ]
     images.append(PollinationsImages(settings.image_url_template))
 
     logger.info(
@@ -805,6 +938,7 @@ def _build() -> Assistant:
         else None,
         fast_mergers=[n.strip() for n in settings.assistant_fast_mergers.split(",") if n.strip()],
         merge_by_speed=settings.assistant_merge_by_speed,
+        fetch_text=lambda url: _read_text(http, url),
         merge_drafts=settings.assistant_merge_drafts,
     )
 

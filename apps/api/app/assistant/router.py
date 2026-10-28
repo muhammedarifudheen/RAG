@@ -19,7 +19,9 @@ import re
 from typing import Literal
 
 Mode = Literal["auto", "best"]
-Route = Literal["sources", "code", "current", "reasoning", "chat", "general", "image", "vision"]
+Route = Literal[
+    "sources", "code", "current", "reasoning", "chat", "general", "image", "vision", "review"
+]
 
 # Every service, strongest first; each route lists the ones it prefers first and
 # then the rest in this order.
@@ -61,6 +63,8 @@ ROUTE_ORDER: dict[str, tuple[str, ...]] = {
     "image": _prefer("groq", "cerebras", "gemini", "mistral", "openrouter"),
     # Services whose models see images reliably first.
     "vision": _prefer("gemini", "claude", "openrouter", "github", "mistral"),
+    # Code reviews: the strongest coders first.
+    "review": _prefer("claude", "deepseek", "openrouter", "github", "gemini", "mistral", "nvidia"),
 }
 
 # Routes that keep their own order in "best" mode too.
@@ -150,9 +154,12 @@ def provider_order(mode: Mode, route: Route, best_order: str, available: set[str
 def model_order(models: list[str], route: Route) -> list[str]:
     """A service's models with the ones suited to the route first (coding, reasoning, or
     web-searching models), otherwise as configured."""
-    marks = {"code": _CODE_MODELS, "reasoning": _REASONING_MODELS, "current": _SEARCH_MODELS}.get(
-        route, ()
-    )
+    marks = {
+        "code": _CODE_MODELS,
+        "review": _CODE_MODELS,
+        "reasoning": _REASONING_MODELS,
+        "current": _SEARCH_MODELS,
+    }.get(route, ())
     if not marks:
         return list(models)
     return sorted(models, key=lambda model: not any(mark in model.lower() for mark in marks))

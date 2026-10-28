@@ -8,6 +8,7 @@ import type {
   Attachment,
   AttachmentText,
   ChatTurn,
+  CodeAnalysis,
   CouncilAgent,
   FileDetail,
   GeneratedImage,
@@ -131,6 +132,10 @@ export interface AssistantHandlers {
   onDelta?: (text: string) => void;
   /** A service failed partway; drop the text so far, the next one starts over. */
   onReset?: () => void;
+  /** The code analyser's progress, for a code review. */
+  onAnalysing?: (message: string) => void;
+  /** What the code analyser found, before the agents review it. */
+  onAnalysis?: (analysis: CodeAnalysis) => void;
   /** The web is being searched for the latest information. */
   onSearching?: () => void;
   /** What the web search found; every agent reads it. */
@@ -151,8 +156,8 @@ export interface AssistantQuestion {
   style?: AnswerStyle;
   temperature?: number | null;
   instructions?: string;
-  /** "image" draws a picture. */
-  task?: "answer" | "image";
+  /** "image" draws a picture; "review" runs the code analyser and reviews its findings. */
+  task?: "answer" | "image" | "review";
 }
 
 /** The request body, with only what differs from the API's defaults. */
@@ -165,7 +170,7 @@ export function askBody(asked: AssistantQuestion): AskRequest {
     body.temperature = asked.temperature;
   }
   if (asked.instructions?.trim()) body.instructions = asked.instructions.trim();
-  if (asked.task === "image") body.task = "image";
+  if (asked.task === "image" || asked.task === "review") body.task = asked.task;
   return body;
 }
 
@@ -206,6 +211,10 @@ export async function askAssistant(
       handlers.onDelta?.(data.text as string);
     } else if (event.event === "reset") {
       handlers.onReset?.();
+    } else if (event.event === "analysing") {
+      handlers.onAnalysing?.(String(data.message ?? ""));
+    } else if (event.event === "analysis") {
+      handlers.onAnalysis?.(data as unknown as CodeAnalysis);
     } else if (event.event === "searching") {
       handlers.onSearching?.();
     } else if (event.event === "web") {

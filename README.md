@@ -133,10 +133,24 @@ The chat page answers any question, not only questions about your sources:
   `POST /attachments`; nothing is stored) and images (sent to the models that can see
   them). Drop or paste them into the message box; follow-ups still see them.
 - **Pictures.** "Draw a lighthouse at dusk", or the Draw switch: a fast model writes a
-  detailed prompt and several services draw it at once, shown as a gallery as each
-  picture arrives: [Pollinations](https://pollinations.ai) and
-  [AI Horde](https://aihorde.net) (free, no key), plus FLUX on Cloudflare and Hugging
-  Face when their keys are set.
+  detailed prompt (subject, medium, lighting, composition) and up to eight picture agents
+  draw it at once, shown as a gallery as each picture arrives:
+  [Pollinations](https://pollinations.ai) FLUX and one [AI Horde](https://aihorde.net)
+  agent per model (AlbedoBase XL, Juggernaut XL, Deliberate; free, no key, with a
+  negative prompt against blur and artefacts), plus FLUX on Cloudflare, Hugging Face and
+  Together when their keys are set, and Gemini's image model with `GEMINI_IMAGES=true`
+  (it needs billing). A free `HORDE_API_KEY` moves the Horde agents up the queue.
+- **A code analyser.** Ask to review or audit code (pasted, attached, a link to a file
+  on GitHub, or a whole public repository) and real checks run first: Ruff's bug and
+  security rules (Bandit's) on Python, a scan for leaked keys, risky patterns in
+  JavaScript, TypeScript and Go (eval, HTML injection, SQL built from strings, TLS checks
+  turned off), each function's cyclomatic complexity and nesting from its syntax tree,
+  and for a repository its import cycles, most depended-on and riskiest files. The
+  council then reviews the findings as principal engineers would: confirmed issues with
+  `path:line` and a fix, false positives dismissed, logic and design problems the
+  checkers cannot see. The **Analyse** page does this for a repository and shows the
+  report: a score and grade, the riskiest files, cycles, complex functions and every
+  finding by severity. Nothing is stored; the clone is deleted.
 - **Your settings.** Answer length (concise, balanced, detailed), creativity
   (temperature) and custom instructions sent with every question; answers read aloud.
 - **Everything around it.** Copy, regenerate, edit a question and resend, copy code

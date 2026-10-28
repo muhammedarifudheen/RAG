@@ -94,8 +94,11 @@ class AskRequest(BaseModel):
         max_length=4000,
         description="The user's standing instructions to the assistant.",
     )
-    task: Literal["answer", "image"] = Field(
-        default="answer", description="`image` draws a picture of the question."
+    task: Literal["answer", "image", "review"] = Field(
+        default="answer",
+        description="`image` draws a picture of the question; `review` runs the code analyser "
+        "on the attached code, code in the question, or a GitHub link, and the agents review "
+        "what it finds.",
     )
 
     @model_validator(mode="after")
@@ -147,6 +150,59 @@ class WebSource(BaseModel):
     url: str
 
 
+class CodeFinding(BaseModel):
+    tool: str = Field(description="ruff, secrets, patterns or complexity.")
+    rule: str
+    severity: Literal["high", "medium", "low"]
+    path: str
+    line: int
+    message: str
+
+
+class FunctionMetricOut(BaseModel):
+    path: str
+    name: str
+    start_line: int
+    end_line: int
+    complexity: int = Field(description="Cyclomatic: 1 + decision points.")
+    nesting: int = Field(description="The deepest block nesting inside it.")
+
+
+class FileRiskOut(BaseModel):
+    path: str
+    lines: int
+    findings: int
+    complexity: int = Field(description="Its most complex function's complexity.")
+    imported_by: int
+    risk: float
+
+
+class ImportCount(BaseModel):
+    path: str
+    imported_by: int
+
+
+class CodeAnalysis(BaseModel):
+    """What the code analyser found, before any AI looked at it."""
+
+    repo: str | None = Field(default=None, description="The GitHub repository analysed.")
+    commit: str | None = None
+    files: int
+    lines: int
+    code_lines: int
+    languages: dict[str, int] = Field(description="Lines per language.")
+    score: int = Field(description="0-100: findings per thousand lines of code, weighted.")
+    grade: str
+    counts: dict[str, int] = Field(description="Findings by severity.")
+    findings: list[CodeFinding] = Field(description="Most severe first; at most 300.")
+    functions: list[FunctionMetricOut] = Field(description="The most complex functions.")
+    test_files: int | None = None
+    cycles: list[list[str]] = Field(default=[], description="Groups of files importing each other.")
+    most_imported: list[ImportCount] = []
+    riskiest: list[FileRiskOut] = []
+    seconds: float | None = None
+
+
 class GeneratedImage(BaseModel):
     url: str = Field(description="Where the picture is drawn; the browser loads it from there.")
     prompt: str = Field(description="What was asked of the image model.")
@@ -170,6 +226,9 @@ class AskResponse(BaseModel):
     images: list[GeneratedImage] = Field(default=[], description="Pictures drawn for the answer.")
     agents: list[str] = Field(
         default=[], description="The council's agents whose drafts were merged into the answer."
+    )
+    analysis: CodeAnalysis | None = Field(
+        default=None, description="For a code review: what the code analyser found."
     )
 
 

@@ -63,7 +63,7 @@ export interface AskRequest {
   /** Standing instructions to the assistant. */
   instructions?: string;
   /** "image" draws a picture of the question. */
-  task?: "answer" | "image";
+  task?: "answer" | "image" | "review";
 }
 
 /** POST /attachments: a document's text, read for attaching to a question. */
@@ -103,7 +103,8 @@ export type AssistantRoute =
   | "chat"
   | "general"
   | "image"
-  | "vision";
+  | "vision"
+  | "review";
 
 export interface WebSource {
   title: string;
@@ -139,6 +140,63 @@ export interface AskResponse {
   images?: GeneratedImage[];
   /** The council's agents whose drafts were merged into the answer. */
   agents?: string[];
+  /** For a code review: what the code analyser found. */
+  analysis?: CodeAnalysis | null;
+}
+
+// --- The code analyser (a review's `analysis`) --------------------------------
+
+export type Severity = "high" | "medium" | "low";
+
+export interface CodeFinding {
+  /** ruff, secrets, patterns or complexity. */
+  tool: string;
+  rule: string;
+  severity: Severity;
+  path: string;
+  line: number;
+  message: string;
+}
+
+export interface FunctionMetric {
+  path: string;
+  name: string;
+  start_line: number;
+  end_line: number;
+  /** Cyclomatic: 1 + decision points. */
+  complexity: number;
+  nesting: number;
+}
+
+export interface FileRisk {
+  path: string;
+  lines: number;
+  findings: number;
+  complexity: number;
+  imported_by: number;
+  risk: number;
+}
+
+export interface CodeAnalysis {
+  /** The GitHub repository analysed, for a repository review. */
+  repo?: string | null;
+  commit?: string | null;
+  files: number;
+  lines: number;
+  code_lines: number;
+  /** Lines per language. */
+  languages: Record<string, number>;
+  /** 0-100: findings per thousand lines of code, weighted by severity. */
+  score: number;
+  grade: string;
+  counts: Record<Severity, number>;
+  findings: CodeFinding[];
+  functions: FunctionMetric[];
+  test_files?: number | null;
+  cycles?: string[][];
+  most_imported?: { path: string; imported_by: number }[];
+  riskiest?: FileRisk[];
+  seconds?: number | null;
 }
 
 // --- /shares ----------------------------------------------------------------

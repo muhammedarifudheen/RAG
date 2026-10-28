@@ -20,6 +20,8 @@ dependencies = [
     "httpx2>=2.0",
     # Parses file uploads.
     "python-multipart>=0.0.9",
+    # The code analyser's Python checks (bugs, security, complexity); run as a program.
+    "ruff>=0.5",
 ]
 
 [project.optional-dependencies]

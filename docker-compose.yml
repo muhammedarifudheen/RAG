@@ -71,6 +71,8 @@ services:
       BRAVE_API_KEY: ${BRAVE_API_KEY:-}
       COHERE_API_KEY: ${COHERE_API_KEY:-}
       TOGETHER_API_KEY: ${TOGETHER_API_KEY:-}
+      HORDE_API_KEY: ${HORDE_API_KEY:-0000000000}
+      GEMINI_IMAGES: ${GEMINI_IMAGES:-false}
       # Only for ingesting private repositories.
       GITHUB_TOKEN: ${GITHUB_TOKEN:-}
     ports:

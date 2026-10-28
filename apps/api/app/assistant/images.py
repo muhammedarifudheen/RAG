@@ -1,8 +1,9 @@
 """Pictures from several free services at once, for a gallery.
 
 Pollinations draws from a URL the browser loads, so it costs the server nothing.
-Cloudflare, Hugging Face and AI Horde return the picture itself, which is passed on
-as a data URL (Horde's own links expire after half an hour).
+Cloudflare, Hugging Face, Together, Gemini and AI Horde (one agent per model) return
+the picture itself, which is passed on as a data URL (Horde's own links expire after
+half an hour).
 """
 
 from __future__ import annotations
@@ -41,6 +42,13 @@ class ImageService(Protocol):
     def draw(self, prompt: str, seed: int) -> str:
         """The picture's URL (or data URL). Raises ImageError."""
         ...
+
+
+# What diffusion models are told to avoid (Stable Diffusion's "negative prompt").
+NEGATIVE = (
+    "blurry, low quality, lowres, jpeg artifacts, deformed, distorted, disfigured, bad anatomy, "
+    "extra limbs, extra fingers, watermark, signature, text, logo, frame, cropped"
+)
 
 
 def _data_url(content: bytes, mime: str) -> str:
@@ -103,6 +111,80 @@ class HuggingFaceImages:
         return _data_url(response.content, mime)
 
 
+class TogetherImages:
+    label = "Together FLUX"
+
+    def __init__(self, client: httpx2.Client, token: str, model: str):
+        self.client, self.token, self.model = client, token, model
+
+    def draw(self, prompt: str, seed: int) -> str:
+        try:
+            response = self.client.post(
+                "https://api.together.xyz/v1/images/generations",
+                headers={"Authorization": f"Bearer {self.token}"},
+                json={
+                    "model": self.model,
+                    "prompt": prompt,
+                    "width": 1024,
+                    "height": 1024,
+                    "steps": 4,
+                    "n": 1,
+                    "seed": seed % 2_147_483_647,
+                    "response_format": "b64_json",
+                },
+            )
+        except httpx2.HTTPError as error:
+            raise ImageError(f"Together could not be reached: {error}") from error
+        if response.status_code >= 400:
+            raise ImageError(f"Together: HTTP {response.status_code}")
+        data = (response.json().get("data") or [{}])[0]
+        if data.get("b64_json"):
+            return f"data:image/jpeg;base64,{data['b64_json']}"
+        if data.get("url"):
+            return data["url"]
+        raise ImageError("Together returned no image.")
+
+
+class GeminiImages:
+    """Gemini's image models ("Nano Banana"). Google gives these no free quota, so they
+    are only used when GEMINI_IMAGES is on (a key with billing)."""
+
+    label = "Gemini"
+
+    def __init__(self, client: httpx2.Client, api_key: str, model: str):
+        self.client, self.api_key, self.model = client, api_key, model
+
+    def draw(self, prompt: str, seed: int) -> str:
+        url = (
+            f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
+        )
+        try:
+            response = self.client.post(
+                url,
+                headers={"x-goog-api-key": self.api_key},
+                json={
+                    "contents": [{"parts": [{"text": f"Create this picture: {prompt}"}]}],
+                    "generationConfig": {"responseModalities": ["IMAGE"], "seed": seed % 2**31},
+                },
+            )
+        except httpx2.HTTPError as error:
+            raise ImageError(f"Gemini could not be reached: {error}") from error
+        if response.status_code >= 400:
+            raise ImageError(f"Gemini: HTTP {response.status_code}")
+        for candidate in response.json().get("candidates") or []:
+            for part in (candidate.get("content") or {}).get("parts") or []:
+                inline = part.get("inlineData") or part.get("inline_data")
+                if inline and inline.get("data"):
+                    mime = inline.get("mimeType") or inline.get("mime_type") or "image/png"
+                    return f"data:{mime};base64,{inline['data']}"
+        raise ImageError("Gemini returned no image.")
+
+
+def _horde_size(models: list[str]) -> int:
+    """SDXL and FLUX models draw at 1024 pixels; older Stable Diffusion ones at 512."""
+    return 1024 if any(("XL" in m or "Flux" in m or "FLUX" in m) for m in models) else 512
+
+
 class HordeImages:
     label = "AI Horde"
 
@@ -112,12 +194,15 @@ class HordeImages:
         api_key: str,
         models: list[str],
         *,
+        label: str | None = None,
         poll_every: float = 3.0,
         give_up_after: float = 120.0,
         sleep: Callable[[float], None] = time.sleep,
     ):
         self.client, self.api_key, self.models = client, api_key, models
         self.poll_every, self.give_up_after, self.sleep = poll_every, give_up_after, sleep
+        if label:
+            self.label = label
 
     def draw(self, prompt: str, seed: int) -> str:
         headers = horde_headers(self.api_key)
@@ -126,10 +211,11 @@ class HordeImages:
                 f"{HORDE}/generate/async",
                 headers=headers,
                 json={
-                    "prompt": prompt[:1000],
+                    # Horde's syntax for a negative prompt: after "###".
+                    "prompt": f"{prompt[:900]} ### {NEGATIVE}",
                     "params": {
-                        "width": 512,
-                        "height": 512,
+                        "width": _horde_size(self.models),
+                        "height": _horde_size(self.models),
                         "steps": 20,
                         "n": 1,
                         "sampler_name": "k_euler_a",

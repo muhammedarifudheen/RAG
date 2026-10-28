@@ -61,10 +61,14 @@ STYLES = {
 }
 
 IMAGE_SYSTEM = """\
-You write prompts for an image generator. From the user's latest message, and the \
-conversation before it for requests such as "make it blue", write one detailed English \
-prompt for the picture they want: the subject, setting, style, colours, lighting and \
-composition. Reply with the prompt alone, under 80 words, without quotes or a preamble."""
+You write prompts for image generators (FLUX and Stable Diffusion XL). From the user's \
+latest message, and the conversation before it for requests such as "make it blue", write \
+one English prompt for the picture they want. Start with the subject and what it is doing, \
+then the setting, then the medium and style (for example "cinematic photograph, 35mm" or \
+"watercolour illustration"), lighting, colour palette, camera angle and composition, and \
+end with quality words ("highly detailed, sharp focus"). Keep everything the user asked \
+for, and invent nothing that contradicts it. Words written in the picture go in double \
+quotes. Reply with the prompt alone, under 90 words, without a preamble."""
 
 
 def system_prompt(
@@ -88,9 +92,10 @@ def conversation(
     attachments: Sequence[Attachment] = (),
     keep: int = 12,
     web: str = "",
+    analysis: str = "",
 ) -> list[Turn]:
     """The earlier messages (the most recent `keep`), then the question with any attached
-    files, excerpts and web results."""
+    files, excerpts, web results and the code analyser's findings."""
     turns = [Turn(t.role, t.content[:12000]) for t in history[-keep:] if t.content.strip()]
     # Providers expect the conversation to start with the user.
     while turns and turns[0].role != "user":
@@ -104,6 +109,8 @@ def conversation(
         last = f"{attached}\n\n{last}"
     if web:
         last = f"{web}\n\n{last}"
+    if analysis:
+        last = f"{last}\n\n{analysis}"
     images = [Image(a.mime, a.data) for a in attachments if a.kind == "image" and a.mime and a.data]
     return [*turns, Turn("user", last, images)]
 
@@ -152,6 +159,35 @@ class FollowUpSplitter:
         # A model sometimes bolds or heads the marker line; drop what is left of that.
         answer = re.sub(r"[\s*#_]+$", "", answer).strip()
         return rest, answer, questions[:3]
+
+
+REVIEW = """\
+This is a code review: review as a principal engineer would. The message has the code \
+(attached files, pasted blocks, or for a repository a report with the code of its most \
+complex functions) and the findings of real static checks, in <static_analysis> or \
+<repository_analysis>: Ruff's bug and security rules, a scan for leaked secrets, risky \
+patterns, and complexity measured on the syntax tree. Treat the findings as evidence, not \
+verdicts: confirm the real ones and say why they matter, dismiss false positives in a few \
+words, and find what checkers cannot: logic errors, unhandled edge cases, race conditions, \
+error handling, security flaws (injection, authentication, secrets, unsafe \
+deserialisation, missing validation), performance, API design and missing tests.
+
+Write the review in this order:
+1. **Verdict**: a short paragraph with the overall quality, the analyser's score, and the \
+single most important problem.
+2. **Critical and high issues**: for each, the location as `path:line` in backticks, what \
+goes wrong and when, and the fix as a code block.
+3. **Medium issues**: the same, more briefly.
+4. **Design and maintainability**: complexity hotspots, structure, naming, tests.
+5. **Quick wins**: a short checklist.
+Use `path:line` for locations, never the [path:start-end] citation form. Be specific and \
+concrete, and do not pad: a short review of clean code is right.
+
+Be technically exact: every claim must hold for the code shown and the language's real \
+semantics. Common false alarms to avoid: `except Exception` does not catch \
+KeyboardInterrupt or SystemExit; HMAC stays secure with SHA-1 (collisions do not break \
+it); a parameterised query is not SQL injection. When you cannot confirm a problem from \
+the code, call it a risk to check, not a bug, and rank it lower."""
 
 
 MERGE = """\

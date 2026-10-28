@@ -16,6 +16,8 @@ import {
 import { copyText } from "@/lib/exporting";
 import { normalizeMath } from "@/lib/markdown";
 
+import { AnalysisReport } from "./AnalysisReport";
+
 interface Props {
   response: AskResponse;
   onCite: (range: CodeRange) => void;
@@ -77,6 +79,19 @@ export function Answer({ response, onCite }: Props) {
       </div>
 
       {response.images && response.images.length > 0 && <Gallery images={response.images} />}
+
+      {response.analysis && (
+        <details className="mt-4 border-t border-line pt-3">
+          <summary className="cursor-pointer select-none text-sm text-muted hover:text-paper">
+            Code analysis: grade {response.analysis.grade}, {response.analysis.score}/100,{" "}
+            {response.analysis.counts.high} high · {response.analysis.counts.medium} medium ·{" "}
+            {response.analysis.counts.low} low
+          </summary>
+          <div className="mt-3">
+            <AnalysisReport analysis={response.analysis} />
+          </div>
+        </details>
+      )}
 
       {!response.complete && (
         <p className="mt-3 text-xs text-warn">This answer was cut off at the length limit.</p>
