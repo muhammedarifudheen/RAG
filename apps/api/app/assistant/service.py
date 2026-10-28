@@ -49,11 +49,13 @@ from .images import (
     TogetherImages,
     gallery,
 )
+from .planner import parse_queries
 from .prompt import (
     FORMATS,
     IMAGE_SYSTEM,
     MERGE,
     NOT_IN_SOURCES,
+    QUERY_PLANNER,
     REVIEW,
     FollowUpSplitter,
     conversation,
@@ -109,7 +111,11 @@ class Options:
     format: str = "markdown"  # or "plain", "json"
     include_drafts: bool = False
     strict: bool = False  # sources only, with the user's strict rules
+    search_queries: Sequence[str] = ()  # what the query planner had searched for
 
+
+# The query planner's time; after it the question alone is searched.
+PLAN_SECONDS = 5.0
 
 # Services too slow to wait for when a quick reply is all that is needed.
 SLOW_SERVICES = ("horde",)
@@ -195,10 +201,13 @@ class Assistant:
         fast_mergers: Sequence[str] = (),
         merge_by_speed: bool = False,
         merge_drafts: int = 12,
+        planner: bool = False,
         analyse_repo: Callable[[str, Callable[[str], None]], RepoReport] = analyse_repo,
         fetch_text: Callable[[str], str] | None = None,
     ) -> None:
         self.providers = {p.name: p for p in providers}
+        # Plan several knowledge-base searches per question (see plan_queries).
+        self.planner = planner
         self.analyse_repo = analyse_repo
         # Reads a GitHub file linked in a review request; None leaves such links out.
         self.fetch_text = fetch_text
@@ -240,10 +249,50 @@ class Assistant:
         the whole response, or `error`. A code review first sends `analysing` progress and
         the code analyser's `analysis`, which the `done` response carries too."""
         review: dict = {}
+        planned = list((options.search_queries if options else ()) or ())
+        if planned:
+            yield "planned", {"queries": planned}
         for name, data in self._respond(question, chunks, history, mode, options, review):
             if name == "done" and review.get("schema") is not None:
                 data = {**data, "analysis": review["schema"].model_dump()}
+            if name == "done" and planned:
+                data = {**data, "search_queries": planned}
             yield name, data
+
+    def plan_queries(self, question: str) -> list[str]:
+        """Up to five knowledge-base searches for `question`: itself, then the query
+        planner's (a fast model, given PLAN_SECONDS). Just the question if none answers."""
+        order = provider_order("auto", "image", self.best_order, set(self.providers))
+        candidates = [
+            (n, m)
+            for n, m in self._attempts(order, "image")
+            if n not in (*SLOW_SERVICES, "pollinations")
+        ]
+        replies: queue.Queue = queue.Queue()
+
+        def run() -> None:
+            for name, model in candidates[:3]:
+                try:
+                    text = "".join(
+                        self.providers[name].stream(
+                            model, QUERY_PLANNER, [Turn("user", question)], Outcome(), web=False
+                        )
+                    )
+                except (ProviderError, ValueError, KeyError) as error:
+                    logger.info("query planner %s %s failed (%s)", name, model, error)
+                    continue
+                if "{" in text:
+                    replies.put(text)
+                    return
+            replies.put("")
+
+        threading.Thread(target=run, daemon=True).start()
+        try:
+            reply = replies.get(timeout=PLAN_SECONDS)
+        except queue.Empty:
+            logger.info("query planner: no plan within %.0fs", PLAN_SECONDS)
+            reply = ""
+        return parse_queries(reply, question)
 
     def _respond(
         self,
@@ -1024,6 +1073,7 @@ def _build() -> Assistant:
         else None,
         fast_mergers=[n.strip() for n in settings.assistant_fast_mergers.split(",") if n.strip()],
         merge_by_speed=settings.assistant_merge_by_speed,
+        planner=settings.assistant_query_planner,
         fetch_text=lambda url: _read_text(http, url),
         merge_drafts=settings.assistant_merge_drafts,
     )

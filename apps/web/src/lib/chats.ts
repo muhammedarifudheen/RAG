@@ -52,6 +52,8 @@ export interface ChatSettings {
   webSearch: boolean;
   /** Strict sources only: answers from the knowledge base alone, citing every claim. */
   strict: boolean;
+  /** Plan several searches per question (keywords, a hypothetical answer, a variant). */
+  planQueries: boolean;
   /** Show each agent's own draft under the merged answer. */
   showDrafts: boolean;
 }
@@ -72,6 +74,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   minScore: null,
   webSearch: true,
   strict: false,
+  planQueries: true,
   showDrafts: false,
 };
 

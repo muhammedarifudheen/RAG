@@ -115,6 +115,11 @@ class AskRequest(BaseModel):
         default=None, ge=0, le=1, description="Excerpts less similar than this are left out."
     )
     web_search: bool = Field(default=True, description="Search the web before answering.")
+    plan_queries: bool = Field(
+        default=True,
+        description="Have a fast model plan several knowledge-base searches (the question, its "
+        "keywords, a hypothetical answer, a variant) and fuse their results.",
+    )
     strict: bool = Field(
         default=False,
         description="Strict sources only: answer from the knowledge base (and attached files) "
@@ -164,6 +169,7 @@ class AskRequest(BaseModel):
             or not self.use_sources
             or self.min_score is not None
             or not self.web_search
+            or not self.plan_queries
             or self.strict
             or self.max_tokens is not None
             or self.format != "markdown"
@@ -285,6 +291,9 @@ class AskResponse(BaseModel):
     )
     drafts: list[AgentDraft] = Field(
         default=[], description="Each council agent's own draft, when include_drafts was set."
+    )
+    search_queries: list[str] = Field(
+        default=[], description="The knowledge-base searches the query planner ran."
     )
 
 

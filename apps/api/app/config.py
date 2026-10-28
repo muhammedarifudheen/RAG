@@ -114,6 +114,9 @@ class Settings(BaseSettings):
     tavily_api_key: str | None = None  # https://app.tavily.com
     brave_api_key: str | None = None  # https://brave.com/search/api
     web_max_wait: float = 5.0
+    # Before a knowledge-base search, a fast model plans several queries (the question,
+    # its keywords, a hypothetical answer for HyDE, a variant) whose results are fused.
+    assistant_query_planner: bool = True
     # Knowledge-base excerpts less similar than this are not shown to the model.
     assistant_min_score: float = 0.3
     assistant_max_tokens: int = 8000

@@ -247,6 +247,7 @@ export function Chat() {
           format: settings.format,
           includeDrafts: settings.showDrafts,
           strict: settings.strict,
+          planQueries: settings.planQueries,
         },
         {
           onDelta: (piece) => setStreaming((current) => (current ?? "") + piece),

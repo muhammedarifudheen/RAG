@@ -97,6 +97,20 @@ def strict_prompt(instructions: str = "") -> str:
     return prompt
 
 
+# Query planning for the knowledge-base search: the user's own planner prompt, word for word.
+QUERY_PLANNER = """\
+You are a query planner for a retrieval system.
+
+Given the user's question, produce up to 4 search queries that maximize recall:
+- Q1: the literal question, cleaned up.
+- Q2: a keyword-only version (entities, function names, acronyms).
+- Q3: a hypothetical answer sentence (HyDE) that would appear in a good source.
+- Q4 (optional): a broader or narrower variant if the question is vague or very specific.
+
+Return JSON: {"queries": ["...", "...", "...", "..."]}
+Do not answer the question. Only produce queries."""
+
+
 # How the answer is written, when the user chose other than Markdown.
 FORMATS = {
     "markdown": "",
@@ -179,7 +193,8 @@ class FollowUpSplitter:
         self.cut: int | None = None
 
     def feed(self, piece: str) -> str:
-        self.text += piece
+        # Some models cite in full-width brackets, 【path:1-2】; citations are [path:1-2].
+        self.text += piece.replace("【", "[").replace("】", "]")
         if self.cut is None:
             found = _MARKER.search(self.text)
             if found:

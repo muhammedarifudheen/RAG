@@ -142,3 +142,27 @@ test("the strict switch asks for cited answers from the sources only, and is rem
   await settings.getByRole("tab", { name: "Retrieval" }).click();
   await expect(settings.getByRole("switch", { name: /Strict sources only/ })).toBeChecked();
 });
+
+test("the planned searches are listed under the answer, and planning can be turned off", async ({
+  page,
+}) => {
+  const searches = ["How is a signature checked?", "itsdangerous signature verify", "It recomputes the HMAC"];
+  const sent = await mock(page, [reply("Answer.", { search_queries: searches }), reply("Again.")]);
+  await page.goto("/chat");
+  await ask(page, "How is a signature checked?");
+  const answer = page.getByRole("article", { name: "Answer" });
+  await answer.getByText("Searched your sources 3 ways").click();
+  await expect(answer.getByRole("list", { name: "Searches" }).getByRole("listitem")).toHaveText(
+    searches,
+  );
+
+  await page.getByRole("button", { name: "⚙ Settings" }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByRole("tab", { name: "Retrieval" }).click();
+  await settings.getByRole("switch", { name: /Plan several searches/ }).uncheck();
+  await settings.getByRole("button", { name: "Close settings" }).click();
+  await ask(page, "And again?");
+  await expect(page.getByRole("article", { name: "Answer" }).nth(1)).toContainText("Again.");
+  expect(sent[0].plan_queries).toBeUndefined();
+  expect(sent[1].plan_queries).toBe(false);
+});

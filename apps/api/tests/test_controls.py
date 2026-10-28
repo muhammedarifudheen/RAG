@@ -220,3 +220,13 @@ def test_strict_mode_keeps_the_users_instructions_after_the_rules():
 
 def test_strict_sends_the_question_to_the_assistant():
     assert AskRequest(question="q", strict=True).for_assistant
+
+
+def test_full_width_citation_brackets_become_citations():
+    from app.assistant.prompt import FollowUpSplitter
+
+    splitter = FollowUpSplitter()
+    text = splitter.feed("It signs values【itsdangerous/signer.py:40-52】. ")
+    rest, answer, _ = splitter.finish()
+    assert "[itsdangerous/signer.py:40-52]" in text + rest
+    assert answer == "It signs values[itsdangerous/signer.py:40-52]."

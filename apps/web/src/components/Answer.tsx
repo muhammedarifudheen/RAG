@@ -144,6 +144,19 @@ export function Answer({ response, onCite }: Props) {
         </div>
       )}
 
+      {response.search_queries && response.search_queries.length > 1 && (
+        <details className="mt-4 border-t border-line pt-3 text-xs text-soft">
+          <summary className="cursor-pointer select-none text-muted hover:text-paper">
+            Searched your sources {response.search_queries.length} ways
+          </summary>
+          <ol aria-label="Searches" className="mt-2 list-inside list-decimal space-y-1">
+            {response.search_queries.map((query) => (
+              <li key={query}>{query}</li>
+            ))}
+          </ol>
+        </details>
+      )}
+
       {response.chunks.length > 0 && (
         <details className="mt-4 border-t border-line pt-3 text-xs text-soft">
           <summary className="cursor-pointer select-none text-muted hover:text-paper">

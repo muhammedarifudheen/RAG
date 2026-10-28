@@ -43,7 +43,7 @@ jobs:
         run: |
           deploy=$(curl -fsS -X POST "https://api.render.com/v1/services/$SERVICE/deploys" \
             -H "Authorization: Bearer $RENDER_API_KEY" -H "Content-Type: application/json" \
-            -d "{\"commitId\": \"$GITHUB_SHA\"}" | jq -r .id)
+            -d "{\"commitId\": \"$GITHUB_SHA\", \"clearCache\": \"clear\"}" | jq -r .id)
           echo "Render deploy $deploy"
           echo "id=$deploy" >> "$GITHUB_OUTPUT"
       - name: Wait for it to go live

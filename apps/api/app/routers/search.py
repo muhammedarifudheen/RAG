@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.assistant import Assistant, AssistantError, Options, get_assistant
+from app.assistant.planner import fuse
 from app.config import settings
 from app.db import get_db
 from app.embedding import Embedder, get_embedder
@@ -112,8 +113,17 @@ def ask(
         # previous question too.
         previous = next((t.content for t in reversed(body.history) if t.role == "user"), "")
         query = f"{previous[:500]}\n{question}" if previous else question
+        queries = [query]
+        if body.use_sources and body.plan_queries and getattr(assistant, "planner", False):
+            queries = assistant.plan_queries(query)
         chunks = (
-            search_symbols(db, embedder, query, body.top_k, settings.snippet_max_lines)
+            fuse(
+                [
+                    search_symbols(db, embedder, q, body.top_k, settings.snippet_max_lines)
+                    for q in queries
+                ],
+                body.top_k,
+            )
             if body.use_sources
             else []
         )
@@ -132,6 +142,7 @@ def ask(
             format=body.format,
             include_drafts=body.include_drafts,
             strict=body.strict,
+            search_queries=tuple(queries) if len(queries) > 1 else (),
         )
         if streaming:
             events = assistant.respond(question, chunks, body.history, mode, options)

@@ -170,6 +170,7 @@ export interface AssistantQuestion {
   format?: AnswerFormat;
   includeDrafts?: boolean;
   strict?: boolean;
+  planQueries?: boolean;
 }
 
 const DEFAULT_TOP_K = 8;
@@ -196,6 +197,7 @@ export function askBody(asked: AssistantQuestion): AskRequest {
   if (asked.format && asked.format !== "markdown") body.format = asked.format;
   if (asked.includeDrafts) body.include_drafts = true;
   if (asked.strict) body.strict = true;
+  if (asked.planQueries === false) body.plan_queries = false;
   return body;
 }
 

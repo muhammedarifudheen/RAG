@@ -83,6 +83,8 @@ export interface AskRequest {
   include_drafts?: boolean;
   /** Strict sources only: the knowledge base and attached files, cited, or "not there". */
   strict?: boolean;
+  /** Plan several knowledge-base searches (keywords, a hypothetical answer…); default true. */
+  plan_queries?: boolean;
 }
 
 export type AnswerFormat = "markdown" | "plain" | "json";
@@ -172,6 +174,8 @@ export interface AskResponse {
   analysis?: CodeAnalysis | null;
   /** Each council agent's own draft, when include_drafts was set. */
   drafts?: AgentDraft[];
+  /** The knowledge-base searches the query planner ran. */
+  search_queries?: string[];
 }
 
 // --- The code analyser (a review's `analysis`) --------------------------------

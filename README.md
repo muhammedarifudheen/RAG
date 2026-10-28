@@ -105,7 +105,12 @@ proxies `/api/*` to the API, which runs the ingestion itself.
 The chat page answers any question, not only questions about your sources:
 
 - **Sources first.** It searches your knowledge base and cites the exact lines it
-  used, as `[path:start-end]`, each checked against what the model was shown.
+  used, as `[path:start-end]`, each checked against what the model was shown. A query
+  planner (a fast model, about a second) first turns the question into several searches:
+  the question cleaned up, its keywords, a hypothetical answer sentence (HyDE) and a broader
+  or narrower variant. Their results are fused by reciprocal rank, so excerpts several
+  searches agree on come first; the answer lists the searches (Settings → Retrieval turns
+  planning off; `plan_queries: false` on `/ask`).
 - **Today's facts, every time.** Before answering (anything but small talk) it searches
   the web and gives every agent the results, so versions, news, prices, scores and
   who-holds-what come from today, with dates and links: Google News and Wikipedia (no

@@ -543,6 +543,12 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
           onChange={(useSources) => set({ useSources })}
         />
         <div className={settings.useSources ? "" : "pointer-events-none opacity-40"}>
+          <Toggle
+            label="Plan several searches per question"
+            hint="A fast model rewrites the question into keywords, a hypothetical answer (HyDE) and a variant; their results are fused, so more of the right excerpts are found."
+            checked={settings.planQueries}
+            onChange={(planQueries) => set({ planQueries })}
+          />
           <Slider
             id="top-k"
             label="Excerpts per question (top-k)"
@@ -584,6 +590,7 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
             minScore: DEFAULT_SETTINGS.minScore,
             webSearch: DEFAULT_SETTINGS.webSearch,
             strict: DEFAULT_SETTINGS.strict,
+            planQueries: DEFAULT_SETTINGS.planQueries,
           })
         }
         className="mt-4 text-xs text-cyan hover:underline"
@@ -607,7 +614,8 @@ function TransparencyTab({ settings, set }: { settings: ChatSettings; set: Patch
       />
       <p className="mt-3 text-xs text-muted">
         Always shown: the council&apos;s agents as they work (with their times), the web results
-        found, the knowledge-base excerpts each answer was given with their relevance scores,
+        found, the searches the query planner ran, the knowledge-base excerpts each answer was
+        given with their relevance scores,
         and for code reviews the analyser&apos;s full report.
       </p>
     </section>
