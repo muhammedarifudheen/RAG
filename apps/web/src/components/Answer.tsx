@@ -93,6 +93,33 @@ export function Answer({ response, onCite }: Props) {
         </details>
       )}
 
+      {response.drafts && response.drafts.length > 0 && (
+        <details className="mt-4 border-t border-line pt-3">
+          <summary className="cursor-pointer select-none text-sm text-muted hover:text-paper">
+            {response.drafts.length} agent drafts, before the merge
+          </summary>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            {response.drafts.map((draft) => (
+              <section
+                key={draft.agent}
+                aria-label={`Draft by ${draft.agent}`}
+                className="rounded-2xl border border-line bg-white/70 p-3"
+              >
+                <p className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="font-medium text-soft">{draft.agent}</span>
+                  <span className="font-mono text-faint">{draft.seconds}s</span>
+                </p>
+                <div className="markdown mt-2 max-h-72 overflow-y-auto text-[13px] leading-relaxed">
+                  <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE}>
+                    {normalizeMath(draft.answer)}
+                  </ReactMarkdown>
+                </div>
+              </section>
+            ))}
+          </div>
+        </details>
+      )}
+
       {!response.complete && (
         <p className="mt-3 text-xs text-warn">This answer was cut off at the length limit.</p>
       )}

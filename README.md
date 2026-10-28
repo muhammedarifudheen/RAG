@@ -151,8 +151,17 @@ The chat page answers any question, not only questions about your sources:
   checkers cannot see. The **Analyse** page does this for a repository and shows the
   report: a score and grade, the riskiest files, cycles, complex functions and every
   finding by severity. Nothing is stored; the clone is deleted.
-- **Your settings.** Answer length (concise, balanced, detailed), creativity
-  (temperature) and custom instructions sent with every question; answers read aloud.
+- **Every control, in Settings.** *Answers*: length (concise, balanced, detailed),
+  creativity (temperature), a persona (senior engineer, teacher, researcher, analyst,
+  writer), the output format (Markdown, plain text or JSON), the maximum length in tokens,
+  custom instructions and reading answers aloud. *Models*: which AI services may answer,
+  how many agents sit on the council (1 is a single, fastest model) and which service
+  merges. *Retrieval*: search your sources or not, how many excerpts (top-k), the
+  relevance threshold, and web search on or off. *Transparency*: each agent's own draft
+  and time under the merged answer. Only changed settings are sent (`services`,
+  `council_size`, `merger`, `use_sources`, `top_k`, `min_score`, `web_search`,
+  `max_tokens`, `format`, `include_drafts` on `/ask`).
+- **Liquid light.** A calm, airy design: pastel waves drift behind floating glass panels.
 - **Everything around it.** Copy, regenerate, edit a question and resend, copy code
   blocks (highlighted), maths typeset with KaTeX, voice input, search, pin and rename
   chats, export a chat as Markdown or all chats as JSON (and import them), share a

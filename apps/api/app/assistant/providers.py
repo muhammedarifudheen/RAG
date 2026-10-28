@@ -64,6 +64,7 @@ class Provider(Protocol):
         *,
         web: bool,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> Iterator[str]: ...
 
 
@@ -116,8 +117,9 @@ class GeminiProvider:
         *,
         web: bool,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> Iterator[str]:
-        config: dict = {"maxOutputTokens": self.max_tokens}
+        config: dict = {"maxOutputTokens": max_tokens or self.max_tokens}
         if temperature is not None:
             config["temperature"] = temperature
         payload: dict = {
@@ -220,12 +222,13 @@ class OpenAICompatibleProvider:
         *,
         web: bool,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> Iterator[str]:
         payload: dict = {
             "model": model,
             "messages": [{"role": "system", "content": system}]
             + [{"role": t.role, "content": _openai_content(t)} for t in turns],
-            "max_tokens": self.max_tokens,
+            "max_tokens": max_tokens or self.max_tokens,
             "stream": True,
         }
         if temperature is not None:
@@ -304,12 +307,13 @@ class ClaudeProvider:
         *,
         web: bool,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> Iterator[str]:
         options: dict = {} if temperature is None else {"temperature": min(temperature, 1.0)}
         try:
             with self.client.messages.stream(
                 model=model,
-                max_tokens=self.max_tokens,
+                max_tokens=max_tokens or self.max_tokens,
                 system=system,
                 messages=[{"role": t.role, "content": _claude_content(t)} for t in turns],
                 **options,

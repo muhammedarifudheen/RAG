@@ -60,6 +60,16 @@ STYLES = {
     "and caveats, and give examples.",
 }
 
+# How the answer is written, when the user chose other than Markdown.
+FORMATS = {
+    "markdown": "",
+    "plain": "Write this answer as plain text: no Markdown, no headings, no tables, no code "
+    "fences; plain paragraphs and simple numbered lines only.",
+    "json": "Answer with one valid JSON object and nothing else (no prose, no code fence): "
+    'use the keys that fit the question, with an "answer" key holding the main answer, and '
+    "do not write follow-up questions.",
+}
+
 IMAGE_SYSTEM = """\
 You write prompts for image generators (FLUX and Stable Diffusion XL). From the user's \
 latest message, and the conversation before it for requests such as "make it blue", write \

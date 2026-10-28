@@ -1,4 +1,5 @@
 import type {
+  AnswerFormat,
   AnswerStyle,
   ApiErrorBody,
   AskRequest,
@@ -158,7 +159,19 @@ export interface AssistantQuestion {
   instructions?: string;
   /** "image" draws a picture; "review" runs the code analyser and reviews its findings. */
   task?: "answer" | "image" | "review";
+  services?: string[];
+  councilSize?: number | null;
+  merger?: string;
+  useSources?: boolean;
+  topK?: number;
+  minScore?: number | null;
+  webSearch?: boolean;
+  maxTokens?: number | null;
+  format?: AnswerFormat;
+  includeDrafts?: boolean;
 }
+
+const DEFAULT_TOP_K = 8;
 
 /** The request body, with only what differs from the API's defaults. */
 export function askBody(asked: AssistantQuestion): AskRequest {
@@ -171,6 +184,16 @@ export function askBody(asked: AssistantQuestion): AskRequest {
   }
   if (asked.instructions?.trim()) body.instructions = asked.instructions.trim();
   if (asked.task === "image" || asked.task === "review") body.task = asked.task;
+  if (asked.services?.length) body.services = asked.services;
+  if (asked.councilSize) body.council_size = asked.councilSize;
+  if (asked.merger) body.merger = asked.merger;
+  if (asked.useSources === false) body.use_sources = false;
+  if (asked.topK && asked.topK !== DEFAULT_TOP_K) body.top_k = asked.topK;
+  if (asked.minScore !== undefined && asked.minScore !== null) body.min_score = asked.minScore;
+  if (asked.webSearch === false) body.web_search = false;
+  if (asked.maxTokens) body.max_tokens = asked.maxTokens;
+  if (asked.format && asked.format !== "markdown") body.format = asked.format;
+  if (asked.includeDrafts) body.include_drafts = true;
   return body;
 }
 

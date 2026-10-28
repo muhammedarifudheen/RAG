@@ -23,9 +23,11 @@ import {
   parseImportedChats,
   saveChats,
   saveMode,
+  saveActiveServices,
   saveSettings,
   titleOf,
   DEFAULT_SETTINGS,
+  PERSONAS,
   type ChatSettings,
   type SavedChat,
   type StoredAttachment,
@@ -89,6 +91,12 @@ const NO_PROGRESS: Progress = {
   merging: null,
   images: [],
 };
+
+/** The chosen persona's role, then the user's own instructions. */
+function withPersona(settings: ChatSettings): string {
+  const persona = PERSONAS.find((p) => p.id === settings.persona)?.text ?? "";
+  return [persona, settings.instructions.trim()].filter(Boolean).join("\n\n");
+}
 
 function turnsOf(messages: StoredMessage[]): ChatTurn[] {
   return messages
@@ -226,13 +234,28 @@ export function Chat() {
           attachments: attachmentsToSend(base, attachments),
           style: settings.style,
           temperature: settings.temperature,
-          instructions: settings.instructions,
+          instructions: withPersona(settings),
           task: draw ? "image" : "answer",
+          services: settings.services,
+          councilSize: settings.councilSize,
+          merger: settings.merger,
+          useSources: settings.useSources,
+          topK: settings.topK,
+          minScore: settings.minScore,
+          webSearch: settings.webSearch,
+          maxTokens: settings.maxTokens,
+          format: settings.format,
+          includeDrafts: settings.showDrafts,
         },
         {
           onDelta: (piece) => setStreaming((current) => (current ?? "") + piece),
           onReset: () => setStreaming(null),
-          onRoute: (route) => setProgress((p) => ({ ...p, route })),
+          onRoute: (route, providers) => {
+            setProgress((p) => ({ ...p, route }));
+            // Every configured service is listed when none were chosen: remember them
+            // so the settings can show which services this server has.
+            if (!settings.services.length && providers.length) saveActiveServices(providers);
+          },
           onAnalysing: (message) => setProgress((p) => ({ ...p, analysing: message })),
           onAnalysis: (analysis) => setProgress((p) => ({ ...p, analysis })),
           onSearching: () => setProgress((p) => ({ ...p, searching: true })),
@@ -401,7 +424,7 @@ export function Chat() {
 
   return (
     // Exactly the screen below the navigation bar: only the conversation scrolls.
-    <div className="relative flex h-[calc(100dvh-3.5rem)] min-h-0">
+    <div className="relative flex h-[calc(100dvh-3.75rem)] min-h-0">
       <ChatSidebar
         ref={search}
         chats={chats}
@@ -428,7 +451,7 @@ export function Chat() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-line bg-ink/80 px-4 py-2">
+        <div className="flex items-center gap-2 border-b border-white/70 bg-white/40 px-4 py-2 backdrop-blur-xl">
           <button
             type="button"
             onClick={() => setShowChats((v) => !v)}
@@ -436,7 +459,7 @@ export function Chat() {
           >
             Chats
           </button>
-          <p className="min-w-0 flex-1 truncate font-display text-xs font-semibold uppercase tracking-[0.1em] text-soft">
+          <p className="min-w-0 flex-1 truncate font-display text-sm font-medium text-soft">
             {title}
           </p>
           <div role="radiogroup" aria-label="Models" className="flex border border-line-strong">
@@ -707,6 +730,9 @@ function CouncilPanel({ agents }: { agents: CouncilAgent[] }) {
             </span>
             <span className="text-soft">{agent.service}</span>
             <span className="max-w-[10rem] truncate">{agent.model}</span>
+            {agent.seconds != null && agent.state === "done" && (
+              <span className="text-faint">{agent.seconds}s</span>
+            )}
             <span className="sr-only">{look.label}</span>
           </li>
         );
@@ -723,7 +749,7 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
         Assistant
         <span aria-hidden="true" className="h-px flex-1 bg-line" />
       </p>
-      <h1 className="mt-6 font-display text-3xl font-extrabold uppercase leading-[1.08] tracking-tight sm:text-4xl">
+      <h1 className="mt-6 font-display text-3xl font-semibold leading-[1.08] tracking-tight sm:text-4xl">
         Ask about the codebase <span className="text-signal">—</span>{" "}
         <span className="chrome-text">or anything else</span>
       </h1>
@@ -738,7 +764,7 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
             <button
               type="button"
               onClick={() => onPick(starter.text)}
-              className="group flex h-full w-full flex-col gap-2 border border-line bg-panel/70 p-4 text-left transition-all hover:-translate-y-0.5 hover:border-paper/40 hover:shadow-block"
+              className="glass group flex h-full w-full flex-col gap-2 rounded-glass p-4 text-left shadow-block transition-all hover:-translate-y-1 hover:shadow-float"
             >
               <span className="label flex items-center gap-2 text-muted">
                 <span className="text-signal">{String(index + 1).padStart(2, "0")}</span>
@@ -837,7 +863,7 @@ function UserMessage({
         </form>
       ) : (
         <>
-          <p className="max-w-[85%] whitespace-pre-wrap border border-line-strong bg-raised px-4 py-2.5 text-[15px] text-paper shadow-[3px_3px_0_0_#3d3d46]">
+          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-paper px-4 py-2.5 text-[15px] text-ink shadow-float">
             {message.text}
           </p>
           <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">

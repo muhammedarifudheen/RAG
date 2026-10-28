@@ -10,7 +10,7 @@ export default function Home() {
         Sources
         <span aria-hidden="true" className="h-px flex-1 bg-line" />
       </p>
-      <h1 className="mt-6 font-display text-4xl font-extrabold uppercase leading-[1.05] tracking-tight sm:text-5xl">
+      <h1 className="mt-6 font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
         Build a <span className="chrome-text">knowledge</span>{" "}
         <span className="relative inline-block">
           base

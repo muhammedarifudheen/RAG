@@ -19,7 +19,7 @@ import { useApi } from "@/lib/useApi";
 
 import { ErrorMessage, Loading, NothingIngested } from "./States";
 
-const BAR = "#79f2ff";
+const BAR = "#6b5cff";
 const RED = "#dc2626";
 const AMBER = "#f59e0b";
 const CHART_ROWS = 12;
@@ -244,7 +244,7 @@ function Bars({
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
-        <CartesianGrid horizontal={false} stroke="#2a2a30" />
+        <CartesianGrid horizontal={false} stroke="#e3e4ee" />
         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
         <YAxis
           type="category"
@@ -257,7 +257,7 @@ function Bars({
         <Tooltip
           formatter={(value) => [`${String(value)} ${unit}`, ""]}
           separator=""
-          cursor={{ fill: "rgba(238, 233, 223, 0.06)" }}
+          cursor={{ fill: "rgba(107, 92, 255, 0.06)" }}
         />
         {threshold !== undefined && threshold <= peak && (
           <ReferenceLine x={threshold} stroke={RED} strokeDasharray="4 3" />

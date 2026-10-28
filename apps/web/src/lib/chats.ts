@@ -1,4 +1,10 @@
-import type { AnswerStyle, AskResponse, AssistantMode, Attachment } from "@atlas/shared";
+import type {
+  AnswerFormat,
+  AnswerStyle,
+  AskResponse,
+  AssistantMode,
+  Attachment,
+} from "@atlas/shared";
 
 /** A file attached to a message. Images may lose `data` when storage runs short. */
 export type StoredAttachment = Attachment & { size?: number; truncated?: boolean };
@@ -27,6 +33,25 @@ export interface ChatSettings {
   instructions: string;
   /** Read each new answer aloud. */
   speak: boolean;
+  /** A preset role added before the custom instructions; "" is none. */
+  persona: string;
+  /** The longest answer in tokens; null is each model's default. */
+  maxTokens: number | null;
+  format: AnswerFormat;
+  /** The AI services that may answer; empty is all of them. */
+  services: string[];
+  /** Agents answering in parallel; null is the server's choice (up to 12). */
+  councilSize: number | null;
+  /** The service to merge the drafts; "" picks the quickest. */
+  merger: string;
+  useSources: boolean;
+  /** Knowledge-base excerpts per question. */
+  topK: number;
+  /** The relevance threshold for excerpts; null is the server's (0.3). */
+  minScore: number | null;
+  webSearch: boolean;
+  /** Show each agent's own draft under the merged answer. */
+  showDrafts: boolean;
 }
 
 export const DEFAULT_SETTINGS: ChatSettings = {
@@ -34,11 +59,73 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   temperature: null,
   instructions: "",
   speak: false,
+  persona: "",
+  maxTokens: null,
+  format: "markdown",
+  services: [],
+  councilSize: null,
+  merger: "",
+  useSources: true,
+  topK: 8,
+  minScore: null,
+  webSearch: true,
+  showDrafts: false,
 };
+
+/** Roles the assistant can take, sent before the user's own instructions. */
+export const PERSONAS: { id: string; label: string; text: string }[] = [
+  { id: "", label: "Default", text: "" },
+  {
+    id: "engineer",
+    label: "Senior engineer",
+    text: "Act as a senior software engineer: precise, pragmatic, with working code, edge cases and trade-offs.",
+  },
+  {
+    id: "teacher",
+    label: "Teacher",
+    text: "Act as a patient teacher: explain step by step from first principles, with an example and a quick check of understanding.",
+  },
+  {
+    id: "researcher",
+    label: "Researcher",
+    text: "Act as a careful researcher: separate established facts from claims, give dates and sources, and say what is uncertain.",
+  },
+  {
+    id: "analyst",
+    label: "Analyst",
+    text: "Act as a business analyst: lead with the conclusion, quantify where possible, and use tables to compare options.",
+  },
+  {
+    id: "writer",
+    label: "Writer",
+    text: "Act as a skilled writer and editor: clear, vivid and well structured prose, with a fitting tone.",
+  },
+];
+
+/** Every AI service Atlas can use; which are active depends on the server's keys. */
+export const AI_SERVICES: { id: string; label: string }[] = [
+  { id: "gemini", label: "Gemini" },
+  { id: "claude", label: "Claude" },
+  { id: "groq", label: "Groq" },
+  { id: "openrouter", label: "OpenRouter" },
+  { id: "nvidia", label: "NVIDIA" },
+  { id: "deepseek", label: "DeepSeek" },
+  { id: "mistral", label: "Mistral" },
+  { id: "cerebras", label: "Cerebras" },
+  { id: "github", label: "GitHub Models" },
+  { id: "cloudflare", label: "Cloudflare" },
+  { id: "huggingface", label: "Hugging Face" },
+  { id: "sambanova", label: "SambaNova" },
+  { id: "cohere", label: "Cohere" },
+  { id: "together", label: "Together" },
+  { id: "pollinations", label: "Pollinations" },
+  { id: "horde", label: "AI Horde" },
+];
 
 const CHATS_KEY = "atlas-chats";
 const MODE_KEY = "atlas-mode";
 const SETTINGS_KEY = "atlas-settings";
+const ACTIVE_KEY = "atlas-active-services";
 const MAX_CHATS = 50;
 
 /**
@@ -131,6 +218,25 @@ export function saveSettings(settings: ChatSettings): void {
     window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
   } catch {
     // Falls back to the defaults next time.
+  }
+}
+
+/** The services the server last said it can use (from an answer's route). */
+export function loadActiveServices(): string[] {
+  try {
+    const raw = window.localStorage.getItem(ACTIVE_KEY);
+    const active = raw ? (JSON.parse(raw) as unknown) : [];
+    return Array.isArray(active) ? active.filter((s): s is string => typeof s === "string") : [];
+  } catch {
+    return [];
+  }
+}
+
+export function saveActiveServices(services: string[]): void {
+  try {
+    window.localStorage.setItem(ACTIVE_KEY, JSON.stringify(services));
+  } catch {
+    // Only a hint in the settings.
   }
 }
 

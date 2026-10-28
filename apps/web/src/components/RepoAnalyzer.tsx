@@ -81,7 +81,7 @@ export function RepoAnalyzer() {
         Code analyser
         <span aria-hidden="true" className="h-px flex-1 bg-line" />
       </p>
-      <h1 className="mt-5 font-display text-3xl font-extrabold uppercase tracking-tight sm:text-4xl">
+      <h1 className="mt-5 font-display text-3xl font-semibold tracking-tight sm:text-4xl">
         Analyse a repository
       </h1>
       <p className="mt-3 max-w-2xl text-sm text-soft">

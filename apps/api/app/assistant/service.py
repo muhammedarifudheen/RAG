@@ -27,7 +27,15 @@ from app.analysis.repo import RepoReport, RepoTooLarge, analyse_repo, summary_fo
 from app.analysis.review import code_files, files_summary, repo_url, to_schema, wants_review
 from app.analysis.static import analyse_files
 from app.config import settings
-from app.schemas import AskResponse, Attachment, ChatTurn, CodeChunk, GeneratedImage, WebSource
+from app.schemas import (
+    AgentDraft,
+    AskResponse,
+    Attachment,
+    ChatTurn,
+    CodeChunk,
+    GeneratedImage,
+    WebSource,
+)
 from app.services.search import extract_citations
 
 from .horde import HordeTextProvider
@@ -42,6 +50,7 @@ from .images import (
     gallery,
 )
 from .prompt import (
+    FORMATS,
     IMAGE_SYSTEM,
     MERGE,
     REVIEW,
@@ -88,7 +97,15 @@ class Options:
     style: str = "balanced"
     temperature: float | None = None
     instructions: str = ""
-    task: str = "answer"  # or "image"
+    task: str = "answer"  # or "image", "review"
+    services: Sequence[str] = ()  # only these answer; empty is all
+    council_size: int | None = None
+    merger: str | None = None
+    min_score: float | None = None
+    web_search: bool = True
+    max_tokens: int | None = None
+    format: str = "markdown"  # or "plain", "json"
+    include_drafts: bool = False
 
 
 # Services too slow to wait for when a quick reply is all that is needed.
@@ -249,8 +266,18 @@ class Assistant:
                     return
         top = chunks[0].score if chunks else None
         route: Route = "review" if review else classify(question, top, images=images)
-        shown = [c for c in chunks if c.score >= self.min_score]
-        order = provider_order(mode, route, self.best_order, set(self.providers))
+        min_score = self.min_score if options.min_score is None else options.min_score
+        shown = [c for c in chunks if c.score >= min_score]
+        available = set(self.providers)
+        if options.services:
+            available &= set(options.services)
+            if not available:
+                yield (
+                    "error",
+                    {"status": 422, "detail": "None of the chosen AI services is available here."},
+                )
+                return
+        order = provider_order(mode, route, self.best_order, available)
         if route == "current":
             # Recent events need a web search: services that can search right now first.
             order.sort(
@@ -262,7 +289,7 @@ class Assistant:
             return
 
         found: list[WebResult] = []
-        if self.web is not None and route not in ("chat", "review"):
+        if self.web is not None and options.web_search and route not in ("chat", "review"):
             yield "searching", {}
             previous = next((t.content for t in reversed(history) if t.role == "user"), None)
             started = time.monotonic()
@@ -274,7 +301,11 @@ class Assistant:
         system = system_prompt(style=options.style, instructions=options.instructions)
         if review:
             system = f"{system}\n\n{REVIEW}"
-        tuning = {} if options.temperature is None else {"temperature": options.temperature}
+        if FORMATS.get(options.format):
+            system = f"{system}\n\n{FORMATS[options.format]}"
+        tuning: dict = {} if options.temperature is None else {"temperature": options.temperature}
+        if options.max_tokens:
+            tuning["max_tokens"] = options.max_tokens
         today = datetime.now(UTC).date()
         findings = review.get("text", "")
         turns = conversation(
@@ -286,7 +317,8 @@ class Assistant:
             analysis=findings,
         )
         panel = self._candidates(order, route, images)
-        if self.council_size > 1 and len(panel) > 1:
+        size = options.council_size or self.council_size
+        if size > 1 and len(panel) > 1:
             # The merger needs the web results' links, not their text: a smaller request
             # is quicker and fits free per-minute limits.
             merge_base = conversation(
@@ -310,6 +342,9 @@ class Assistant:
                 merge_base,
                 # A review's drafts carry code blocks with fixes: keep more of each.
                 draft_limit=6000 if review else 3500,
+                size=size,
+                merger=options.merger,
+                keep_drafts=options.include_drafts,
             )
             return
         failures: list[str] = []
@@ -402,11 +437,16 @@ class Assistant:
         searched: Sequence[dict[str, str]] = (),
         merge_base: list[Turn] | None = None,
         draft_limit: int = 3500,
+        size: int | None = None,
+        merger: str | None = None,
+        keep_drafts: bool = False,
     ) -> Iterator[Event]:
-        """Seats up to `council_size` agents, collects their drafts, then merges them."""
+        """Seats up to `size` agents, collects their drafts, then merges them; `merger`
+        names the service to merge first, if it answered."""
+        size = size or self.council_size
         results: queue.Queue = queue.Queue()
-        seats = candidates[: self.council_size]
-        reserve = candidates[self.council_size :]
+        seats = candidates[:size]
+        reserve = candidates[size:]
 
         def run(agent: int, name: str, model: str, pause: float = 0.0) -> None:
             if pause:
@@ -522,6 +562,7 @@ class Assistant:
                     only.suggestions,
                     sources,
                     drafts,
+                    keep_drafts,
                 ).model_dump(),
             )
             return
@@ -541,6 +582,9 @@ class Assistant:
             )
             fast += [(d.service, d.seat) for d in quickest if (d.service, d.seat) not in fast]
         merge_order = fast + [p for p in merge_order if p not in fast]
+        if merger:
+            chosen = [p for p in merge_order if p[0] == merger and p in answered]
+            merge_order = chosen + [p for p in merge_order if p not in chosen]
         for name, model in merge_order:
             provider = self.providers[name]
             outcome = Outcome()
@@ -585,6 +629,7 @@ class Assistant:
                     suggestions or drafts[0].suggestions,
                     sources + outcome.web_sources,
                     drafts,
+                    keep_drafts,
                 ).model_dump(),
             )
             return
@@ -605,6 +650,7 @@ class Assistant:
                 best.suggestions,
                 sources,
                 drafts,
+                keep_drafts,
             ).model_dump(),
         )
 
@@ -682,6 +728,7 @@ class Assistant:
         suggestions: list[str],
         sources: list[dict[str, str]],
         drafts: Sequence[Draft],
+        keep_drafts: bool = False,
     ) -> AskResponse:
         return AskResponse(
             question=question,
@@ -695,6 +742,14 @@ class Assistant:
             suggestions=suggestions,
             web_sources=_unique_sources(sources),
             agents=[f"{d.provider} · {d.model}" for d in drafts],
+            drafts=[
+                AgentDraft(
+                    agent=f"{d.provider} · {d.model}", seconds=round(d.seconds, 1), answer=d.answer
+                )
+                for d in drafts
+            ]
+            if keep_drafts
+            else [],
         )
 
     def _attempts(self, order: Sequence[str], route: Route) -> list[tuple[str, str]]:

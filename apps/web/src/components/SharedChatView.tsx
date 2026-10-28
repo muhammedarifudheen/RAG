@@ -62,7 +62,7 @@ export function SharedChatView() {
           {new Date(chat.created_at).toLocaleDateString(undefined, { dateStyle: "medium" })}
           <span aria-hidden="true" className="h-px flex-1 bg-line" />
         </p>
-        <h1 className="mt-5 font-display text-2xl font-extrabold uppercase leading-tight tracking-tight">
+        <h1 className="mt-5 font-display text-2xl font-semibold leading-tight tracking-tight">
           {chat.title}
         </h1>
         <div className="mt-4 flex flex-wrap gap-3">

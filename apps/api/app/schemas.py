@@ -94,6 +94,38 @@ class AskRequest(BaseModel):
         max_length=4000,
         description="The user's standing instructions to the assistant.",
     )
+    # Models and the council.
+    services: list[str] = Field(
+        default=[],
+        max_length=20,
+        description="Only these AI services answer (gemini, groq, openrouter, nvidia, …); "
+        "empty is every configured one.",
+    )
+    council_size: int | None = Field(
+        default=None, ge=1, le=12, description="Agents answering in parallel; 1 is one model."
+    )
+    merger: str | None = Field(
+        default=None,
+        max_length=40,
+        description="The service that merges the drafts, if it answered.",
+    )
+    # Retrieval.
+    use_sources: bool = Field(default=True, description="Search the knowledge base.")
+    min_score: float | None = Field(
+        default=None, ge=0, le=1, description="Excerpts less similar than this are left out."
+    )
+    web_search: bool = Field(default=True, description="Search the web before answering.")
+    # Generation.
+    max_tokens: int | None = Field(
+        default=None, ge=64, le=16000, description="The longest answer, in tokens."
+    )
+    format: Literal["markdown", "plain", "json"] = Field(
+        default="markdown", description="How the answer is written."
+    )
+    # Transparency.
+    include_drafts: bool = Field(
+        default=False, description="Return each council agent's own draft with the answer."
+    )
     task: Literal["answer", "image", "review"] = Field(
         default="answer",
         description="`image` draws a picture of the question; `review` runs the code analyser "
@@ -121,6 +153,15 @@ class AskRequest(BaseModel):
             or self.temperature is not None
             or self.instructions.strip()
             or self.task != "answer"
+            or self.services
+            or self.council_size is not None
+            or self.merger
+            or not self.use_sources
+            or self.min_score is not None
+            or not self.web_search
+            or self.max_tokens is not None
+            or self.format != "markdown"
+            or self.include_drafts
         )
 
 
@@ -148,6 +189,12 @@ class Citation(BaseModel):
 class WebSource(BaseModel):
     title: str
     url: str
+
+
+class AgentDraft(BaseModel):
+    agent: str = Field(description='"Service · model".')
+    seconds: float
+    answer: str
 
 
 class CodeFinding(BaseModel):
@@ -229,6 +276,9 @@ class AskResponse(BaseModel):
     )
     analysis: CodeAnalysis | None = Field(
         default=None, description="For a code review: what the code analyser found."
+    )
+    drafts: list[AgentDraft] = Field(
+        default=[], description="Each council agent's own draft, when include_drafts was set."
     )
 
 

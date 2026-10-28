@@ -11,50 +11,45 @@ const LINKS = [
   { href: "/analyze", label: "Analyse" },
 ];
 
+/** A glass bar floating over the page. */
 export function Nav() {
   const pathname = usePathname();
 
   return (
-    <header className="relative z-20 border-b border-line bg-ink/95 backdrop-blur">
-      <nav aria-label="Main" className="flex h-14 items-stretch gap-2 pr-4">
-        {/* The mark: a red slab cut on the diagonal, chrome lettering, an acid star. */}
+    <header className="relative z-20 px-3 pt-3">
+      <nav
+        aria-label="Main"
+        className="glass mx-auto flex h-12 max-w-6xl items-center gap-1 rounded-full pl-2 pr-3 shadow-float"
+      >
         <Link
           href="/chat"
-          className="relative flex items-center gap-2 pl-4 pr-8"
+          className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3"
           aria-label="Atlas home"
         >
+          {/* The mark: a soft orb of the accent colours. */}
           <span
             aria-hidden="true"
-            className="absolute inset-y-0 left-0 w-full bg-signal [clip-path:polygon(0_0,100%_0,calc(100%-18px)_100%,0_100%)]"
+            className="h-7 w-7 rounded-full bg-[conic-gradient(from_200deg,#6b5cff,#3aa0ff,#12b88f,#ffb4c8,#6b5cff)] shadow-[0_0_18px_-2px_rgba(107,92,255,0.6)]"
           />
-          <span className="relative font-display text-[17px] font-extrabold tracking-[0.08em] text-ink">
-            ATLAS
-          </span>
-          <span aria-hidden="true" className="relative text-sm text-ink">
-            ✦
+          <span className="chrome-text font-display text-[17px] font-semibold tracking-tight">
+            atlas
           </span>
         </Link>
 
-        <ul className="flex items-stretch overflow-x-auto">
-          {LINKS.map(({ href, label }, index) => {
+        <ul className="flex items-center gap-0.5 overflow-x-auto">
+          {LINKS.map(({ href, label }) => {
             const active = pathname === href;
             return (
               <li key={href} className="flex">
                 <Link
                   href={href}
                   aria-current={active ? "page" : undefined}
-                  className={`group flex items-center gap-1.5 border-b-2 px-3 font-mono text-[11px] uppercase tracking-[0.16em] transition-colors ${
+                  className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                     active
-                      ? "border-signal text-paper"
-                      : "border-transparent text-muted hover:border-line-strong hover:text-paper"
+                      ? "bg-paper text-ink shadow-[0_6px_16px_-8px_rgba(22,24,39,0.5)]"
+                      : "text-muted hover:bg-white/70 hover:text-paper"
                   }`}
                 >
-                  <span
-                    aria-hidden="true"
-                    className={active ? "text-signal" : "text-faint group-hover:text-muted"}
-                  >
-                    {String(index + 1).padStart(2, "0")}
-                  </span>
                   {label}
                 </Link>
               </li>
@@ -62,7 +57,7 @@ export function Nav() {
           })}
         </ul>
 
-        <p className="label ml-auto hidden items-center gap-2 text-muted md:flex">
+        <p className="ml-auto hidden items-center gap-2 text-[12px] text-muted md:flex">
           <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-acid" />
           Multi-model AI
         </p>

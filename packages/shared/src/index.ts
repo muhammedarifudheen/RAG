@@ -64,6 +64,32 @@ export interface AskRequest {
   instructions?: string;
   /** "image" draws a picture of the question. */
   task?: "answer" | "image" | "review";
+  /** Only these AI services answer; empty or absent is every configured one. */
+  services?: string[];
+  /** Agents answering in parallel (1-12); 1 is one model. */
+  council_size?: number;
+  /** The service that merges the drafts, if it answered. */
+  merger?: string;
+  /** Search the knowledge base (default true). */
+  use_sources?: boolean;
+  /** Excerpts less similar than this (0-1) are left out. */
+  min_score?: number;
+  /** Search the web before answering (default true). */
+  web_search?: boolean;
+  /** The longest answer, in tokens. */
+  max_tokens?: number;
+  format?: AnswerFormat;
+  /** Return each council agent's own draft. */
+  include_drafts?: boolean;
+}
+
+export type AnswerFormat = "markdown" | "plain" | "json";
+
+export interface AgentDraft {
+  /** "Service · model". */
+  agent: string;
+  seconds: number;
+  answer: string;
 }
 
 /** POST /attachments: a document's text, read for attaching to a question. */
@@ -142,6 +168,8 @@ export interface AskResponse {
   agents?: string[];
   /** For a code review: what the code analyser found. */
   analysis?: CodeAnalysis | null;
+  /** Each council agent's own draft, when include_drafts was set. */
+  drafts?: AgentDraft[];
 }
 
 // --- The code analyser (a review's `analysis`) --------------------------------

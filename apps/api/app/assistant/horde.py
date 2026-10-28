@@ -75,10 +75,14 @@ class HordeTextProvider:
         *,
         web: bool,
         temperature: float | None = None,
+        max_tokens: int | None = None,
     ) -> Iterator[str]:
         if any(t.images for t in turns):
             raise ProviderError("AI Horde's text models cannot see images.")
-        params: dict = {"max_length": self.max_tokens, "max_context_length": 8192}
+        params: dict = {
+            "max_length": min(max_tokens or self.max_tokens, self.max_tokens),
+            "max_context_length": 8192,
+        }
         if temperature is not None:
             params["temperature"] = max(0.01, temperature)
         headers = horde_headers(self.api_key)

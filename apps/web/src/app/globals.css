@@ -4,58 +4,161 @@
 
 /* The palette, for the few places outside Tailwind classes (charts, graph, Markdown). */
 :root {
-  color-scheme: dark;
-  --ink: #0a0a0b;
-  --panel: #111113;
-  --raised: #1b1b1f;
-  --line: #2a2a30;
-  --paper: #eee9df;
-  --muted: #8b8891;
-  --signal: #ff3d1f;
-  --acid: #d7ff3b;
-  --cyan: #79f2ff;
+  color-scheme: light;
+  --ink: #f6f6fb;
+  --panel: #ffffff;
+  --raised: #f0f1f8;
+  --line: #e3e4ee;
+  --paper: #161827;
+  --soft: #3d4057;
+  --muted: #6b6f86;
+  --signal: #6b5cff;
+  --acid: #0fa985;
+  --cyan: #0a7fb8;
+  --radius: 14px;
+  --glass: rgba(255, 255, 255, 0.72);
+}
+
+html {
+  background-color: var(--ink);
 }
 
 body {
-  background-color: var(--ink);
-  /* A faint dot grid, like graph paper on an old screen. */
-  background-image: radial-gradient(rgba(238, 233, 223, 0.05) 1px, transparent 1px);
-  background-size: 22px 22px;
+  position: relative;
+  isolation: isolate;
+  background-color: transparent;
+}
+
+/* Liquid light: pastel blobs drifting slowly behind everything… */
+body::before {
+  position: fixed;
+  z-index: -2;
+  inset: -20%;
+  background:
+    radial-gradient(38% 34% at 18% 22%, rgba(186, 172, 255, 0.55), transparent 70%),
+    radial-gradient(32% 30% at 82% 18%, rgba(158, 222, 255, 0.5), transparent 70%),
+    radial-gradient(36% 34% at 72% 78%, rgba(160, 238, 210, 0.45), transparent 70%),
+    radial-gradient(30% 28% at 24% 82%, rgba(255, 205, 214, 0.4), transparent 70%);
+  filter: blur(30px);
+  content: "";
+  animation: drift 32s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* …and soft waves rolling along the bottom of the screen. */
+body::after {
+  position: fixed;
+  z-index: -1;
+  inset: auto 0 0 0;
+  height: 46vh;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 400' preserveAspectRatio='none'%3E%3Cpath d='M0 220 C 240 150 420 300 720 230 S 1200 140 1440 210 L1440 400 L0 400 Z' fill='%23b9acff' fill-opacity='0.16'/%3E%3Cpath d='M0 270 C 300 210 520 340 820 270 S 1260 200 1440 260 L1440 400 L0 400 Z' fill='%2392dcff' fill-opacity='0.14'/%3E%3Cpath d='M0 320 C 260 280 560 380 900 320 S 1300 280 1440 320 L1440 400 L0 400 Z' fill='%2390e8c8' fill-opacity='0.14'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-size: 200% 100%;
+  content: "";
+  animation: waves 28s ease-in-out infinite alternate;
+  pointer-events: none;
+}
+
+@keyframes drift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  33% {
+    transform: translate3d(3%, -2%, 0) scale(1.05);
+  }
+  66% {
+    transform: translate3d(-2%, 3%, 0) scale(0.97);
+  }
+}
+
+@keyframes waves {
+  from {
+    background-position: 0% 100%;
+  }
+  to {
+    background-position: 100% 100%;
+  }
 }
 
 ::selection {
-  background: var(--acid);
-  color: var(--ink);
+  background: rgba(107, 92, 255, 0.22);
+  color: var(--paper);
 }
 
 * {
-  scrollbar-color: #3d3d46 transparent;
+  scrollbar-color: #c9cbdb transparent;
   scrollbar-width: thin;
 }
 
 :focus-visible {
-  outline: 2px solid var(--acid);
+  outline: 2px solid var(--signal);
   outline-offset: 2px;
 }
 
+/* Everything soft-edged: controls, cards, dialogs and bordered boxes. Zero specificity,
+   so a component's own rounded-* class still wins. */
+:where(
+    button,
+    input,
+    textarea,
+    select,
+    summary,
+    kbd,
+    dialog,
+    details,
+    article,
+    table,
+    [role="status"],
+    [role="alert"],
+    [role="region"],
+    [role="dialog"],
+    a[class~="border"],
+    li[class~="border"],
+    span[class~="border"],
+    div[class~="border"],
+    section[class~="border"],
+    form[class~="border"],
+    p[class~="border"],
+    label[class~="border"],
+    ul[class~="border"],
+    ol[class~="border"],
+    pre
+  ) {
+  border-radius: var(--radius);
+}
+
 @layer components {
-  /* Y2K chrome lettering. */
+  /* The gradient lettering of headings and the mark. */
   .chrome-text {
-    background: linear-gradient(180deg, #ffffff 0%, #c9ccd3 38%, #6d717a 52%, #e9ebef 70%, #9aa0aa 100%);
+    background: linear-gradient(100deg, #6b5cff 0%, #3aa0ff 45%, #12b88f 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
   }
-  /* Small monospace caps, for labels and the numbering of sections. */
+  /* Small caps for labels and the numbering of sections. */
   .label {
     font-family: var(--font-mono), ui-monospace, monospace;
     font-size: 10.5px;
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
-  /* A Constructivist slab: a red bar along the left edge. */
+  /* A floating glass card. */
   .slab {
-    box-shadow: inset 3px 0 0 var(--signal);
+    border: 1px solid rgba(255, 255, 255, 0.9);
+    border-radius: 22px;
+    background: var(--glass);
+    box-shadow:
+      0 24px 60px -30px rgba(76, 64, 190, 0.35),
+      0 6px 18px -10px rgba(22, 24, 39, 0.1);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
+  }
+  .glass {
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    background: var(--glass);
+    -webkit-backdrop-filter: blur(18px) saturate(1.4);
+    backdrop-filter: blur(18px) saturate(1.4);
   }
 }
 
@@ -67,7 +170,7 @@ body {
   margin-top: 0.8rem;
 }
 .markdown ul {
-  list-style: square;
+  list-style: disc;
   padding-left: 1.25rem;
 }
 .markdown ul li::marker {
@@ -90,9 +193,9 @@ body {
 .markdown h3,
 .markdown h4 {
   font-family: var(--font-display), sans-serif;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: #fff;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--paper);
 }
 .markdown h1 {
   font-size: 1.3rem;
@@ -104,17 +207,17 @@ body {
   font-size: 1rem;
 }
 .markdown strong {
-  color: #fff;
+  color: var(--paper);
   font-weight: 650;
 }
 .markdown code {
   border: 1px solid var(--line);
-  border-radius: 0.25rem;
+  border-radius: 6px;
   background: var(--raised);
-  padding: 0.08rem 0.3rem;
+  padding: 0.08rem 0.35rem;
   font-family: var(--font-mono), monospace;
   font-size: 0.84em;
-  color: var(--acid);
+  color: #4b3fd9;
 }
 .markdown pre {
   overflow-x: auto;
@@ -131,7 +234,7 @@ body {
 .markdown a {
   color: var(--cyan);
   text-decoration: underline;
-  text-decoration-color: rgba(121, 242, 255, 0.4);
+  text-decoration-color: rgba(10, 127, 184, 0.35);
   text-underline-offset: 3px;
 }
 .markdown a:hover {
@@ -139,8 +242,9 @@ body {
 }
 .markdown blockquote {
   border-left: 3px solid var(--signal);
+  border-radius: 0;
   padding-left: 0.9rem;
-  color: #c3beb4;
+  color: var(--soft);
 }
 .markdown hr {
   border-color: var(--line);
@@ -148,21 +252,23 @@ body {
 .markdown table {
   display: block;
   overflow-x: auto;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   font-size: 0.92em;
 }
 .markdown th,
 .markdown td {
-  border: 1px solid var(--line);
-  padding: 0.35rem 0.65rem;
+  border-bottom: 1px solid var(--line);
+  padding: 0.45rem 0.75rem;
   text-align: left;
 }
 .markdown th {
   background: var(--raised);
   font-family: var(--font-mono), monospace;
-  font-size: 0.8em;
+  font-size: 0.78em;
   letter-spacing: 0.06em;
   text-transform: uppercase;
+  color: var(--muted);
 }
 .markdown .katex-display {
   overflow-x: auto;
@@ -170,7 +276,11 @@ body {
   padding: 0.25rem 0;
 }
 
-/* Shiki output in the code panel: one .line span per source line. */
+/* Shiki output in the code panel (a dark theme): one .line span per source line. */
+.code-view {
+  background: #101010;
+  color: #e6e6e6;
+}
 .code-view pre {
   margin: 0;
   min-width: max-content;
@@ -197,31 +307,32 @@ body {
   user-select: none;
 }
 .code-view .line.cited {
-  background: rgba(255, 61, 31, 0.16);
-  box-shadow: inset 3px 0 0 var(--signal);
+  background: rgba(107, 92, 255, 0.22);
+  box-shadow: inset 3px 0 0 #8f84ff;
 }
 
 /* File nodes and dependency edges on the graph page. */
 .react-flow__node.file-node {
   width: auto;
   border: 1px solid #cbd5e1;
-  border-radius: 0;
+  border-radius: 12px;
   background: var(--panel);
-  padding: 0.4rem 0.7rem;
+  padding: 0.4rem 0.75rem;
   color: var(--paper);
   font-family: var(--font-mono), monospace;
   font-size: 11.5px;
+  box-shadow: 0 10px 24px -16px rgba(76, 64, 190, 0.4);
 }
 .react-flow__node.file-node.in-cycle {
   border: 2px solid #dc2626;
-  background: #2a0f0c;
-  color: #ffb4a6;
+  background: #fff1f0;
+  color: #b42318;
 }
 .react-flow__node.file-node.selected {
-  box-shadow: 4px 4px 0 0 var(--acid);
+  box-shadow: 0 0 0 3px rgba(107, 92, 255, 0.35);
 }
 .react-flow__background {
-  background: var(--ink);
+  background: transparent;
 }
 .react-flow__controls-button {
   border-bottom-color: var(--line) !important;
@@ -232,6 +343,7 @@ body {
   background: var(--raised) !important;
 }
 .react-flow__minimap {
+  border-radius: 14px;
   background: var(--panel) !important;
 }
 .react-flow__attribution {
@@ -249,6 +361,7 @@ body {
 }
 .recharts-default-tooltip {
   border-color: var(--line) !important;
+  border-radius: 12px;
   background: var(--panel) !important;
   color: var(--paper);
 }

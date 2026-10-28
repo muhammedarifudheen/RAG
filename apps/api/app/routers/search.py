@@ -112,13 +112,25 @@ def ask(
         # previous question too.
         previous = next((t.content for t in reversed(body.history) if t.role == "user"), "")
         query = f"{previous[:500]}\n{question}" if previous else question
-        chunks = search_symbols(db, embedder, query, body.top_k, settings.snippet_max_lines)
+        chunks = (
+            search_symbols(db, embedder, query, body.top_k, settings.snippet_max_lines)
+            if body.use_sources
+            else []
+        )
         options = Options(
             attachments=body.attachments,
             style=body.style,
             temperature=body.temperature,
             instructions=body.instructions,
             task=body.task,
+            services=tuple(body.services),
+            council_size=body.council_size,
+            merger=body.merger,
+            min_score=body.min_score,
+            web_search=body.web_search,
+            max_tokens=body.max_tokens,
+            format=body.format,
+            include_drafts=body.include_drafts,
         )
         if streaming:
             events = assistant.respond(question, chunks, body.history, mode, options)
