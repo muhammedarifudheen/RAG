@@ -140,7 +140,8 @@ class AskRequest(BaseModel):
     strict: bool = Field(
         default=False,
         description="Strict sources only: answer from the knowledge base (and attached files) "
-        "alone, citing every claim, or say it is not there. No web search, no general knowledge.",
+        "alone, citing every sentence of fact, flagging conflicts and saying what is missing. "
+        "No web search, no general knowledge.",
     )
     # Generation.
     max_tokens: int | None = Field(

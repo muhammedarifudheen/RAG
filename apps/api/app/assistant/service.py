@@ -518,6 +518,7 @@ class Assistant:
             options.attachments,
             web=web_block(found, today) if found else "",
             analysis=findings,
+            strict=options.strict and not review,
         )
         panel = self._candidates(order, route, images)
         size = options.council_size or self.council_size
@@ -531,6 +532,7 @@ class Assistant:
                 options.attachments,
                 web=web_block(found, today, brief=True) if found else "",
                 analysis=findings,
+                strict=options.strict and not review,
             )
             yield from self._council(
                 question,

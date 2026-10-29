@@ -205,10 +205,10 @@ def test_ask_gives_the_model_only_the_excerpts_the_judge_kept(client):
     app.dependency_overrides[get_assistant] = lambda: Assistant([recording], reranker=True)
     try:
         judged = client.post(
-            "/ask", json={"question": "How are user names formatted?", "style": "concise"}
+            "/ask", json={"question": "format name of a user", "style": "concise"}
         ).json()
         off = client.post(
-            "/ask", json={"question": "How are user names formatted?", "rerank": False}
+            "/ask", json={"question": "format name of a user", "rerank": False}
         ).json()
     finally:
         app.dependency_overrides.pop(get_assistant, None)

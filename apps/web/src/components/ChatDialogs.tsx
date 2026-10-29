@@ -533,7 +533,7 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
         <h3 className="label text-muted">Your knowledge base</h3>
         <Toggle
           label="Strict sources only"
-          hint="Answer only from your sources and attached files, citing every claim; otherwise say it is not in the knowledge base. No web, no general knowledge."
+          hint="Answer only from your sources and attached files, with a citation ending every sentence of fact; conflicts between sources are flagged, and when the sources fall short it says exactly what is missing. No web, no general knowledge."
           checked={settings.strict}
           onChange={(strict) => set({ strict })}
         />

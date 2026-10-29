@@ -190,8 +190,10 @@ def test_strict_mode_answers_from_the_sources_with_the_users_rules():
     )
     system = gemini.calls[0].system
     assert system.startswith("You are Atlas, a retrieval-grounded research assistant.")
-    assert "Answer ONLY from the retrieved context" in system
-    assert 'path="itsdangerous/signer.py" lines="40-52"' in gemini.calls[0].turns[-1].content
+    message = gemini.calls[0].turns[-1].content
+    assert message.startswith("Answer the question using ONLY the context below.")
+    assert "[itsdangerous/signer.py:40-52]\n40| def sign(value):" in message
+    assert message.endswith("Do not speculate.\n\nAnswer:")
     assert searcher.queries == []  # never the web
     assert events[0][1]["route"] == "sources"
     assert events[-1][1]["answer"] == "It signs [itsdangerous/signer.py:40-52]."
@@ -215,11 +217,25 @@ def test_strict_mode_keeps_the_users_instructions_after_the_rules():
     gemini = Agent("gemini", {"g1": "x"})
     ask(Assistant([gemini]), "q", [chunk_about()], strict=True, instructions="Reply in French.")
     system = gemini.calls[0].system
-    assert system.index("RULES:") < system.index("Reply in French.")
+    assert system.index("follow them exactly") < system.index("Reply in French.")
 
 
 def test_strict_sends_the_question_to_the_assistant():
     assert AskRequest(question="q", strict=True).for_assistant
+
+
+def test_strict_context_is_blocks_of_source_id_and_lines_then_text():
+    from app.assistant.prompt import strict_message
+    from app.schemas import Attachment
+
+    notes = Attachment(name="notes.md", kind="text", text="Keys rotate {weekly}.\nSee ops.")
+    message = strict_message("How often do keys rotate?", [chunk_about()], [notes])
+    assert (
+        "Context (each block is [source_id:lines] then text):\n[itsdangerous/signer.py" in message
+    )
+    assert "[notes.md:1-2]\n1| Keys rotate {weekly}.\n2| See ops." in message
+    assert "Question: How often do keys rotate?\n" in message
+    assert "(nothing was retrieved)" in strict_message("q", [])
 
 
 def test_full_width_citation_brackets_become_citations():
