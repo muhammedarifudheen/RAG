@@ -22,6 +22,10 @@ class CodeChunk(BaseModel):
     citation: str = Field(
         description="Reference covering the snippet.", examples=["[pkg/models.py:16-17]"]
     )
+    relevance: int | None = Field(
+        default=None, description="The relevance judge's score, 0-10, when it judged this."
+    )
+    relevance_reason: str | None = Field(default=None, description="The judge's one-line reason.")
 
 
 class SearchResponse(BaseModel):
@@ -120,6 +124,14 @@ class AskRequest(BaseModel):
         description="Have a fast model plan several knowledge-base searches (the question, its "
         "keywords, a hypothetical answer, a variant) and fuse their results.",
     )
+    rerank: bool = Field(
+        default=True,
+        description="Have fast models judge each candidate excerpt's relevance (0-10), then "
+        "order the excerpts by that score and leave out those under `rerank_cutoff`.",
+    )
+    rerank_cutoff: int | None = Field(
+        default=None, ge=0, le=10, description="Excerpts the judge scores below this are left out."
+    )
     strict: bool = Field(
         default=False,
         description="Strict sources only: answer from the knowledge base (and attached files) "
@@ -170,6 +182,8 @@ class AskRequest(BaseModel):
             or self.min_score is not None
             or not self.web_search
             or not self.plan_queries
+            or not self.rerank
+            or self.rerank_cutoff is not None
             or self.strict
             or self.max_tokens is not None
             or self.format != "markdown"
@@ -201,6 +215,13 @@ class Citation(BaseModel):
 class WebSource(BaseModel):
     title: str
     url: str
+
+
+class Reranking(BaseModel):
+    candidates: int = Field(description="Excerpts the search found.")
+    judged: int = Field(description="Those the relevance judge scored in time.")
+    kept: int = Field(description="Those given to the model.")
+    cutoff: int = Field(description="Judged excerpts scoring below this were left out.")
 
 
 class AgentDraft(BaseModel):
@@ -294,6 +315,9 @@ class AskResponse(BaseModel):
     )
     search_queries: list[str] = Field(
         default=[], description="The knowledge-base searches the query planner ran."
+    )
+    reranking: Reranking | None = Field(
+        default=None, description="What the relevance judge did with the excerpts."
     )
 
 

@@ -161,6 +161,13 @@ export function Answer({ response, onCite }: Props) {
         <details className="mt-4 border-t border-line pt-3 text-xs text-soft">
           <summary className="cursor-pointer select-none text-muted hover:text-paper">
             {response.chunks.length} code excerpts were given to {response.model}
+            {response.reranking && response.reranking.judged > 0 && (
+              <>
+                {" "}
+                · the judge scored {response.reranking.judged} of{" "}
+                {response.reranking.candidates}, kept those ≥ {response.reranking.cutoff}/10
+              </>
+            )}
           </summary>
           <ul className="mt-2 space-y-1">
             {response.chunks.map((chunk) => (
@@ -182,6 +189,17 @@ export function Answer({ response, onCite }: Props) {
                   <span className="text-muted">
                     {chunk.kind} {chunk.name} · {chunk.score.toFixed(2)}
                   </span>
+                  {chunk.relevance !== undefined && chunk.relevance !== null && (
+                    <span
+                      className="ml-1 rounded-full bg-acid/10 px-1.5 text-acid"
+                      title={chunk.relevance_reason ?? undefined}
+                    >
+                      relevance {chunk.relevance}/10
+                    </span>
+                  )}
+                  {chunk.relevance_reason && (
+                    <span className="block pl-4 text-faint">{chunk.relevance_reason}</span>
+                  )}
                 </button>
               </li>
             ))}

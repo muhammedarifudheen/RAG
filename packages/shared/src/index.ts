@@ -25,6 +25,10 @@ export interface CodeChunk {
   snippet_end_line: number;
   truncated: boolean;
   citation: string;
+  /** The relevance judge's score, 0-10, when it judged this excerpt. */
+  relevance?: number | null;
+  /** The judge's one-line reason. */
+  relevance_reason?: string | null;
 }
 
 export interface SearchResponse {
@@ -85,6 +89,21 @@ export interface AskRequest {
   strict?: boolean;
   /** Plan several knowledge-base searches (keywords, a hypothetical answer…); default true. */
   plan_queries?: boolean;
+  /** Judge each excerpt's relevance (0-10) and rerank; default true. */
+  rerank?: boolean;
+  /** Judged excerpts scoring below this are left out; unset is the server's (4). */
+  rerank_cutoff?: number;
+}
+
+/** What the relevance judge did with the excerpts. */
+export interface Reranking {
+  /** Excerpts the search found. */
+  candidates: number;
+  /** Those the judge scored in time. */
+  judged: number;
+  /** Those given to the model. */
+  kept: number;
+  cutoff: number;
 }
 
 export type AnswerFormat = "markdown" | "plain" | "json";
@@ -176,6 +195,8 @@ export interface AskResponse {
   drafts?: AgentDraft[];
   /** The knowledge-base searches the query planner ran. */
   search_queries?: string[];
+  /** What the relevance judge did with the excerpts. */
+  reranking?: Reranking | null;
 }
 
 // --- The code analyser (a review's `analysis`) --------------------------------

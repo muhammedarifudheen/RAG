@@ -248,6 +248,8 @@ export function Chat() {
           includeDrafts: settings.showDrafts,
           strict: settings.strict,
           planQueries: settings.planQueries,
+          rerank: settings.rerank,
+          rerankCutoff: settings.rerankCutoff,
         },
         {
           onDelta: (piece) => setStreaming((current) => (current ?? "") + piece),

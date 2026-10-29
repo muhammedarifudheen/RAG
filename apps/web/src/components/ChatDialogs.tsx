@@ -526,6 +526,7 @@ function ModelsTab({ settings, set }: { settings: ChatSettings; set: Patch }) {
 /** Retrieval-augmented generation: the knowledge base and the web. */
 function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch }) {
   const minScore = settings.minScore ?? 0.3;
+  const rerankCutoff = settings.rerankCutoff ?? 4;
   return (
     <>
       <section>
@@ -549,6 +550,25 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
             checked={settings.planQueries}
             onChange={(planQueries) => set({ planQueries })}
           />
+          <Toggle
+            label="Judge each excerpt's relevance"
+            hint="Fast models score every candidate excerpt 0-10 for the question; the best come first and those under the cut-off are left out."
+            checked={settings.rerank}
+            onChange={(rerank) => set({ rerank })}
+          />
+          <div className={settings.rerank ? "" : "pointer-events-none opacity-40"}>
+            <Slider
+              id="rerank-cutoff"
+              label="Judge's cut-off"
+              value={rerankCutoff}
+              shown={`${rerankCutoff}/10`}
+              min={0}
+              max={10}
+              step={1}
+              onChange={(value) => set({ rerankCutoff: value === 4 ? null : value })}
+              ends={["Keep more", "Only direct answers"]}
+            />
+          </div>
           <Slider
             id="top-k"
             label="Excerpts per question (top-k)"
@@ -591,6 +611,8 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
             webSearch: DEFAULT_SETTINGS.webSearch,
             strict: DEFAULT_SETTINGS.strict,
             planQueries: DEFAULT_SETTINGS.planQueries,
+            rerank: DEFAULT_SETTINGS.rerank,
+            rerankCutoff: DEFAULT_SETTINGS.rerankCutoff,
           })
         }
         className="mt-4 text-xs text-cyan hover:underline"

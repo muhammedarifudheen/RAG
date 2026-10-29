@@ -54,6 +54,10 @@ export interface ChatSettings {
   strict: boolean;
   /** Plan several searches per question (keywords, a hypothetical answer, a variant). */
   planQueries: boolean;
+  /** Fast models judge each excerpt's relevance; the best are kept, the weak left out. */
+  rerank: boolean;
+  /** The judge's cut-off, 0-10; null is the server's (4). */
+  rerankCutoff: number | null;
   /** Show each agent's own draft under the merged answer. */
   showDrafts: boolean;
 }
@@ -75,6 +79,8 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   webSearch: true,
   strict: false,
   planQueries: true,
+  rerank: true,
+  rerankCutoff: null,
   showDrafts: false,
 };
 

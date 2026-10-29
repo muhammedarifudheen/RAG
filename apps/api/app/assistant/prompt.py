@@ -111,6 +111,23 @@ Return JSON: {"queries": ["...", "...", "...", "..."]}
 Do not answer the question. Only produce queries."""
 
 
+# Reranking: the user's own relevance-judge prompt, word for word; {question} and {chunk}
+# are filled in by judge_prompt.
+RELEVANCE_JUDGE = """You are a relevance judge.
+
+User question: {question}
+Candidate chunk: {chunk}
+
+Score the chunk 0-10 for how useful it is to answer the question.
+0 = unrelated, 10 = directly answers it.
+Return only: {"score": <int>, "reason": "<one line>"}"""
+
+
+def judge_prompt(question: str, chunk: str) -> str:
+    # replace, not format: the reply's JSON has braces of its own.
+    return RELEVANCE_JUDGE.replace("{question}", question).replace("{chunk}", chunk)
+
+
 # How the answer is written, when the user chose other than Markdown.
 FORMATS = {
     "markdown": "",

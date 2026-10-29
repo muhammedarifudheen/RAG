@@ -117,6 +117,10 @@ class Settings(BaseSettings):
     # Before a knowledge-base search, a fast model plans several queries (the question,
     # its keywords, a hypothetical answer for HyDE, a variant) whose results are fused.
     assistant_query_planner: bool = True
+    # Then fast models judge each candidate excerpt's relevance (0-10, the user's judge
+    # prompt); the excerpts are reordered by it and those under the cut-off left out.
+    assistant_reranker: bool = True
+    assistant_rerank_cutoff: int = 4
     # Knowledge-base excerpts less similar than this are not shown to the model.
     assistant_min_score: float = 0.3
     assistant_max_tokens: int = 8000

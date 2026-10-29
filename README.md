@@ -110,7 +110,12 @@ The chat page answers any question, not only questions about your sources:
   the question cleaned up, its keywords, a hypothetical answer sentence (HyDE) and a broader
   or narrower variant. Their results are fused by reciprocal rank, so excerpts several
   searches agree on come first; the answer lists the searches (Settings → Retrieval turns
-  planning off; `plan_queries: false` on `/ask`).
+  planning off; `plan_queries: false` on `/ask`). Then a relevance judge reranks them:
+  fast models score each of about twice as many candidate excerpts 0-10 for the question,
+  one call per excerpt, all at once (about 2-4 seconds); the excerpts go to the model best
+  first, and those scoring under the cut-off (4 by default) are left out. Each excerpt
+  shows its score and the judge's reason (Settings → Retrieval turns judging off or moves
+  the cut-off; `rerank: false` or `rerank_cutoff` on `/ask`).
 - **Today's facts, every time.** Before answering (anything but small talk) it searches
   the web and gives every agent the results, so versions, news, prices, scores and
   who-holds-what come from today, with dates and links: Google News and Wikipedia (no

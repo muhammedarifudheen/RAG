@@ -34,6 +34,7 @@ from app.schemas import (
     ChatTurn,
     CodeChunk,
     GeneratedImage,
+    Reranking,
     WebSource,
 )
 from app.services.search import extract_citations
@@ -59,6 +60,7 @@ from .prompt import (
     REVIEW,
     FollowUpSplitter,
     conversation,
+    judge_prompt,
     strict_prompt,
     system_prompt,
     with_drafts,
@@ -72,6 +74,7 @@ from .providers import (
     ProviderError,
     Turn,
 )
+from .rerank import chunk_text, parse_judgement
 from .router import Mode, Route, classify, model_order, provider_order, wants_image
 from .services import configured, openrouter_free_models
 from .web import WebResult, WebSearch, search_query, web_block
@@ -112,10 +115,14 @@ class Options:
     include_drafts: bool = False
     strict: bool = False  # sources only, with the user's strict rules
     search_queries: Sequence[str] = ()  # what the query planner had searched for
+    reranking: Reranking | None = None  # what the relevance judge did
 
 
 # The query planner's time; after it the question alone is searched.
 PLAN_SECONDS = 5.0
+# The relevance judge's time for all the excerpts, and how many models share them.
+JUDGE_SECONDS = 4.0
+JUDGE_MODELS = 8
 
 # Services too slow to wait for when a quick reply is all that is needed.
 SLOW_SERVICES = ("horde",)
@@ -202,12 +209,15 @@ class Assistant:
         merge_by_speed: bool = False,
         merge_drafts: int = 12,
         planner: bool = False,
+        reranker: bool = False,
         analyse_repo: Callable[[str, Callable[[str], None]], RepoReport] = analyse_repo,
         fetch_text: Callable[[str], str] | None = None,
     ) -> None:
         self.providers = {p.name: p for p in providers}
         # Plan several knowledge-base searches per question (see plan_queries).
         self.planner = planner
+        # Judge each excerpt's relevance and rerank them (see judge_chunks).
+        self.reranker = reranker
         self.analyse_repo = analyse_repo
         # Reads a GitHub file linked in a review request; None leaves such links out.
         self.fetch_text = fetch_text
@@ -252,11 +262,16 @@ class Assistant:
         planned = list((options.search_queries if options else ()) or ())
         if planned:
             yield "planned", {"queries": planned}
+        reranking = options.reranking if options else None
+        if reranking is not None:
+            yield "judged", reranking.model_dump()
         for name, data in self._respond(question, chunks, history, mode, options, review):
             if name == "done" and review.get("schema") is not None:
                 data = {**data, "analysis": review["schema"].model_dump()}
             if name == "done" and planned:
                 data = {**data, "search_queries": planned}
+            if name == "done" and reranking is not None:
+                data = {**data, "reranking": reranking.model_dump()}
             yield name, data
 
     def plan_queries(self, question: str) -> list[str]:
@@ -293,6 +308,63 @@ class Assistant:
             logger.info("query planner: no plan within %.0fs", PLAN_SECONDS)
             reply = ""
         return parse_queries(reply, question)
+
+    def judge_chunks(
+        self, question: str, chunks: Sequence[CodeChunk]
+    ) -> dict[int, tuple[int, str]]:
+        """symbol_id -> (score 0-10, reason) from the relevance judge: one call per excerpt,
+        all at once, spread over the fast models (another one if a call fails). Excerpts not
+        judged within JUDGE_SECONDS are left out of the result."""
+        order = provider_order("auto", "image", self.best_order, set(self.providers))
+        candidates = [
+            (n, m)
+            for n, m in self._attempts(order, "image")
+            if n not in (*SLOW_SERVICES, "pollinations")
+        ]
+        models = ([p for p in candidates if not self._resting(p)] or candidates)[:JUDGE_MODELS]
+        if not models or not chunks:
+            return {}
+        verdicts: dict[int, tuple[int, str]] = {}
+        lock = threading.Lock()
+        system = "You are a relevance judge. Reply with the JSON asked for and nothing else."
+
+        def judge(index: int, chunk: CodeChunk) -> None:
+            prompt = judge_prompt(question[:2000], chunk_text(chunk))
+            for attempt in range(min(2, len(models))):
+                name, model = models[(index + attempt) % len(models)]
+                try:
+                    reply = "".join(
+                        self.providers[name].stream(
+                            model,
+                            system,
+                            [Turn("user", prompt)],
+                            Outcome(),
+                            web=False,
+                            temperature=0,
+                            max_tokens=120,
+                        )
+                    )
+                except (ProviderError, ValueError, KeyError) as error:
+                    self._note_failure((name, model), str(error))
+                    continue
+                verdict = parse_judgement(reply)
+                if verdict is not None:
+                    with lock:
+                        verdicts[chunk.symbol_id] = verdict
+                    return
+
+        threads = [
+            threading.Thread(target=judge, args=(i, c), daemon=True) for i, c in enumerate(chunks)
+        ]
+        for thread in threads:
+            thread.start()
+        give_up = time.monotonic() + JUDGE_SECONDS
+        for thread in threads:
+            thread.join(max(0.0, give_up - time.monotonic()))
+        with lock:
+            judged = dict(verdicts)
+        logger.info("relevance judge: %d of %d excerpts judged", len(judged), len(chunks))
+        return judged
 
     def _respond(
         self,
@@ -1074,6 +1146,7 @@ def _build() -> Assistant:
         fast_mergers=[n.strip() for n in settings.assistant_fast_mergers.split(",") if n.strip()],
         merge_by_speed=settings.assistant_merge_by_speed,
         planner=settings.assistant_query_planner,
+        reranker=settings.assistant_reranker,
         fetch_text=lambda url: _read_text(http, url),
         merge_drafts=settings.assistant_merge_drafts,
     )

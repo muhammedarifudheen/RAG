@@ -171,6 +171,8 @@ export interface AssistantQuestion {
   includeDrafts?: boolean;
   strict?: boolean;
   planQueries?: boolean;
+  rerank?: boolean;
+  rerankCutoff?: number | null;
 }
 
 const DEFAULT_TOP_K = 8;
@@ -198,6 +200,10 @@ export function askBody(asked: AssistantQuestion): AskRequest {
   if (asked.includeDrafts) body.include_drafts = true;
   if (asked.strict) body.strict = true;
   if (asked.planQueries === false) body.plan_queries = false;
+  if (asked.rerank === false) body.rerank = false;
+  if (asked.rerankCutoff !== undefined && asked.rerankCutoff !== null) {
+    body.rerank_cutoff = asked.rerankCutoff;
+  }
   return body;
 }
 

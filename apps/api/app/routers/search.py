@@ -11,12 +11,13 @@ from sqlalchemy.orm import Session
 
 from app.assistant import Assistant, AssistantError, Options, get_assistant
 from app.assistant.planner import fuse
+from app.assistant.rerank import rerank
 from app.config import settings
 from app.db import get_db
 from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
 from app.ratelimit import rate_limit
-from app.schemas import AskRequest, AskResponse, SearchResponse
+from app.schemas import AskRequest, AskResponse, Reranking, SearchResponse
 from app.services.search import extract_citations, search_symbols
 
 RATE_LIMITED = {429: {"description": "Rate limit exceeded; see the Retry-After header."}}
@@ -116,17 +117,33 @@ def ask(
         queries = [query]
         if body.use_sources and body.plan_queries and getattr(assistant, "planner", False):
             queries = assistant.plan_queries(query)
+        judging = body.use_sources and body.rerank and getattr(assistant, "reranker", False)
+        # The judge picks from about twice as many excerpts as are shown.
+        pool = min(body.top_k * 2, 20) if judging else body.top_k
         chunks = (
             fuse(
                 [
-                    search_symbols(db, embedder, q, body.top_k, settings.snippet_max_lines)
+                    search_symbols(db, embedder, q, pool, settings.snippet_max_lines)
                     for q in queries
                 ],
-                body.top_k,
+                pool,
             )
             if body.use_sources
             else []
         )
+        reranking = None
+        if judging and chunks:
+            cutoff = (
+                settings.assistant_rerank_cutoff
+                if body.rerank_cutoff is None
+                else body.rerank_cutoff
+            )
+            verdicts = assistant.judge_chunks(query, chunks)
+            candidates = len(chunks)
+            chunks = rerank(chunks, verdicts, cutoff, body.top_k)
+            reranking = Reranking(
+                candidates=candidates, judged=len(verdicts), kept=len(chunks), cutoff=cutoff
+            )
         options = Options(
             attachments=body.attachments,
             style=body.style,
@@ -143,6 +160,7 @@ def ask(
             include_drafts=body.include_drafts,
             strict=body.strict,
             search_queries=tuple(queries) if len(queries) > 1 else (),
+            reranking=reranking,
         )
         if streaming:
             events = assistant.respond(question, chunks, body.history, mode, options)
