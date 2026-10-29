@@ -11,14 +11,61 @@ from app.schemas import CodeChunk
 
 # What the judge sees of an excerpt: its place, then its code, up to this many characters.
 CHUNK_CHARS = 3000
+# The ranker sees all the excerpts in one message, so less of each.
+PASSAGE_CHARS = 1200
 
 _OBJECT = re.compile(r"\{.*?\}", re.DOTALL)
 _SCORE = re.compile(r'"score"\s*:\s*"?(\d+(?:\.\d+)?)')
 
 
-def chunk_text(chunk: CodeChunk) -> str:
+def chunk_text(chunk: CodeChunk, limit: int = CHUNK_CHARS) -> str:
     head = f"{chunk.file}:{chunk.start_line}-{chunk.snippet_end_line} ({chunk.kind} {chunk.name})"
-    return f"{head}\n{chunk.snippet[:CHUNK_CHARS]}"
+    return f"{head}\n{chunk.snippet[:limit]}"
+
+
+_LIST = re.compile(r"\[\s*\d+(?:\s*,\s*\d+)*\s*\]")
+_JUSTIFICATION = re.compile(r"justification\**\s*[:\-—]?\s*(.+)", re.IGNORECASE)
+
+
+def parse_ranking(reply: str, count: int) -> tuple[list[int], str] | None:
+    """The ranker's passage numbers, best first, as 0-based positions: each of the `count`
+    passages once (any it left out keep their order at the end); with its justification
+    for the top pick. None when the reply holds no list of numbers."""
+    reply = reply or ""
+    numbers: list[int] | None = None
+    justification = ""
+    found = re.search(r"\{.*\}", reply, re.DOTALL)
+    if found:
+        try:
+            data = json.loads(found.group(0))
+        except ValueError:
+            data = None
+        if isinstance(data, dict):
+            for value in data.values():
+                if isinstance(value, list) and numbers is None:
+                    numbers = [
+                        int(float(v))
+                        for v in value
+                        if isinstance(v, (int, float))
+                        or (isinstance(v, str) and v.strip().isdigit())
+                    ]
+                elif isinstance(value, str) and not justification:
+                    justification = value
+    if not numbers:
+        listed = _LIST.search(reply)
+        if not listed:
+            return None
+        numbers = json.loads(listed.group(0))
+        tail = _JUSTIFICATION.search(reply[listed.end() :])
+        justification = tail.group(1) if tail else ""
+    order: list[int] = []
+    for number in numbers:
+        if 1 <= number <= count and number - 1 not in order:
+            order.append(number - 1)
+    if not order:
+        return None
+    order += [i for i in range(count) if i not in order]
+    return order, justification.strip().strip('"*').strip()[:300]
 
 
 def parse_judgement(reply: str) -> tuple[int, str] | None:

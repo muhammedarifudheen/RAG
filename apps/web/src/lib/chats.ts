@@ -56,6 +56,8 @@ export interface ChatSettings {
   planQueries: boolean;
   /** Fast models judge each excerpt's relevance; the best are kept, the weak left out. */
   rerank: boolean;
+  /** Then one call ranks the kept excerpts together, best first. */
+  rankPassages: boolean;
   /** The judge's cut-off, 0-10; null is the server's (4). */
   rerankCutoff: number | null;
   /** Show each agent's own draft under the merged answer. */
@@ -80,6 +82,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   strict: false,
   planQueries: true,
   rerank: true,
+  rankPassages: true,
   rerankCutoff: null,
   showDrafts: false,
 };

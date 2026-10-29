@@ -113,9 +113,11 @@ The chat page answers any question, not only questions about your sources:
   planning off; `plan_queries: false` on `/ask`). Then a relevance judge reranks them:
   fast models score each of about twice as many candidate excerpts 0-10 for the question,
   one call per excerpt, all at once (about 2-4 seconds); the excerpts go to the model best
-  first, and those scoring under the cut-off (4 by default) are left out. Each excerpt
-  shows its score and the judge's reason (Settings → Retrieval turns judging off or moves
-  the cut-off; `rerank: false` or `rerank_cutoff` on `/ask`).
+  first, and those scoring under the cut-off (4 by default) are left out. Then a listwise
+  ranker, one call with every excerpt kept, orders them by how directly they answer and
+  names its top pick. Each excerpt shows its score and the judge's reason (Settings →
+  Retrieval turns either off or moves the cut-off; `rerank: false`, `rank_passages: false`
+  or `rerank_cutoff` on `/ask`).
 - **Today's facts, every time.** Before answering (anything but small talk) it searches
   the web and gives every agent the results, so versions, news, prices, scores and
   who-holds-what come from today, with dates and links: Google News and Wikipedia (no

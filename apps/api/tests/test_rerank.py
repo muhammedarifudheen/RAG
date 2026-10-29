@@ -5,7 +5,8 @@ import re
 import time
 
 from app.assistant import service as service_module
-from app.assistant.rerank import parse_judgement, rerank
+from app.assistant.prompt import rank_prompt
+from app.assistant.rerank import parse_judgement, parse_ranking, rerank
 from app.assistant.service import Assistant, Options
 from app.schemas import AskRequest, CodeChunk, Reranking
 
@@ -124,6 +125,52 @@ def test_turning_reranking_off_or_changing_the_cutoff_sends_the_question_to_the_
     assert not AskRequest(question="q").for_assistant
 
 
+def test_the_rankers_prompt_numbers_the_passages():
+    prompt = rank_prompt("how is x set", ["a.py:1-2 (function f)\nx = 1", "b.py:3-4 (function g)"])
+    assert prompt.startswith(
+        "Rank the following passages by how directly they answer the question.\n"
+        "Question: how is x set\n\nPassages:\n[1] a.py:1-2 (function f)\nx = 1\n"
+        "[2] b.py:3-4 (function g)\n\nReturn a JSON list of passage numbers"
+    )
+    assert "{passage_1}" not in prompt and "..." not in prompt
+
+
+def test_the_rankers_reply_is_read():
+    assert parse_ranking('{"ranking": [3, 1, 2], "justification": "Defines it."}', 3) == (
+        [2, 0, 1],
+        "Defines it.",
+    )
+    assert parse_ranking("```json\n[2, 1]\n```\nJustification: [2] answers it.", 3) == (
+        [1, 0, 2],  # 3 was left out: it goes last
+        "[2] answers it.",
+    )
+    assert parse_ranking('{"order": ["2", "2", "9", "1"]}', 2) == ([1, 0], "")
+    assert parse_ranking("Passage two is best.", 2) is None
+
+
+class Ranker(Judge):
+    def __init__(self, name, reply, delay=0.0):
+        super().__init__(name, delay=delay, reply=reply)
+
+
+def test_a_fast_model_ranks_the_kept_excerpts_together(monkeypatch):
+    groq = Ranker("groq", '{"ranking": [2, 1], "justification": "It compares."}')
+    chunks = [chunk(1, 0.6), chunk(2, 0.5)]
+    assert Assistant([groq]).rank_chunks("q", chunks) == ([1, 0], "It compares.")
+    assert len(groq.prompts) == 1 and groq.prompts[0].startswith("Rank the following passages")
+    assert Assistant([groq]).rank_chunks("q", chunks[:1]) is None  # nothing to order
+    horde = Ranker("horde", '{"ranking": [2, 1]}')
+    assert Assistant([horde]).rank_chunks("q", chunks) is None and horde.prompts == []
+    monkeypatch.setattr(service_module, "RANK_SECONDS", 0.2)
+    started = time.monotonic()
+    assert Assistant([Ranker("groq", "[2, 1]", delay=2)]).rank_chunks("q", chunks) is None
+    assert time.monotonic() - started < 1.5
+
+
+def test_turning_the_ranker_off_sends_the_question_to_the_assistant():
+    assert AskRequest(question="q", rank_passages=False).for_assistant
+
+
 # --- Through /ask, against the test database --------------------------------------------
 
 
@@ -141,6 +188,10 @@ class Recording(Judge):
         if content.startswith("You are a relevance judge."):
             chunk_part = content.split("Candidate chunk:", 1)[1]
             yield json.dumps({"score": 9 if "format_name" in chunk_part else 1, "reason": "r"})
+            return
+        if content.startswith("Rank the following passages"):
+            count = len(re.findall(r"^\[\d+\] ", content, re.MULTILINE))
+            yield json.dumps({"ranking": list(range(count, 0, -1)), "justification": "last"})
             return
         self.asked.append(content)
         yield "Answer."
@@ -164,5 +215,6 @@ def test_ask_gives_the_model_only_the_excerpts_the_judge_kept(client):
     assert judged["reranking"]["candidates"] >= judged["reranking"]["kept"] >= 1
     assert all(c["relevance"] == 9 for c in judged["chunks"])
     assert any(c["name"].endswith("format_name") for c in judged["chunks"])
+    assert judged["reranking"]["ranked"] == (judged["reranking"]["kept"] >= 2)
     assert off["reranking"] is None
     assert all(c["relevance"] is None for c in off["chunks"])

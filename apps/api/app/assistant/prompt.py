@@ -128,6 +128,28 @@ def judge_prompt(question: str, chunk: str) -> str:
     return RELEVANCE_JUDGE.replace("{question}", question).replace("{chunk}", chunk)
 
 
+# Then the user's listwise ranker, word for word, orders the excerpts the judge kept;
+# rank_prompt fills in the question and the numbered passages.
+LISTWISE_RANKER = """\
+Rank the following passages by how directly they answer the question.
+Question: {question}
+
+Passages:
+[1] {passage_1}
+[2] {passage_2}
+...
+
+Return a JSON list of passage numbers in best-to-worst order, plus a one-line justification \
+for the top pick."""
+
+_PASSAGES = "[1] {passage_1}\n[2] {passage_2}\n..."
+
+
+def rank_prompt(question: str, passages: Sequence[str]) -> str:
+    numbered = "\n".join(f"[{n}] {passage}" for n, passage in enumerate(passages, 1))
+    return LISTWISE_RANKER.replace("{question}", question).replace(_PASSAGES, numbered)
+
+
 # How the answer is written, when the user chose other than Markdown.
 FORMATS = {
     "markdown": "",

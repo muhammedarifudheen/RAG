@@ -61,6 +61,7 @@ from .prompt import (
     FollowUpSplitter,
     conversation,
     judge_prompt,
+    rank_prompt,
     strict_prompt,
     system_prompt,
     with_drafts,
@@ -74,7 +75,7 @@ from .providers import (
     ProviderError,
     Turn,
 )
-from .rerank import chunk_text, parse_judgement
+from .rerank import PASSAGE_CHARS, chunk_text, parse_judgement, parse_ranking
 from .router import Mode, Route, classify, model_order, provider_order, wants_image
 from .services import configured, openrouter_free_models
 from .web import WebResult, WebSearch, search_query, web_block
@@ -123,6 +124,8 @@ PLAN_SECONDS = 5.0
 # The relevance judge's time for all the excerpts, and how many models share them.
 JUDGE_SECONDS = 4.0
 JUDGE_MODELS = 8
+# The listwise ranker's time; after it the judge's order stands.
+RANK_SECONDS = 6.0
 
 # Services too slow to wait for when a quick reply is all that is needed.
 SLOW_SERVICES = ("horde",)
@@ -365,6 +368,54 @@ class Assistant:
             judged = dict(verdicts)
         logger.info("relevance judge: %d of %d excerpts judged", len(judged), len(chunks))
         return judged
+
+    def rank_chunks(
+        self, question: str, chunks: Sequence[CodeChunk]
+    ) -> tuple[list[int], str] | None:
+        """The listwise ranker's order for `chunks` (0-based, best first) and its reason for
+        the top pick: one call with every excerpt, on a fast model (up to three tried,
+        within RANK_SECONDS). None if none ranked them."""
+        if len(chunks) < 2:
+            return None
+        order = provider_order("auto", "image", self.best_order, set(self.providers))
+        candidates = [
+            p
+            for p in self._attempts(order, "image")
+            if p[0] not in (*SLOW_SERVICES, "pollinations") and not self._resting(p)
+        ]
+        prompt = rank_prompt(question[:2000], [chunk_text(c, PASSAGE_CHARS) for c in chunks])
+        replies: queue.Queue = queue.Queue()
+
+        def run() -> None:
+            for name, model in candidates[:3]:
+                try:
+                    reply = "".join(
+                        self.providers[name].stream(
+                            model,
+                            "You rank passages for a retrieval system. Reply with the JSON "
+                            "asked for and nothing else.",
+                            [Turn("user", prompt)],
+                            Outcome(),
+                            web=False,
+                            temperature=0,
+                            max_tokens=200,
+                        )
+                    )
+                except (ProviderError, ValueError, KeyError) as error:
+                    self._note_failure((name, model), str(error))
+                    continue
+                ranking = parse_ranking(reply, len(chunks))
+                if ranking is not None:
+                    replies.put(ranking)
+                    return
+            replies.put(None)
+
+        threading.Thread(target=run, daemon=True).start()
+        try:
+            return replies.get(timeout=RANK_SECONDS)
+        except queue.Empty:
+            logger.info("listwise ranker: no ranking within %.0fs", RANK_SECONDS)
+            return None
 
     def _respond(
         self,

@@ -91,6 +91,8 @@ export interface AskRequest {
   plan_queries?: boolean;
   /** Judge each excerpt's relevance (0-10) and rerank; default true. */
   rerank?: boolean;
+  /** Then rank the kept excerpts together, best first, in one call; default true. */
+  rank_passages?: boolean;
   /** Judged excerpts scoring below this are left out; unset is the server's (4). */
   rerank_cutoff?: number;
 }
@@ -104,6 +106,10 @@ export interface Reranking {
   /** Those given to the model. */
   kept: number;
   cutoff: number;
+  /** True if the listwise ranker then ordered the kept excerpts. */
+  ranked?: boolean;
+  /** The ranker's reason for its first pick. */
+  top_pick?: string | null;
 }
 
 export type AnswerFormat = "markdown" | "plain" | "json";

@@ -568,6 +568,12 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
               onChange={(value) => set({ rerankCutoff: value === 4 ? null : value })}
               ends={["Keep more", "Only direct answers"]}
             />
+            <Toggle
+              label="Then rank the kept excerpts together"
+              hint="One more call compares the excerpts the judge kept side by side and orders them by how directly they answer, so the model reads the best first."
+              checked={settings.rankPassages}
+              onChange={(rankPassages) => set({ rankPassages })}
+            />
           </div>
           <Slider
             id="top-k"
@@ -612,6 +618,7 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
             strict: DEFAULT_SETTINGS.strict,
             planQueries: DEFAULT_SETTINGS.planQueries,
             rerank: DEFAULT_SETTINGS.rerank,
+            rankPassages: DEFAULT_SETTINGS.rankPassages,
             rerankCutoff: DEFAULT_SETTINGS.rerankCutoff,
           })
         }

@@ -172,6 +172,7 @@ export interface AssistantQuestion {
   strict?: boolean;
   planQueries?: boolean;
   rerank?: boolean;
+  rankPassages?: boolean;
   rerankCutoff?: number | null;
 }
 
@@ -201,6 +202,7 @@ export function askBody(asked: AssistantQuestion): AskRequest {
   if (asked.strict) body.strict = true;
   if (asked.planQueries === false) body.plan_queries = false;
   if (asked.rerank === false) body.rerank = false;
+  if (asked.rankPassages === false) body.rank_passages = false;
   if (asked.rerankCutoff !== undefined && asked.rerankCutoff !== null) {
     body.rerank_cutoff = asked.rerankCutoff;
   }

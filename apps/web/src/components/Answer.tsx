@@ -166,9 +166,16 @@ export function Answer({ response, onCite }: Props) {
                 {" "}
                 · the judge scored {response.reranking.judged} of{" "}
                 {response.reranking.candidates}, kept those ≥ {response.reranking.cutoff}/10
+                {response.reranking.ranked && ", then ranked them together"}
               </>
             )}
           </summary>
+          {response.reranking?.top_pick && (
+            <p className="mt-2 text-soft">
+              <span className="text-muted">Top pick: </span>
+              {response.reranking.top_pick}
+            </p>
+          )}
           <ul className="mt-2 space-y-1">
             {response.chunks.map((chunk) => (
               <li key={chunk.symbol_id}>

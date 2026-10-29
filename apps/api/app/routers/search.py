@@ -141,8 +141,16 @@ def ask(
             verdicts = assistant.judge_chunks(query, chunks)
             candidates = len(chunks)
             chunks = rerank(chunks, verdicts, cutoff, body.top_k)
+            ranking = assistant.rank_chunks(query, chunks) if body.rank_passages else None
+            if ranking is not None:
+                chunks = [chunks[i] for i in ranking[0]]
             reranking = Reranking(
-                candidates=candidates, judged=len(verdicts), kept=len(chunks), cutoff=cutoff
+                candidates=candidates,
+                judged=len(verdicts),
+                kept=len(chunks),
+                cutoff=cutoff,
+                ranked=ranking is not None,
+                top_pick=(ranking[1] or None) if ranking else None,
             )
         options = Options(
             attachments=body.attachments,

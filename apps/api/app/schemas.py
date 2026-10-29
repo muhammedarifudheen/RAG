@@ -129,6 +129,11 @@ class AskRequest(BaseModel):
         description="Have fast models judge each candidate excerpt's relevance (0-10), then "
         "order the excerpts by that score and leave out those under `rerank_cutoff`.",
     )
+    rank_passages: bool = Field(
+        default=True,
+        description="After the judge, one call to a fast model ranks the kept excerpts "
+        "best-to-worst by how directly they answer, and they are given in that order.",
+    )
     rerank_cutoff: int | None = Field(
         default=None, ge=0, le=10, description="Excerpts the judge scores below this are left out."
     )
@@ -183,6 +188,7 @@ class AskRequest(BaseModel):
             or not self.web_search
             or not self.plan_queries
             or not self.rerank
+            or not self.rank_passages
             or self.rerank_cutoff is not None
             or self.strict
             or self.max_tokens is not None
@@ -222,6 +228,10 @@ class Reranking(BaseModel):
     judged: int = Field(description="Those the relevance judge scored in time.")
     kept: int = Field(description="Those given to the model.")
     cutoff: int = Field(description="Judged excerpts scoring below this were left out.")
+    ranked: bool = Field(
+        default=False, description="True if the listwise ranker then ordered the kept excerpts."
+    )
+    top_pick: str | None = Field(default=None, description="The ranker's reason for its first.")
 
 
 class AgentDraft(BaseModel):

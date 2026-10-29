@@ -249,6 +249,7 @@ export function Chat() {
           strict: settings.strict,
           planQueries: settings.planQueries,
           rerank: settings.rerank,
+          rankPassages: settings.rankPassages,
           rerankCutoff: settings.rerankCutoff,
         },
         {

@@ -69,7 +69,7 @@ test("the judge's scores are shown with the excerpts, and its cut-off can be cha
       excerpt("Signer.verify_signature", 9, "Compares the signatures."),
       excerpt("Signer.unsign", 7, "Calls the check."),
     ],
-    reranking: { candidates: 16, judged: 15, kept: 2, cutoff: 4 },
+    reranking: { candidates: 16, judged: 15, kept: 2, cutoff: 4, ranked: true, top_pick: "It compares the signatures." },
   });
   const sent = await mock(page, [judged, reply("Stricter."), reply("Unjudged.")]);
   await page.goto("/chat");
@@ -77,7 +77,9 @@ test("the judge's scores are shown with the excerpts, and its cut-off can be cha
   const answer = page.getByRole("article", { name: "Answer" });
   await answer.getByText(/2 code excerpts were given to m · the judge scored 15 of 16/).click();
   await expect(answer.getByText("relevance 9/10")).toBeVisible();
-  await expect(answer.getByText("Compares the signatures.")).toBeVisible();
+  await expect(answer.getByText("Compares the signatures.", { exact: true })).toBeVisible();
+  await expect(answer).toContainText("then ranked them together");
+  await expect(answer).toContainText("Top pick: It compares the signatures.");
 
   await page.getByRole("button", { name: "⚙ Settings" }).click();
   const settings = page.getByRole("dialog", { name: "Settings" });
@@ -90,6 +92,7 @@ test("the judge's scores are shown with the excerpts, and its cut-off can be cha
 
   await page.getByRole("button", { name: "⚙ Settings" }).click();
   await settings.getByRole("tab", { name: "Retrieval" }).click();
+  await settings.getByRole("switch", { name: /Then rank the kept excerpts/ }).uncheck();
   await settings.getByRole("switch", { name: /Judge each excerpt's relevance/ }).uncheck();
   await settings.getByRole("button", { name: "Close settings" }).click();
   await ask(page, "No judge?");
@@ -98,5 +101,7 @@ test("the judge's scores are shown with the excerpts, and its cut-off can be cha
   expect(sent[0].rerank).toBeUndefined();
   expect(sent[0].rerank_cutoff).toBeUndefined();
   expect(sent[1].rerank_cutoff).toBe(7);
+  expect(sent[1].rank_passages).toBeUndefined();
   expect(sent[2].rerank).toBe(false);
+  expect(sent[2].rank_passages).toBe(false);
 });
