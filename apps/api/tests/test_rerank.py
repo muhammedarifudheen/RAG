@@ -47,8 +47,11 @@ def test_judged_excerpts_are_ordered_by_score_and_the_weak_left_out():
     assert [c.symbol_id for c in ranked] == [3, 2, 4]  # 2 before 4: same score, more similar
     assert (ranked[0].relevance, ranked[0].relevance_reason) == (9, "answers it")
     assert ranked[2].relevance_reason is None
-    # Not judged in time: kept after the judged ones, in search order.
-    assert [c.symbol_id for c in rerank(chunks, verdicts, 4, 10)] == [3, 2, 4, 5]
+    # Four of five judged: the fifth, not reached in time, goes like those turned down.
+    assert [c.symbol_id for c in rerank(chunks, verdicts, 4, 10)] == [3, 2, 4]
+    # Only two of five judged: the others are kept after them, in search order.
+    few = {3: (9, ""), 1: (1, "")}
+    assert [c.symbol_id for c in rerank(chunks, few, 4, 10)] == [3, 2, 4, 5]
     # No verdicts at all: the search order.
     assert [c.symbol_id for c in rerank(chunks, {}, 4, 2)] == [1, 2]
 

@@ -122,10 +122,10 @@ class Options:
 # The query planner's time; after it the question alone is searched.
 PLAN_SECONDS = 5.0
 # The relevance judge's time for all the excerpts, and how many models share them.
-JUDGE_SECONDS = 4.0
+JUDGE_SECONDS = 6.0
 JUDGE_MODELS = 8
 # The listwise ranker's time; after it the judge's order stands.
-RANK_SECONDS = 6.0
+RANK_SECONDS = 8.0
 
 # Services too slow to wait for when a quick reply is all that is needed.
 SLOW_SERVICES = ("horde",)
@@ -213,6 +213,7 @@ class Assistant:
         merge_drafts: int = 12,
         planner: bool = False,
         reranker: bool = False,
+        judge_services: Sequence[str] = (),
         analyse_repo: Callable[[str, Callable[[str], None]], RepoReport] = analyse_repo,
         fetch_text: Callable[[str], str] | None = None,
     ) -> None:
@@ -221,6 +222,7 @@ class Assistant:
         self.planner = planner
         # Judge each excerpt's relevance and rerank them (see judge_chunks).
         self.reranker = reranker
+        self.judge_services = tuple(judge_services)
         self.analyse_repo = analyse_repo
         # Reads a GitHub file linked in a review request; None leaves such links out.
         self.fetch_text = fetch_text
@@ -312,18 +314,27 @@ class Assistant:
             reply = ""
         return parse_queries(reply, question)
 
+    def _judges(self) -> list[tuple[str, str]]:
+        """(service, model) pairs for the relevance judge and the ranker: the judge
+        services in their order, so the many small calls spend other quotas than the
+        answers' (never Claude, which is paid, nor the slow keyless services)."""
+        excluded = (*SLOW_SERVICES, "pollinations", "claude")
+        names = [n for n in self.judge_services if n in self.providers]
+        names += [n for n in self.providers if n not in names]
+        return [
+            (n, m)
+            for n in names
+            if n not in excluded
+            for m in self.providers[n].models[: self.models_per_provider]
+        ]
+
     def judge_chunks(
         self, question: str, chunks: Sequence[CodeChunk]
     ) -> dict[int, tuple[int, str]]:
         """symbol_id -> (score 0-10, reason) from the relevance judge: one call per excerpt,
         all at once, spread over the fast models (another one if a call fails). Excerpts not
         judged within JUDGE_SECONDS are left out of the result."""
-        order = provider_order("auto", "image", self.best_order, set(self.providers))
-        candidates = [
-            (n, m)
-            for n, m in self._attempts(order, "image")
-            if n not in (*SLOW_SERVICES, "pollinations")
-        ]
+        candidates = self._judges()
         models = ([p for p in candidates if not self._resting(p)] or candidates)[:JUDGE_MODELS]
         if not models or not chunks:
             return {}
@@ -343,8 +354,8 @@ class Assistant:
                             [Turn("user", prompt)],
                             Outcome(),
                             web=False,
-                            temperature=0,
-                            max_tokens=120,
+                            # Room for a reasoning model to think before its JSON.
+                            max_tokens=800,
                         )
                     )
                 except (ProviderError, ValueError, KeyError) as error:
@@ -377,12 +388,7 @@ class Assistant:
         within RANK_SECONDS). None if none ranked them."""
         if len(chunks) < 2:
             return None
-        order = provider_order("auto", "image", self.best_order, set(self.providers))
-        candidates = [
-            p
-            for p in self._attempts(order, "image")
-            if p[0] not in (*SLOW_SERVICES, "pollinations") and not self._resting(p)
-        ]
+        candidates = [p for p in self._judges() if not self._resting(p)]
         prompt = rank_prompt(question[:2000], [chunk_text(c, PASSAGE_CHARS) for c in chunks])
         replies: queue.Queue = queue.Queue()
 
@@ -397,8 +403,7 @@ class Assistant:
                             [Turn("user", prompt)],
                             Outcome(),
                             web=False,
-                            temperature=0,
-                            max_tokens=200,
+                            max_tokens=1500,
                         )
                     )
                 except (ProviderError, ValueError, KeyError) as error:
@@ -1200,6 +1205,9 @@ def _build() -> Assistant:
         merge_by_speed=settings.assistant_merge_by_speed,
         planner=settings.assistant_query_planner,
         reranker=settings.assistant_reranker,
+        judge_services=[
+            n.strip() for n in settings.assistant_judge_services.split(",") if n.strip()
+        ],
         fetch_text=lambda url: _read_text(http, url),
         merge_drafts=settings.assistant_merge_drafts,
     )

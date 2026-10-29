@@ -118,8 +118,8 @@ def ask(
         if body.use_sources and body.plan_queries and getattr(assistant, "planner", False):
             queries = assistant.plan_queries(query)
         judging = body.use_sources and body.rerank and getattr(assistant, "reranker", False)
-        # The judge picks from about twice as many excerpts as are shown.
-        pool = min(body.top_k * 2, 20) if judging else body.top_k
+        # The judge picks from a few more excerpts than are shown.
+        pool = min(body.top_k + 4, 20) if judging else body.top_k
         chunks = (
             fuse(
                 [

@@ -10,7 +10,7 @@ from collections.abc import Mapping, Sequence
 from app.schemas import CodeChunk
 
 # What the judge sees of an excerpt: its place, then its code, up to this many characters.
-CHUNK_CHARS = 3000
+CHUNK_CHARS = 1500
 # The ranker sees all the excerpts in one message, so less of each.
 PASSAGE_CHARS = 1200
 
@@ -94,9 +94,9 @@ def rerank(
     cutoff: int,
     limit: int,
 ) -> list[CodeChunk]:
-    """The judged excerpts scoring at least `cutoff`, best first (ties by similarity), then
-    any the judge did not reach in their search order; at most `limit`. Without verdicts,
-    the search order."""
+    """The judged excerpts scoring at least `cutoff`, best first (ties by similarity), then,
+    if the judge reached fewer than half, the others in their search order; at most
+    `limit`. Without verdicts, the search order."""
     if not verdicts:
         return list(chunks[:limit])
     judged = [
@@ -110,5 +110,10 @@ def rerank(
         if chunk.symbol_id in verdicts and verdicts[chunk.symbol_id][0] >= cutoff
     ]
     judged.sort(key=lambda c: (-(c.relevance or 0), -c.score))
-    unjudged = [c for c in chunks if c.symbol_id not in verdicts]
+    # Judged as a fair sample, the rest are no likelier to help than those it turned down.
+    unjudged = (
+        [c for c in chunks if c.symbol_id not in verdicts]
+        if len(verdicts) * 2 < len(chunks)
+        else []
+    )
     return [*judged, *unjudged][:limit]

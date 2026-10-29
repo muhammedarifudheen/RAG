@@ -121,6 +121,9 @@ class Settings(BaseSettings):
     # prompt); the excerpts are reordered by it and those under the cut-off left out.
     assistant_reranker: bool = True
     assistant_rerank_cutoff: int = 4
+    # The judge's and ranker's services, first to last: about 17 small calls a question,
+    # so services other than the answers' main ones (Groq, Gemini) go first.
+    assistant_judge_services: str = "nvidia,cerebras,sambanova,mistral,github,groq,gemini"
     # Knowledge-base excerpts less similar than this are not shown to the model.
     assistant_min_score: float = 0.3
     assistant_max_tokens: int = 8000
