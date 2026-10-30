@@ -25,7 +25,7 @@ depends_on: str | Sequence[str] | None = None
 _TEXT = """
     coalesce(s.name, '') || ' ' || coalesce(s.signature, '') || ' ' || f.path || ' ' ||
     array_to_string(
-        (string_to_array(coalesce(f.content, ''), E'\\n'))[s.start_line:least(s.end_line, s.start_line + 299)],
+        (string_to_array(coalesce(f.content, ''), E'\\n'))[s.start_line : least(s.end_line, s.start_line + 299)],
         ' '
     )
 """

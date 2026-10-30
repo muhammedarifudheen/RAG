@@ -148,12 +148,14 @@ def test_an_answer_reports_its_notice_stage_timings_and_confidence(caplog):
 # --- through /ask and the database -------------------------------------------------------
 
 
-def test_keyword_search_finds_identifiers_by_their_words(db, embedder):
+def test_keyword_search_finds_identifiers_by_their_words(db):
+    from seed import FakeEmbedder
+
     from app.services.search import hybrid_search, keyword_symbols
 
     found = keyword_symbols(db, "format name", 5, 30)
     assert found and found[0].name == "format_name"
-    fused, notice = hybrid_search(db, embedder, "format name", 5, 30)
+    fused, notice = hybrid_search(db, FakeEmbedder(), "format name", 5, 30)
     assert notice is None and any(c.name == "format_name" for c in fused)
 
 

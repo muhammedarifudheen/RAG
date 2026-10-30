@@ -86,9 +86,14 @@ def keyword_symbols(
         return []
     terms = func.to_tsquery("english", " | ".join(words))
     search = literal_column("symbols.search")
-    rank = func.ts_rank_cd(search, terms).label("rank")
+    rank = func.ts_rank_cd(search, terms, 1)  # 1: divided by the log of the length
+    # A symbol named by the query's words comes before one that only mentions them, so
+    # format_name ranks above the module that calls it.
+    named = func.to_tsvector("english", func.regexp_replace(Symbol.name, "[_./-]+", " ", "g")).op(
+        "@@"
+    )(terms)
     score = (
-        Symbol.embedding.cosine_distance(vector).label("distance")
+        func.coalesce(Symbol.embedding.cosine_distance(vector), 1.0).label("distance")
         if vector is not None
         else (1.0 - func.least(rank, 1.0)).label("distance")
     )
@@ -96,7 +101,7 @@ def keyword_symbols(
         select(Symbol, File.path, File.language, File.content, score)
         .join(File, File.id == Symbol.file_id)
         .where(search.op("@@")(terms))
-        .order_by(rank.desc())
+        .order_by(named.desc(), rank.desc(), Symbol.id)
         .limit(limit)
     ).all()
     return _chunks(rows, max_lines)
