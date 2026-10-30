@@ -2,14 +2,16 @@ import json
 import logging
 import queue
 import threading
+import time
 from collections.abc import Callable, Iterator
 from typing import Annotated, Literal, TypeVar
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.assistant import Assistant, AssistantError, Options, get_assistant
+from app.assistant import Assistant, AssistantError, Options, cache, get_assistant
 from app.assistant.agent import ResearchTools
 from app.assistant.gaps import suggested_source
 from app.assistant.planner import fuse
@@ -19,10 +21,11 @@ from app.config import settings
 from app.db import get_db
 from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
+from app.models import Source
 from app.ratelimit import rate_limit
 from app.schemas import AskRequest, AskResponse, GapReport, Reranking, SearchResponse
 from app.services.catalog import source_catalog
-from app.services.search import extract_citations, search_symbols
+from app.services.search import extract_citations, hybrid_search, search_symbols
 from app.services.spans import read_span
 
 # How long to wait for the ranker once the judge is done (it has its own time limit).
@@ -95,6 +98,14 @@ def ask(
             "(`auto`) or start with the strongest model (`best`).",
         ),
     ] = "auto",
+    fresh: Annotated[
+        bool,
+        Header(
+            alias="X-Atlas-Fresh",
+            description="Assistant only: true answers afresh rather than reusing the answer "
+            "to the same question (Regenerate sends it); the new answer is still kept.",
+        ),
+    ] = False,
 ):
     """Two ways to ask.
 
@@ -133,6 +144,16 @@ def ask(
             fact_check=report,
         )
 
+    # A repeated question within a day: the answer given before.
+    answers, cache_key = None, None
+    if streaming_or_assistant(body, request) and body.task == "answer":
+        answers = getattr(_resolve(request, get_assistant), "answer_cache", None)
+        cache_key = _cache_key(body, mode, db) if answers is not None else None
+        hit = answers.get(cache_key) if answers is not None and cache_key and not fresh else None
+        if hit is not None:
+            logger.info("answer cache hit")
+            return _replay(hit, request)
+
     if body.task == "gaps":
         # What the knowledge base would need to answer the question.
         finder: Assistant = _resolve(request, get_assistant)
@@ -159,6 +180,9 @@ def ask(
         # previous question too.
         previous = next((t.content for t in reversed(body.history) if t.role == "user"), "")
         query = f"{previous[:500]}\n{question}" if previous else question
+        timings: dict[str, float] = {}
+        top_k = body.top_k or settings.assistant_top_k
+        started = time.monotonic()
         queries = [query]
         research = body.use_sources and (
             body.research
@@ -170,6 +194,7 @@ def ask(
         planning = body.use_sources and body.plan_queries and getattr(assistant, "planner", False)
         if planning and not research:
             queries = assistant.plan_queries(query)
+            timings["plan"] = round(time.monotonic() - started, 2)
         judging = (
             not research
             and body.use_sources
@@ -177,18 +202,18 @@ def ask(
             and getattr(assistant, "reranker", False)
         )
         # The judge picks from a few more excerpts than are shown.
-        pool = min(body.top_k + 4, 20) if judging else body.top_k
-        chunks = (
-            fuse(
-                [
-                    search_symbols(db, embedder, q, pool, settings.snippet_max_lines)
-                    for q in queries
-                ],
-                pool,
-            )
-            if body.use_sources
-            else []
-        )
+        pool = min(top_k + 4, 20) if judging else top_k
+        notices: list[str] = []
+
+        def retrieve(q: str, limit: int) -> list:
+            found, notice = hybrid_search(db, embedder, q, limit, settings.snippet_max_lines)
+            if notice and notice not in notices:
+                notices.append(notice)
+            return found
+
+        searched = time.monotonic()
+        chunks = fuse([retrieve(q, pool) for q in queries], pool) if body.use_sources else []
+        timings["search"] = round(time.monotonic() - searched, 2)
         reranking = None
         if judging and chunks:
             cutoff = (
@@ -205,8 +230,9 @@ def ask(
                     target=lambda: ranked.put(assistant.rank_chunks(query, candidates)),
                     daemon=True,
                 ).start()
+            judged = time.monotonic()
             verdicts = assistant.judge_chunks(query, candidates)
-            chunks = rerank(candidates, verdicts, cutoff, body.top_k)
+            chunks = rerank(candidates, verdicts, cutoff, top_k)
             ranking = None
             if body.rank_passages:
                 try:
@@ -217,6 +243,7 @@ def ask(
             if applied:
                 place = {candidates[i].symbol_id: p for p, i in enumerate(ranking[0])}
                 chunks.sort(key=lambda c: place.get(c.symbol_id, len(place)))
+            timings["judge"] = round(time.monotonic() - judged, 2)
             first = candidates[ranking[0][0]].symbol_id if ranking else None
             reranking = Reranking(
                 candidates=len(candidates),
@@ -238,7 +265,6 @@ def ask(
             services=tuple(body.services),
             council_size=body.council_size,
             merger=body.merger,
-            min_score=body.min_score,
             web_search=body.web_search,
             max_tokens=body.max_tokens,
             format=body.format,
@@ -246,27 +272,34 @@ def ask(
             strict=body.strict,
             search_queries=tuple(queries) if len(queries) > 1 else (),
             reranking=reranking,
+            timings=timings,
+            notice=notices[0] if notices else None,
+            min_score=0.0 if notices and body.min_score is None else body.min_score,
             research=ResearchTools(
-                search=lambda q: search_symbols(db, embedder, q, 6, settings.snippet_max_lines),
+                search=lambda q: retrieve(q, 6),
                 read=lambda path, start, end: read_span(db, path, start, end),
             )
             if research
             else None,
         )
         if streaming:
-            events = assistant.respond(question, chunks, body.history, mode, options)
+            events = _remembering(
+                assistant.respond(question, chunks, body.history, mode, options), answers, cache_key
+            )
             return StreamingResponse(
                 _event_stream(events),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
             )
         try:
-            return assistant.answer(question, chunks, body.history, mode, options)
+            response = assistant.answer(question, chunks, body.history, mode, options)
         except AssistantError as error:
             raise HTTPException(error.status_code, error.detail) from error
+        _remember(response.model_dump(), answers, cache_key)
+        return response
 
     answerer: Answerer = _resolve(request, get_answerer)
-    chunks = search_symbols(db, embedder, question, body.top_k, settings.snippet_max_lines)
+    chunks = search_symbols(db, embedder, question, body.top_k or 8, settings.snippet_max_lines)
     if not chunks:
         raise HTTPException(409, "The knowledge base is empty; add a source first.")
 
@@ -282,6 +315,58 @@ def ask(
         chunks=chunks,
         model=result.model,
         complete=result.complete,
+    )
+
+
+def streaming_or_assistant(body: AskRequest, request: Request) -> bool:
+    return "text/event-stream" in request.headers.get("accept", "") or body.for_assistant
+
+
+def _cache_key(body: AskRequest, mode: str, db: Session) -> str | None:
+    """The answer cache's key: the question, the conversation, every choice made and the
+    knowledge base's version (its sources), so a new source answers afresh. None when
+    this question is not to be cached."""
+    if not body.cache or body.attachments:
+        return None
+    sources = db.execute(select(func.count(Source.id), func.max(Source.created_at))).one()
+    choices = body.model_dump(exclude={"question", "history", "cache", "attachments"})
+    history = [(t.role, t.content) for t in body.history[-6:]]
+    return cache.key_of(
+        " ".join(body.question.lower().split()), history, choices, mode, list(sources)
+    )
+
+
+def _remember(response: dict, answers: cache.TTLCache | None, key: str | None) -> None:
+    if answers is not None and key and cache.answer_cacheable(response):
+        answers.put(key, response)
+
+
+def _remembering(
+    events: Iterator[tuple[str, dict]], answers: cache.TTLCache | None, key: str | None
+) -> Iterator[tuple[str, dict]]:
+    """The assistant's events, keeping the finished answer for the cache."""
+    for name, data in events:
+        if name == "done":
+            _remember(data, answers, key)
+        yield name, data
+
+
+def _replay(response: dict, request: Request):
+    """A cached answer, sent the way a fresh one is."""
+    data = {**response, "cached": True, "timings": {"answer": 0.0}}
+    if "text/event-stream" not in request.headers.get("accept", ""):
+        return AskResponse(**data)
+    events = iter(
+        [
+            ("route", {"route": data.get("route"), "mode": "auto", "providers": []}),
+            ("delta", {"text": data["answer"]}),
+            ("done", data),
+        ]
+    )
+    return StreamingResponse(
+        _event_stream(events),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 

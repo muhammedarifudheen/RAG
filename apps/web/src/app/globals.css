@@ -374,3 +374,46 @@ body::after {
     transition-duration: 0.01ms !important;
   }
 }
+
+/* High contrast (Settings → Transparency): darker text, stronger borders, solid panels,
+   no translucent glass or moving background. */
+html[data-contrast="high"] {
+  --ink: #ffffff;
+  --line: #4b4f66;
+  --paper: #000000;
+  --soft: #14162a;
+  --muted: #2b2e45;
+  --signal: #3b2bd6;
+  --cyan: #00507a;
+  --acid: #006b52;
+  --glass: #ffffff;
+}
+html[data-contrast="high"] body::before,
+html[data-contrast="high"] body::after {
+  display: none;
+}
+html[data-contrast="high"] .text-soft,
+html[data-contrast="high"] .text-muted,
+html[data-contrast="high"] .text-faint {
+  color: #1d1f33 !important;
+}
+html[data-contrast="high"] .text-cyan {
+  color: #00507a !important;
+}
+html[data-contrast="high"] .text-signal {
+  color: #3b2bd6 !important;
+}
+html[data-contrast="high"] [class~="border"],
+html[data-contrast="high"] .border-line {
+  border-color: #4b4f66 !important;
+}
+html[data-contrast="high"] .slab,
+html[data-contrast="high"] .glass {
+  background: #ffffff !important;
+  backdrop-filter: none !important;
+  border: 1px solid #4b4f66 !important;
+}
+html[data-contrast="high"] :focus-visible {
+  outline: 3px solid #000000 !important;
+  outline-offset: 2px;
+}

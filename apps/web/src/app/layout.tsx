@@ -26,6 +26,15 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
+      <head>
+        {/* High contrast before the first paint, so the page never flashes the other way. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('atlas-contrast')==='high')document.documentElement.dataset.contrast='high'}catch(e){}",
+          }}
+        />
+      </head>
       <body className="flex min-h-screen flex-col font-sans text-paper antialiased">
         <Nav />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>

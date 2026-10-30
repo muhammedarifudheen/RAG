@@ -73,8 +73,12 @@ class AskRequest(BaseModel):
     question: str = Field(
         min_length=1, max_length=32000, examples=["How are user names formatted?"]
     )
-    top_k: int = Field(
-        default=8, ge=1, le=20, description="How many search results to give Claude."
+    top_k: int | None = Field(
+        default=None,
+        ge=1,
+        le=20,
+        description="How many excerpts to give the model: unset, 5 for the assistant "
+        "(after hybrid search and the relevance judge) and 8 for a plain question.",
     )
     history: list[ChatTurn] = Field(
         default=[],
@@ -136,6 +140,11 @@ class AskRequest(BaseModel):
     )
     rerank_cutoff: int | None = Field(
         default=None, ge=0, le=10, description="Excerpts the judge scores below this are left out."
+    )
+    cache: bool = Field(
+        default=True,
+        description="Reuse the answer to the same question asked within a day (not for "
+        "current events or answers from the web); false always answers afresh.",
     )
     research: bool | None = Field(
         default=None,
@@ -207,6 +216,7 @@ class AskRequest(BaseModel):
             or self.rerank_cutoff is not None
             or self.strict
             or self.research is not None
+            or not self.cache
             or self.max_tokens is not None
             or self.format != "markdown"
             or self.include_drafts
@@ -342,6 +352,15 @@ class GapReport(BaseModel):
     found_by: str = Field(default="", description='"Service · model".')
 
 
+class Confidence(BaseModel):
+    level: Literal["high", "medium", "low"]
+    relevance: float = Field(description="How relevant the excerpts were, 0-1.")
+    coverage: float = Field(description="The share of the answer's sentences cited.")
+    verified: int = Field(description="Citations that point at lines the model was shown.")
+    citations: int
+    reason: str
+
+
 class AskResponse(BaseModel):
     question: str
     answer: str = Field(description="Claude's answer with inline [path:start-end] citations.")
@@ -374,6 +393,20 @@ class AskResponse(BaseModel):
     )
     fact_check: FactCheck | None = Field(
         default=None, description="The fact-checker's report, for `task: check`."
+    )
+    confidence: Confidence | None = Field(
+        default=None,
+        description="For an answer from the knowledge base: high, medium or low, from the "
+        "excerpts' relevance and how much of the answer is cited to lines that check out.",
+    )
+    timings: dict[str, float] = Field(
+        default={}, description="Seconds per stage: plan, search, judge, research, answer."
+    )
+    cached: bool = Field(
+        default=False, description="True if this is a stored answer to the same question."
+    )
+    notice: str | None = Field(
+        default=None, description="Something the user should know, such as a fallback."
     )
     research_steps: list[ResearchStep] = Field(
         default=[], description="Deep research: each tool call the agent made, in order."

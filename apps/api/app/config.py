@@ -121,6 +121,10 @@ class Settings(BaseSettings):
     # prompt); the excerpts are reordered by it and those under the cut-off left out.
     assistant_reranker: bool = True
     assistant_rerank_cutoff: int = 4
+    # Excerpts given to the answer model when the question does not say.
+    assistant_top_k: int = 5
+    # Reuse answers to repeated questions for a day (see app/assistant/cache.py).
+    assistant_answer_cache: bool = True
     # Deep research for questions that look complex, when the user has not chosen.
     assistant_research_auto: bool = True
     # The judge's and ranker's services, first to last: about 17 small calls a question,

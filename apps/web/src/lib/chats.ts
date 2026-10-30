@@ -56,6 +56,10 @@ export interface ChatSettings {
   research: boolean;
   /** Deep research by itself for questions that look complex. */
   researchAuto: boolean;
+  /** Reuse the answer to a question asked again within a day. */
+  cacheAnswers: boolean;
+  /** Stronger text and borders, solid panels. */
+  highContrast: boolean;
   /** Plan several searches per question (keywords, a hypothetical answer, a variant). */
   planQueries: boolean;
   /** Fast models judge each excerpt's relevance; the best are kept, the weak left out. */
@@ -80,12 +84,14 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   councilSize: null,
   merger: "",
   useSources: true,
-  topK: 8,
+  topK: 5,
   minScore: null,
   webSearch: true,
   strict: false,
   research: false,
   researchAuto: true,
+  cacheAnswers: true,
+  highContrast: false,
   planQueries: true,
   rerank: true,
   rankPassages: true,
@@ -227,7 +233,9 @@ export function saveMode(mode: AssistantMode): void {
 export function loadSettings(): ChatSettings {
   try {
     const raw = window.localStorage.getItem(SETTINGS_KEY);
-    const stored = raw ? (JSON.parse(raw) as Partial<ChatSettings>) : {};
+    const stored = raw ? (JSON.parse(raw) as Partial<ChatSettings> & { version?: number }) : {};
+    // Version 2: five excerpts by default, not eight; a saved 8 was the old default.
+    if (!stored.version && stored.topK === 8) delete stored.topK;
     return { ...DEFAULT_SETTINGS, ...stored };
   } catch {
     return DEFAULT_SETTINGS;
@@ -235,10 +243,26 @@ export function loadSettings(): ChatSettings {
 }
 
 export function saveSettings(settings: ChatSettings): void {
+  applyContrast(settings.highContrast);
   try {
-    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
+    window.localStorage.setItem(SETTINGS_KEY, JSON.stringify({ ...settings, version: 2 }));
   } catch {
     // Falls back to the defaults next time.
+  }
+}
+
+/** Read by the script in the page head, so every page opens in the chosen contrast. */
+export const CONTRAST_KEY = "atlas-contrast";
+
+/** High contrast on or off for the whole site, and remembered for the next page. */
+export function applyContrast(high: boolean): void {
+  if (high) document.documentElement.dataset.contrast = "high";
+  else delete document.documentElement.dataset.contrast;
+  try {
+    if (high) window.localStorage.setItem(CONTRAST_KEY, "high");
+    else window.localStorage.removeItem(CONTRAST_KEY);
+  } catch {
+    // Applies to this page only.
   }
 }
 

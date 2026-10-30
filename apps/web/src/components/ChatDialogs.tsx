@@ -647,6 +647,18 @@ function TransparencyTab({ settings, set }: { settings: ChatSettings; set: Patch
         checked={settings.showDrafts}
         onChange={(showDrafts) => set({ showDrafts })}
       />
+      <Toggle
+        label="Reuse answers to repeated questions"
+        hint="The same question with the same settings within a day gets its answer again at once (never for current events or answers from the web). Regenerate always asks afresh."
+        checked={settings.cacheAnswers}
+        onChange={(cacheAnswers) => set({ cacheAnswers })}
+      />
+      <Toggle
+        label="High contrast"
+        hint="Darker text, stronger borders and solid panels."
+        checked={settings.highContrast}
+        onChange={(highContrast) => set({ highContrast })}
+      />
       <p className="mt-3 text-xs text-muted">
         Always shown: the council&apos;s agents as they work (with their times), the web results
         found, the searches the query planner ran, the knowledge-base excerpts each answer was

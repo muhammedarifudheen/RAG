@@ -2,6 +2,8 @@
 
 import type {
   AskResponse,
+  CodeChunk,
+  Confidence,
   FactCheck,
   GapReport,
   GeneratedImage,
@@ -63,6 +65,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
             type="button"
             onClick={() => onCite(citation)}
             data-verified={verified}
+            aria-label={`${formatRange(citation)}${verified ? "" : " (unverified)"}: citation, shows the cited lines`}
             title={
               verified
                 ? "Show this code"
@@ -89,6 +92,18 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
           {markdown}
         </ReactMarkdown>
       </div>
+
+      {(response.confidence || response.cached || response.notice) && (
+        <p className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+          {response.confidence && <ConfidenceBadge confidence={response.confidence} />}
+          {response.cached && (
+            <span className="rounded-full border border-line px-2 py-0.5 text-muted">
+              ↺ Asked before: the answer from then
+            </span>
+          )}
+          {response.notice && <span className="text-warn">{response.notice}</span>}
+        </p>
+      )}
 
       {response.images && response.images.length > 0 && <Gallery images={response.images} />}
 
@@ -185,6 +200,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
       {response.chunks.length > 0 && (
         <details className="mt-4 border-t border-line pt-3 text-xs text-soft">
           <summary className="cursor-pointer select-none text-muted hover:text-paper">
+            <span className="font-medium text-soft">Sources used</span> ·{" "}
             {response.chunks.length} code excerpts were given to {response.model}
             {response.reranking && response.reranking.judged > 0 && (
               <>
@@ -201,8 +217,15 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
               {response.reranking.top_pick}
             </p>
           )}
-          <ul className="mt-2 space-y-1">
-            {response.chunks.map((chunk) => (
+          {response.timings && Object.keys(response.timings).length > 0 && (
+            <p className="mt-2 font-mono text-faint">
+              {Object.entries(response.timings)
+                .map(([stage, seconds]) => `${stage} ${seconds.toFixed(1)} s`)
+                .join(" · ")}
+            </p>
+          )}
+          <ul className="mt-2 space-y-3">
+            {sourcesInOrder(response).map(({ chunk, cited }) => (
               <li key={chunk.symbol_id}>
                 <button
                   type="button"
@@ -233,6 +256,13 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
                     <span className="block pl-4 text-faint">{chunk.relevance_reason}</span>
                   )}
                 </button>
+                <span className="ml-2 inline-flex items-center gap-2 align-middle">
+                  {cited && <span className="rounded-full bg-cyan/10 px-1.5 text-cyan">cited</span>}
+                  <CopyCitation chunk={chunk} />
+                </span>
+                <pre className="mt-1 max-h-16 overflow-hidden whitespace-pre-wrap rounded-lg bg-raised px-2 py-1 font-mono text-[11px] leading-snug text-soft">
+                  {chunk.snippet.split("\n").slice(0, 3).join("\n")}
+                </pre>
               </li>
             ))}
           </ul>
@@ -353,6 +383,62 @@ export function ResearchSteps({ steps }: { steps: ResearchStep[] }) {
         </li>
       ))}
     </ol>
+  );
+}
+
+const LEVEL: Record<Confidence["level"], { label: string; tone: string }> = {
+  high: { label: "High confidence", tone: "border-acid/40 bg-acid/10 text-acid" },
+  medium: { label: "Medium confidence", tone: "border-warn/40 bg-warn/10 text-warn" },
+  low: { label: "Low confidence", tone: "border-danger/40 bg-danger/10 text-danger" },
+};
+
+/** High, medium or low: from the excerpts' relevance and how much is cited and checked. */
+function ConfidenceBadge({ confidence }: { confidence: Confidence }) {
+  const { label, tone } = LEVEL[confidence.level];
+  return (
+    <span
+      role="note"
+      aria-label={`${label}: ${confidence.reason}`}
+      title={confidence.reason}
+      className={`rounded-full border px-2 py-0.5 font-medium ${tone}`}
+    >
+      ● {label}
+    </span>
+  );
+}
+
+/** The excerpts given to the model, those the answer cites first. */
+function sourcesInOrder(response: AskResponse): { chunk: CodeChunk; cited: boolean }[] {
+  const cites = (chunk: CodeChunk) =>
+    response.citations.some(
+      (c) =>
+        c.file === chunk.file &&
+        c.start_line <= chunk.snippet_end_line &&
+        c.end_line >= chunk.start_line,
+    );
+  const rows = response.chunks.map((chunk) => ({ chunk, cited: cites(chunk) }));
+  return [...rows.filter((r) => r.cited), ...rows.filter((r) => !r.cited)];
+}
+
+/** Copies an excerpt's citation, [path:start-end], to paste elsewhere. */
+function CopyCitation({ chunk }: { chunk: CodeChunk }) {
+  const [copied, setCopied] = useState(false);
+  const citation = `[${chunk.file}:${chunk.start_line}-${chunk.snippet_end_line}]`;
+  return (
+    <button
+      type="button"
+      aria-label={`Copy the citation of ${chunk.name}`}
+      title={citation}
+      onClick={() =>
+        void copyText(citation).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        })
+      }
+      className="rounded-full border border-line px-1.5 text-muted hover:border-cyan/60 hover:text-cyan"
+    >
+      {copied ? "Copied" : "⧉ Copy citation"}
+    </button>
   );
 }
 

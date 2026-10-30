@@ -28,6 +28,7 @@ import {
   saveSettings,
   titleOf,
   DEFAULT_SETTINGS,
+  applyContrast,
   PERSONAS,
   type ChatSettings,
   type SavedChat,
@@ -157,7 +158,9 @@ export function Chat() {
     const saved = loadChats();
     setChats(saved);
     setMode(loadMode());
-    setSettings(loadSettings());
+    const loaded = loadSettings();
+    setSettings(loaded);
+    applyContrast(loaded.highContrast);
     const wanted = new URLSearchParams(window.location.search).get("c");
     const chat = wanted ? saved.find((c) => c.id === wanted) : undefined;
     if (chat) {
@@ -205,6 +208,7 @@ export function Chat() {
     attachments: StoredAttachment[],
     draw: boolean,
     base: StoredMessage[] = messages.map(({ id: _id, ...message }) => message),
+    fresh = false,
   ) {
     const trimmed = text.trim();
     if (!trimmed || pending) return;
@@ -252,6 +256,8 @@ export function Chat() {
           strict: settings.strict,
           planQueries: settings.planQueries,
           research: settings.research ? true : settings.researchAuto ? undefined : false,
+          cache: settings.cacheAnswers ? undefined : false,
+          fresh,
           rerank: settings.rerank,
           rankPassages: settings.rankPassages,
           rerankCutoff: settings.rerankCutoff,
@@ -342,7 +348,8 @@ export function Chat() {
     if (question.role !== "user") return;
     const after = all[index + 1];
     const drew = after?.role === "assistant" && after.response.route === "image";
-    void send(question.text, question.attachments ?? [], drew, all.slice(0, index));
+    // Regenerating asks afresh, never for the stored answer.
+    void send(question.text, question.attachments ?? [], drew, all.slice(0, index), true);
   }
 
   function resendEdited(messageId: number, text: string) {

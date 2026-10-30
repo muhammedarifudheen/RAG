@@ -9,6 +9,7 @@ for. Without one, a single model answers, and the next takes over if it fails.
 
 from __future__ import annotations
 
+import json
 import logging
 import queue
 import re
@@ -33,6 +34,7 @@ from app.schemas import (
     AskResponse,
     Attachment,
     ChatTurn,
+    Citation,
     CodeChunk,
     FactCheck,
     GeneratedImage,
@@ -49,6 +51,8 @@ from .agent import (
     parse_action,
     read_text,
 )
+from .cache import TTLCache, key_of
+from .confidence import confidence
 from .factcheck import parse_fact_check
 from .horde import HordeTextProvider
 from .images import (
@@ -144,6 +148,8 @@ class Options:
     search_queries: Sequence[str] = ()  # what the query planner had searched for
     reranking: Reranking | None = None  # what the relevance judge did
     research: ResearchTools | None = None  # deep research: the agent's tools
+    timings: dict | None = None  # seconds per stage before the answer: plan, search, judge
+    notice: str | None = None  # something to tell the user, such as a search fallback
 
 
 # The query planner's time; after it the question alone is searched.
@@ -249,6 +255,7 @@ class Assistant:
         planner: bool = False,
         reranker: bool = False,
         judge_services: Sequence[str] = (),
+        answer_cache: bool = False,
         analyse_repo: Callable[[str, Callable[[str], None]], RepoReport] = analyse_repo,
         fetch_text: Callable[[str], str] | None = None,
     ) -> None:
@@ -258,6 +265,10 @@ class Assistant:
         # Judge each excerpt's relevance and rerank them (see judge_chunks).
         self.reranker = reranker
         self.judge_services = tuple(judge_services)
+        # Answers to repeated questions (the router asks it), and the judge's verdicts per
+        # question and excerpt, each for a day.
+        self.answer_cache: TTLCache[dict] | None = TTLCache(256) if answer_cache else None
+        self.verdict_cache: TTLCache[tuple[int, str]] = TTLCache(5000)
         self.analyse_repo = analyse_repo
         # Reads a GitHub file linked in a review request; None leaves such links out.
         self.fetch_text = fetch_text
@@ -305,6 +316,11 @@ class Assistant:
         reranking = options.reranking if options else None
         if reranking is not None:
             yield "judged", reranking.model_dump()
+        notice = options.notice if options else None
+        if notice:
+            yield "notice", {"message": notice}
+        timings = dict((options.timings if options else None) or {})
+        answering = time.monotonic()
         steps: list[dict] = []
         for name, data in self._respond(question, chunks, history, mode, options, review):
             if name == "researching":
@@ -317,6 +333,18 @@ class Assistant:
                 data = {**data, "search_queries": planned}
             if name == "done" and reranking is not None:
                 data = {**data, "reranking": reranking.model_dump()}
+            if name == "done":
+                timings["answer"] = round(time.monotonic() - answering, 2)
+                data = {**data, "timings": timings, "notice": notice}
+                shown = [CodeChunk(**c) for c in data.get("chunks", [])]
+                rated = confidence(
+                    data.get("answer", ""),
+                    shown,
+                    [Citation(**c) for c in data.get("citations", [])],
+                )
+                if rated is not None:
+                    data = {**data, "confidence": rated.model_dump()}
+                _log_answer(question, options, data)
             if (
                 name == "done"
                 and options is not None
@@ -561,9 +589,20 @@ class Assistant:
         models = ([p for p in candidates if not self._resting(p)] or candidates)[:JUDGE_MODELS]
         if not models or not chunks:
             return {}
-        verdicts: dict[int, tuple[int, str]] = {}
         lock = threading.Lock()
         system = "You are a relevance judge. Reply with the JSON asked for and nothing else."
+        asked = " ".join(question.lower().split())
+
+        def cache_key(chunk: CodeChunk) -> str:
+            return key_of(asked, chunk.file, chunk.start_line, chunk.snippet)
+
+        # Excerpts judged for this question before keep their verdicts.
+        verdicts: dict[int, tuple[int, str]] = {}
+        for chunk in chunks:
+            known = self.verdict_cache.get(cache_key(chunk))
+            if known is not None:
+                verdicts[chunk.symbol_id] = known
+        unjudged = [c for c in chunks if c.symbol_id not in verdicts]
 
         def judge(index: int, chunk: CodeChunk) -> None:
             prompt = judge_prompt(question[:2000], chunk_text(chunk))
@@ -588,10 +627,11 @@ class Assistant:
                 if verdict is not None:
                     with lock:
                         verdicts[chunk.symbol_id] = verdict
+                    self.verdict_cache.put(cache_key(chunk), verdict)
                     return
 
         threads = [
-            threading.Thread(target=judge, args=(i, c), daemon=True) for i, c in enumerate(chunks)
+            threading.Thread(target=judge, args=(i, c), daemon=True) for i, c in enumerate(unjudged)
         ]
         for thread in threads:
             thread.start()
@@ -1445,12 +1485,35 @@ def _build() -> Assistant:
         merge_by_speed=settings.assistant_merge_by_speed,
         planner=settings.assistant_query_planner,
         reranker=settings.assistant_reranker,
+        answer_cache=settings.assistant_answer_cache,
         judge_services=[
             n.strip() for n in settings.assistant_judge_services.split(",") if n.strip()
         ],
         fetch_text=lambda url: _read_text(http, url),
         merge_drafts=settings.assistant_merge_drafts,
     )
+
+
+def _log_answer(question: str, options: Options | None, data: dict) -> None:
+    """One line per answer for observability: the query, its rewrites, what was retrieved
+    and how relevant, the citation check, the confidence and the seconds per stage."""
+    chunks = data.get("chunks", [])
+    citations = data.get("citations", [])
+    record = {
+        "query": question[:300],
+        "rewritten": list((options.search_queries if options else ()) or ())[1:],
+        "retrieved": [c.get("symbol_id") for c in chunks],
+        "scores": [round(c.get("score", 0), 3) for c in chunks],
+        "relevance": [c.get("relevance") for c in chunks],
+        "route": data.get("route"),
+        "model": data.get("model"),
+        "answer_chars": len(data.get("answer", "")),
+        "citations": len(citations),
+        "verified": sum(1 for c in citations if c.get("verified")),
+        "confidence": (data.get("confidence") or {}).get("level"),
+        "timings": data.get("timings"),
+    }
+    logger.info("answer %s", json.dumps(record, default=str))
 
 
 def get_assistant() -> Assistant:

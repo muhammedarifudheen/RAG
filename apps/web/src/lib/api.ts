@@ -182,10 +182,14 @@ export interface AssistantQuestion {
   rankPassages?: boolean;
   /** True always, false never, unset when the server decides. */
   research?: boolean;
+  /** False: never use the answer cache. */
+  cache?: boolean;
+  /** Answer afresh this once, but keep the answer (Regenerate). */
+  fresh?: boolean;
   rerankCutoff?: number | null;
 }
 
-const DEFAULT_TOP_K = 8;
+const DEFAULT_TOP_K = 5;
 
 /** The request body, with only what differs from the API's defaults. */
 export function askBody(asked: AssistantQuestion): AskRequest {
@@ -212,6 +216,7 @@ export function askBody(asked: AssistantQuestion): AskRequest {
   if (asked.planQueries === false) body.plan_queries = false;
   if (asked.rerank === false) body.rerank = false;
   if (asked.research !== undefined) body.research = asked.research;
+  if (asked.cache === false) body.cache = false;
   if (asked.rankPassages === false) body.rank_passages = false;
   if (asked.rerankCutoff !== undefined && asked.rerankCutoff !== null) {
     body.rerank_cutoff = asked.rerankCutoff;
@@ -239,6 +244,7 @@ export async function askAssistant(
       "Content-Type": "application/json",
       Accept: "text/event-stream, application/json",
       "X-Atlas-Mode": mode,
+      ...(asked.fresh ? { "X-Atlas-Fresh": "true" } : {}),
     },
     body: JSON.stringify(body),
     signal,

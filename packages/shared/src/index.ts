@@ -92,6 +92,8 @@ export interface AskRequest {
   strict?: boolean;
   /** Deep research: true always, false never; unset only for questions that look complex. */
   research?: boolean;
+  /** False answers afresh instead of reusing the answer to the same question. */
+  cache?: boolean;
   /** Plan several knowledge-base searches (keywords, a hypothetical answer…); default true. */
   plan_queries?: boolean;
   /** Judge each excerpt's relevance (0-10) and rerank; default true. */
@@ -100,6 +102,18 @@ export interface AskRequest {
   rank_passages?: boolean;
   /** Judged excerpts scoring below this are left out; unset is the server's (4). */
   rerank_cutoff?: number;
+}
+
+/** How far an answer from the knowledge base can be trusted. */
+export interface Confidence {
+  level: "high" | "medium" | "low";
+  /** How relevant the excerpts were, 0-1. */
+  relevance: number;
+  /** The share of the answer's sentences cited. */
+  coverage: number;
+  verified: number;
+  citations: number;
+  reason: string;
 }
 
 /** One tool call of deep research. */
@@ -244,6 +258,14 @@ export interface AskResponse {
   fact_check?: FactCheck | null;
   /** Deep research: each tool call the agent made, in order. */
   research_steps?: ResearchStep[];
+  /** For an answer from the knowledge base: high, medium or low, and why. */
+  confidence?: Confidence | null;
+  /** Seconds per stage: plan, search, judge, research, answer. */
+  timings?: Record<string, number>;
+  /** True if this is the stored answer to the same question, asked before. */
+  cached?: boolean;
+  /** Something to know about how it was answered, such as a search fallback. */
+  notice?: string | null;
   /** What the knowledge base lacks for the question, when asked for (task "gaps"). */
   gaps?: GapReport | null;
   /** True for a strict answer: the page asks for its fact-check once it is shown. */

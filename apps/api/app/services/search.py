@@ -1,6 +1,8 @@
+import logging
 import re
+from collections.abc import Sequence
 
-from sqlalchemy import select, text
+from sqlalchemy import func, literal_column, select, text
 from sqlalchemy.orm import Session
 
 from app.embedding import Embedder
@@ -39,13 +41,25 @@ def snippet(content: str, start_line: int, end_line: int, max_lines: int) -> tup
     return "\n".join(line.rstrip("\r") for line in lines), start_line + max(len(lines), 1) - 1
 
 
+logger = logging.getLogger("atlas.api.search")
+
+# Hybrid search fetches this many candidates from each of vector and keyword search.
+CANDIDATES = 20
+
+
 def search_symbols(
-    db: Session, embedder: Embedder, query: str, limit: int, max_lines: int
+    db: Session,
+    embedder: Embedder,
+    query: str,
+    limit: int,
+    max_lines: int,
+    vector: Sequence[float] | None = None,
 ) -> list[CodeChunk]:
     """The `limit` symbols whose embeddings are closest to the query, nearest first."""
-    distance = Symbol.embedding.cosine_distance(embedder.embed(query)).label("distance")
-    # The HNSW index returns at most ef_search rows (40 by default).
-    db.execute(text(f"SET LOCAL hnsw.ef_search = {max(int(limit) * 2, 40)}"))
+    embedded = vector if vector is not None else embedder.embed(query)
+    distance = Symbol.embedding.cosine_distance(embedded).label("distance")
+    # The HNSW index returns at most ef_search rows.
+    db.execute(text(f"SET LOCAL hnsw.ef_search = {max(int(limit) * 2, 64)}"))
     rows = db.execute(
         select(Symbol, File.path, File.language, File.content, distance)
         .join(File, File.id == Symbol.file_id)
@@ -53,7 +67,76 @@ def search_symbols(
         .order_by(distance)
         .limit(limit)
     ).all()
+    return _chunks(rows, max_lines)
 
+
+def keyword_symbols(
+    db: Session,
+    query: str,
+    limit: int,
+    max_lines: int,
+    vector: Sequence[float] | None = None,
+) -> list[CodeChunk]:
+    """The `limit` symbols whose words best match the query's (full-text search, ranked
+    by cover density), best first. With the query's embedding, each keeps its cosine
+    similarity as its score, so relevance thresholds mean the same as for vector
+    search; without one (vector search failed), the keyword rank stands in."""
+    words = [w for w in re.findall(r"[a-z0-9]+", query.lower()) if len(w) > 1][:24]
+    if not words:
+        return []
+    terms = func.to_tsquery("english", " | ".join(words))
+    search = literal_column("symbols.search")
+    rank = func.ts_rank_cd(search, terms).label("rank")
+    score = (
+        Symbol.embedding.cosine_distance(vector).label("distance")
+        if vector is not None
+        else (1.0 - func.least(rank, 1.0)).label("distance")
+    )
+    rows = db.execute(
+        select(Symbol, File.path, File.language, File.content, score)
+        .join(File, File.id == Symbol.file_id)
+        .where(search.op("@@")(terms))
+        .order_by(rank.desc())
+        .limit(limit)
+    ).all()
+    return _chunks(rows, max_lines)
+
+
+def hybrid_search(
+    db: Session, embedder: Embedder, query: str, limit: int, max_lines: int
+) -> tuple[list[CodeChunk], str | None]:
+    """Vector and keyword search, CANDIDATES each, fused by reciprocal rank: an excerpt
+    both find comes first. If vector search fails (the embedder or the index), keyword
+    search alone; if keyword search fails, vector alone. Returns the excerpts and a
+    notice for the user when one of them failed."""
+    from app.assistant.planner import fuse  # the assistant's fusion, kept in one place
+
+    pool = max(limit, CANDIDATES)
+    vector: Sequence[float] | None = None
+    try:
+        vector = embedder.embed(query)
+        semantic = search_symbols(db, embedder, query, pool, max_lines, vector=vector)
+    except Exception:
+        logger.exception("vector search failed; keyword search only")
+        db.rollback()
+        try:
+            return keyword_symbols(db, query, limit, max_lines), (
+                "Retrieval failed, so this answer used keyword search."
+            )
+        except Exception:
+            logger.exception("keyword search failed too")
+            db.rollback()
+            raise
+    try:
+        keyword = keyword_symbols(db, query, pool, max_lines, vector=vector)
+    except Exception:
+        logger.exception("keyword search failed; vector search only")
+        db.rollback()
+        return semantic[:limit], None
+    return fuse([semantic, keyword], limit), None
+
+
+def _chunks(rows: Sequence, max_lines: int) -> list[CodeChunk]:
     chunks = []
     for symbol, path, language, content, dist in rows:
         code, last_line = snippet(content, symbol.start_line, symbol.end_line, max_lines)
@@ -99,8 +182,7 @@ def extract_citations(answer: str, chunks: list[CodeChunk]) -> list[Citation]:
                     file=path,
                     start_line=start,
                     end_line=end,
-                    verified=start <= end
-                    and set(range(start, end + 1)) <= shown.get(path, set()),
+                    verified=start <= end and set(range(start, end + 1)) <= shown.get(path, set()),
                 ),
             )
     return list(citations.values())
