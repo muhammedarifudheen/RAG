@@ -1,12 +1,17 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.admin import ADMIN_REQUIRED, require_admin
+from app.assistant import Assistant, get_assistant
 from app.config import settings
 from app.db import get_db
+from app.models import KnowledgeAudit, Source
 from app.ratelimit import rate_limit
-from app.schemas import HealthReport, Liveness
+from app.schemas import HealthReport, KnowledgeAuditOut, Liveness
+from app.services.catalog import source_catalog
 from app.services.health import code_health
 
 router = APIRouter()
@@ -43,7 +48,62 @@ def health(
 
     `summary` gives totals; each list is capped at `limit`. This is a report on the
     code, not a liveness probe: use `/healthz` for that."""
-    return code_health(db, max_function_loc=max_function_loc, min_fan_out=min_fan_out, limit=limit)
+    report = code_health(
+        db, max_function_loc=max_function_loc, min_fan_out=min_fan_out, limit=limit
+    )
+    return report.model_copy(update={"knowledge_audit": _latest_audit(db)})
+
+
+@router.post(
+    "/health",
+    response_model=KnowledgeAuditOut,
+    tags=["health"],
+    summary="Audit the knowledge base",
+    responses={
+        **ADMIN_REQUIRED,
+        409: {"description": "Nothing has been ingested yet."},
+        429: {"description": "Rate limit exceeded; see the Retry-After header."},
+        503: {"description": "No model wrote the audit in time."},
+    },
+    dependencies=[
+        Depends(require_admin),
+        Depends(rate_limit("ask", lambda: settings.ask_rate_limit_per_minute)),
+    ],
+)
+def audit(
+    db: Annotated[Session, Depends(get_db)],
+    assistant: Annotated[Assistant, Depends(get_assistant)],
+) -> KnowledgeAuditOut:
+    """Has a model audit every source (coverage, staleness, overlap with other sources,
+    three questions it cannot answer) as a Markdown table, and keeps it: `GET /health`
+    returns the newest. Run weekly, and after each deploy, by the knowledge-audit
+    workflow. Admin only."""
+    catalog = source_catalog(db)
+    if not catalog:
+        raise HTTPException(409, "The knowledge base is empty; add a source first.")
+    written = assistant.audit_sources(catalog)
+    if written is None:
+        raise HTTPException(503, "No model wrote the audit in time; try again in a minute.")
+    report, model = written
+    sources = db.scalar(select(func.count()).select_from(Source)) or 0
+    row = KnowledgeAudit(report=report, model=model, sources=sources)
+    db.add(row)
+    db.commit()
+    db.refresh(row)
+    return KnowledgeAuditOut(
+        report=row.report, model=row.model, sources=row.sources, created_at=row.created_at
+    )
+
+
+def _latest_audit(db: Session) -> KnowledgeAuditOut | None:
+    row = db.scalars(
+        select(KnowledgeAudit).order_by(KnowledgeAudit.created_at.desc(), KnowledgeAudit.id.desc())
+    ).first()
+    if row is None:
+        return None
+    return KnowledgeAuditOut(
+        report=row.report, model=row.model, sources=row.sources, created_at=row.created_at
+    )
 
 
 @router.get("/healthz", response_model=Liveness, tags=["ops"], summary="Liveness probe")

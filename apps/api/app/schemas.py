@@ -501,6 +501,15 @@ class HealthThresholds(BaseModel):
     min_fan_out: int
 
 
+class KnowledgeAuditOut(BaseModel):
+    report: str = Field(
+        description="Markdown table: each source's coverage, staleness, redundancy and gaps."
+    )
+    model: str = Field(description='"Service · model" that wrote it.')
+    sources: int = Field(description="How many sources were audited.")
+    created_at: datetime
+
+
 class HealthReport(BaseModel):
     summary: HealthSummary = Field(description="Totals, before the per-list limit is applied.")
     thresholds: HealthThresholds
@@ -508,6 +517,9 @@ class HealthReport(BaseModel):
     circular_dependencies: Cycles
     long_functions: list[LongFunction]
     high_fan_out_files: list[FanOut]
+    knowledge_audit: KnowledgeAuditOut | None = Field(
+        default=None, description="The newest health check of the knowledge base, if any."
+    )
 
 
 class Liveness(BaseModel):

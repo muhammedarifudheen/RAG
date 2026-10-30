@@ -36,6 +36,11 @@ const DEFAULT_CRAWL_PAGES = 20;
 
 export function IngestForm() {
   const [url, setUrl] = useState("");
+  // "Add this source" from the gap finder links here with ?add=<address>.
+  useEffect(() => {
+    const suggested = new URLSearchParams(window.location.search).get("add");
+    if (suggested) setUrl(suggested);
+  }, []);
   const [crawl, setCrawl] = useState(false);
   const [pages, setPages] = useState(DEFAULT_CRAWL_PAGES);
   const [steps, setSteps] = useState<Step[]>([]);

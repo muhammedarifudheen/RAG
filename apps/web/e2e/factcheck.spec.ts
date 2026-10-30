@@ -55,6 +55,15 @@ async function mock(page: Page, answers: AskResponse[], checks: FactCheck[]): Pr
         body: JSON.stringify(reply(body.answer ?? "", { fact_check: checks.shift() })),
       });
     }
+    if (body.task === "gaps") {
+      // Unsupported claims also ask the gap finder what the knowledge base lacks.
+      const gaps = { report: "2. Missing: the hash used.", suggestion_url: null, found_by: "x" };
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(reply(gaps.report, { gaps })),
+      });
+    }
     const next = answers.shift() ?? reply("…");
     return route.fulfill({
       status: 200,

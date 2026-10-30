@@ -13,6 +13,7 @@ import type {
   CodeChunk,
   CouncilAgent,
   FactCheck,
+  GapReport,
   FileDetail,
   GeneratedImage,
   FileGraph,
@@ -23,6 +24,7 @@ import type {
   IngestProgress,
   IngestRequest,
   IngestResult,
+  KnowledgeAudit,
   SharedChat,
   SiteConfig,
   SourceItem,
@@ -286,6 +288,17 @@ export async function factCheck(
   return response.fact_check;
 }
 
+/** Has the gap finder say what the knowledge base lacks to answer a question. */
+export async function findGaps(question: string): Promise<GapReport> {
+  const response = await request<AskResponse>("/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ question, task: "gaps" }),
+  });
+  if (!response.gaps) throw new ApiError(503, "The gap finder gave no report.");
+  return response.gaps;
+}
+
 /** Reads a document's text (PDF, EPUB, HTML, code, plain text) for attaching to a question. */
 export async function readAttachment(file: File): Promise<AttachmentText> {
   const form = new FormData();
@@ -318,6 +331,11 @@ export function getFileGraph(): Promise<FileGraph> {
 
 export function getHealth(params: HealthParams = {}): Promise<HealthReport> {
   return request<HealthReport>(`/health${query(params)}`);
+}
+
+/** Has a model audit every source now (admin only); the table is kept for the Health page. */
+export function runKnowledgeAudit(): Promise<KnowledgeAudit> {
+  return request<KnowledgeAudit>("/health", { method: "POST", headers: adminHeaders() });
 }
 
 export function getSources(): Promise<SourceItem[]> {

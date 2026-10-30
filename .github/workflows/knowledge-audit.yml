@@ -1,0 +1,50 @@
+# The knowledge-base health check: a model audits every source (coverage, staleness,
+# overlap, gaps) and the server keeps the table for the Health page. Weekly, and after
+# each server deploy, because the free server's database starts afresh on every deploy.
+# Needs the repository secret ATLAS_ADMIN_TOKEN (the server's ADMIN_TOKEN) and the
+# variable PUBLIC_API_URL; without them nothing runs.
+name: Audit the knowledge base
+
+on:
+  schedule:
+    - cron: "17 6 * * 1" # Mondays, 06:17 UTC
+  workflow_run:
+    workflows: [Deploy server]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  audit:
+    if: >-
+      vars.PUBLIC_API_URL != '' &&
+      (github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API: ${{ vars.PUBLIC_API_URL }}
+      TOKEN: ${{ secrets.ATLAS_ADMIN_TOKEN }}
+    steps:
+      - name: Wake the server
+        run: curl -fsS --max-time 120 --retry 3 --retry-delay 15 -o /dev/null "$API/healthz"
+      - name: Run the audit
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::Set the ATLAS_ADMIN_TOKEN secret to audit the knowledge base."
+            exit 0
+          fi
+          # A model writes the table in a minute or two; retry once if none was free.
+          for attempt in 1 2; do
+            status=$(curl -sS --max-time 300 -o audit.json -w "%{http_code}" -X POST "$API/health" \
+              -H "Authorization: Bearer $TOKEN")
+            echo "attempt $attempt: HTTP $status"
+            if [ "$status" = 200 ]; then
+              jq -r '"Audited \(.sources) sources with \(.model)\n\n\(.report)"' audit.json >> "$GITHUB_STEP_SUMMARY"
+              exit 0
+            fi
+            cat audit.json; echo
+            sleep 60
+          done
+          echo "::error::The audit did not run (HTTP $status)."
+          exit 1

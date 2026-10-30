@@ -1,6 +1,7 @@
 "use client";
 
-import type { AskResponse, FactCheck, GeneratedImage } from "@atlas/shared";
+import type { AskResponse, FactCheck, GapReport, GeneratedImage } from "@atlas/shared";
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
@@ -13,7 +14,7 @@ import {
   parseCitationHref,
   type CodeRange,
 } from "@/lib/citations";
-import { factCheck } from "@/lib/api";
+import { factCheck, findGaps } from "@/lib/api";
 import { copyText } from "@/lib/exporting";
 import { normalizeMath } from "@/lib/markdown";
 
@@ -24,12 +25,14 @@ interface Props {
   onCite: (range: CodeRange) => void;
   /** A fact-check finished, to keep with the answer. */
   onFactChecked?: (report: FactCheck) => void;
+  /** The gap finder reported, to keep with the answer. */
+  onGapsFound?: (gaps: GapReport) => void;
 }
 
 const REMARK = [remarkGfm, remarkMath];
 const REHYPE = [rehypeKatex];
 
-export function Answer({ response, onCite, onFactChecked }: Props) {
+export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) {
   const markdown = useMemo(
     () => normalizeMath(linkifyCitations(response.answer)),
     [response.answer],
@@ -84,6 +87,7 @@ export function Answer({ response, onCite, onFactChecked }: Props) {
       {response.images && response.images.length > 0 && <Gallery images={response.images} />}
 
       <FactCheckPanel response={response} onChecked={onFactChecked} />
+      <GapsPanel response={response} onFound={onGapsFound} />
 
       {response.analysis && (
         <details className="mt-4 border-t border-line pt-3">
@@ -310,6 +314,73 @@ function FactCheckPanel({
         </div>
       )}
       {report.checked_by && <p className="mt-2 text-xs text-faint">Checked by {report.checked_by}</p>}
+    </section>
+  );
+}
+
+/** The strict answer when the knowledge base has nothing on the question. */
+const NOT_IN_SOURCES = "I don't have that in the knowledge base.";
+
+/**
+ * What the knowledge base lacks, when it fell short: asked for by itself after a strict
+ * "not in the knowledge base" or a fact-check that found unsupported claims.
+ */
+function GapsPanel({
+  response,
+  onFound,
+}: {
+  response: AskResponse;
+  onFound?: (gaps: GapReport) => void;
+}) {
+  const [gaps, setGaps] = useState<GapReport | null>(response.gaps ?? null);
+  const [state, setState] = useState<"idle" | "finding" | "failed">("idle");
+  const started = useRef(false);
+  const short =
+    response.answer.trim() === NOT_IN_SOURCES ||
+    (response.fact_check?.unsupported.length ?? 0) > 0;
+
+  useEffect(() => {
+    if (!short || response.gaps || started.current) return;
+    started.current = true;
+    setState("finding");
+    findGaps(response.question)
+      .then((found) => {
+        setGaps(found);
+        setState("idle");
+        onFound?.(found);
+      })
+      .catch(() => setState("failed"));
+  }, [short, response, onFound]);
+
+  if (!gaps) {
+    if (state === "finding") {
+      return (
+        <p role="status" className="mt-3 animate-pulse text-xs text-muted">
+          Looking for what the knowledge base is missing…
+        </p>
+      );
+    }
+    return null;
+  }
+  return (
+    <section aria-label="What's missing" className="mt-4 rounded-2xl border border-signal/30 bg-signal/5 p-3">
+      <p className="label text-signal">What the knowledge base is missing</p>
+      <div className="markdown mt-2 text-sm leading-relaxed">
+        <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE}>
+          {normalizeMath(gaps.report)}
+        </ReactMarkdown>
+      </div>
+      <p className="mt-3 flex flex-wrap items-center gap-3 text-xs">
+        {gaps.suggestion_url && (
+          <Link
+            href={`/?add=${encodeURIComponent(gaps.suggestion_url)}`}
+            className="rounded-full bg-signal px-3 py-1 font-medium text-white hover:opacity-90"
+          >
+            + Add this source
+          </Link>
+        )}
+        {gaps.found_by && <span className="text-faint">Found by {gaps.found_by}</span>}
+      </p>
     </section>
   );
 }

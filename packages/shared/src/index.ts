@@ -67,7 +67,7 @@ export interface AskRequest {
   /** Standing instructions to the assistant. */
   instructions?: string;
   /** "image" draws a picture of the question; "check" fact-checks `answer` against `chunks`. */
-  task?: "answer" | "image" | "review" | "check";
+  task?: "answer" | "image" | "review" | "check" | "gaps";
   /** For task "check": the answer to fact-check, and the excerpts it was given. */
   answer?: string;
   chunks?: CodeChunk[];
@@ -98,6 +98,16 @@ export interface AskRequest {
   rank_passages?: boolean;
   /** Judged excerpts scoring below this are left out; unset is the server's (4). */
   rerank_cutoff?: number;
+}
+
+/** What the knowledge base covers and lacks for a question (task "gaps"). */
+export interface GapReport {
+  /** Markdown: what it covers well, what is missing, the best source to add. */
+  report: string;
+  /** The link to the source it suggests adding, when it gave one. */
+  suggestion_url?: string | null;
+  /** "Service · model". */
+  found_by: string;
 }
 
 /** The fact-checker's report on an answer, against the excerpts it was given. */
@@ -220,6 +230,8 @@ export interface AskResponse {
   reranking?: Reranking | null;
   /** The fact-checker's report, when asked for (task "check"). */
   fact_check?: FactCheck | null;
+  /** What the knowledge base lacks for the question, when asked for (task "gaps"). */
+  gaps?: GapReport | null;
   /** True for a strict answer: the page asks for its fact-check once it is shown. */
   fact_check_pending?: boolean;
 }
@@ -395,6 +407,16 @@ export interface HealthThresholds {
   min_fan_out: number;
 }
 
+/** A model's health check of the whole knowledge base. */
+export interface KnowledgeAudit {
+  /** Markdown table: each source's coverage, staleness, redundancy and gaps. */
+  report: string;
+  /** "Service · model". */
+  model: string;
+  sources: number;
+  created_at: string;
+}
+
 export interface HealthReport {
   summary: HealthSummary;
   thresholds: HealthThresholds;
@@ -402,6 +424,8 @@ export interface HealthReport {
   circular_dependencies: Cycles;
   long_functions: LongFunction[];
   high_fan_out_files: FanOut[];
+  /** The newest health check of the knowledge base, if any. */
+  knowledge_audit?: KnowledgeAudit | null;
 }
 
 export interface HealthParams {

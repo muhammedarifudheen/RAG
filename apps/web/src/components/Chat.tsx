@@ -7,7 +7,6 @@ import type {
   ChatTurn,
   CodeAnalysis,
   CouncilAgent,
-  FactCheck,
   GeneratedImage,
   WebSource,
 } from "@atlas/shared";
@@ -302,8 +301,8 @@ export function Chat() {
     if (reply.role === "assistant" && settings.speak) speaker.speak(`m-${shown.id}`, reply.response.answer);
   }
 
-  /** Keeps a fact-check with its answer, so it is not asked for again. */
-  function saveFactCheck(messageId: number, checked: AskResponse, report: FactCheck) {
+  /** Keeps a fact-check or gap report with its answer, so it is not asked for again. */
+  function updateAnswer(messageId: number, checked: AskResponse, patch: Partial<AskResponse>) {
     const owner = chatId;
     setMessages((current) => {
       const at = current.findIndex(
@@ -318,7 +317,7 @@ export function Chat() {
       const message = next[at] as Extract<Message, { role: "assistant" }>;
       next[at] = {
         ...message,
-        response: { ...message.response, fact_check: report, fact_check_pending: false },
+        response: { ...message.response, ...patch },
       };
       if (owner) remember(owner, next.map(({ id: _id, ...rest }) => rest));
       return next;
@@ -576,7 +575,13 @@ export function Chat() {
                   <Answer
                     response={message.response}
                     onCite={setSelected}
-                    onFactChecked={(report) => saveFactCheck(message.id, message.response, report)}
+                    onFactChecked={(report) =>
+                      updateAnswer(message.id, message.response, {
+                        fact_check: report,
+                        fact_check_pending: false,
+                      })
+                    }
+                    onGapsFound={(gaps) => updateAnswer(message.id, message.response, { gaps })}
                   />
                   <div className="mt-1.5 flex items-center gap-1 pl-1">
                     <ActionButton label="Copy answer" onClick={() => void copyAnswer(message.response.answer)}>
