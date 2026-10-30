@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Inter, JetBrains_Mono, Sora } from "next/font/google";
 
 import { Nav } from "@/components/Nav";
+import { THEME_SCRIPT } from "@/lib/theme";
 
 import "katex/dist/katex.min.css";
 import "./globals.css";
@@ -17,7 +18,7 @@ export const metadata: Metadata = {
   description: "An AI assistant over your own sources: ask, attach, draw, search and inspect.",
 };
 
-export const viewport: Viewport = { themeColor: "#f6f6fb" };
+export const viewport: Viewport = { themeColor: "#090b14" };
 
 export default function RootLayout({
   children,
@@ -27,13 +28,8 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${display.variable} ${body.variable} ${mono.variable}`}>
       <head>
-        {/* High contrast before the first paint, so the page never flashes the other way. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html:
-              "try{if(localStorage.getItem('atlas-contrast')==='high')document.documentElement.dataset.contrast='high'}catch(e){}",
-          }}
-        />
+        {/* The theme and contrast before the first paint, so the page never flashes. */}
+        <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="flex min-h-screen flex-col font-sans text-paper antialiased">
         <Nav />

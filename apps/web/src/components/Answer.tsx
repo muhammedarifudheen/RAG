@@ -133,7 +133,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
               <section
                 key={draft.agent}
                 aria-label={`Draft by ${draft.agent}`}
-                className="rounded-2xl border border-line bg-white/70 p-3"
+                className="rounded-2xl border border-line bg-raised/60 p-3"
               >
                 <p className="flex items-baseline justify-between gap-2 text-xs">
                   <span className="font-medium text-soft">{draft.agent}</span>

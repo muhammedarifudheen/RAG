@@ -133,6 +133,25 @@ export function Chat() {
   const [mode, setMode] = useState<AssistantMode>("auto");
   const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
   const [showChats, setShowChats] = useState(false);
+  // On wide screens the chat list can fold away for a single centred column.
+  const [chatsHidden, setChatsHidden] = useState(false);
+  useEffect(() => {
+    try {
+      setChatsHidden(window.localStorage.getItem("atlas-chats-hidden") === "1");
+    } catch {
+      // Shown.
+    }
+  }, []);
+  function toggleChats() {
+    setChatsHidden((hidden) => {
+      try {
+        window.localStorage.setItem("atlas-chats-hidden", hidden ? "0" : "1");
+      } catch {
+        // This page only.
+      }
+      return !hidden;
+    });
+  }
   const [dialog, setDialog] = useState<DialogName>(null);
   const [editing, setEditing] = useState<number | null>(null);
   const [notice, setNotice] = useState("");
@@ -470,6 +489,7 @@ export function Chat() {
         chats={chats}
         currentId={chatId}
         open={showChats}
+        collapsed={chatsHidden}
         busy={pending !== null}
         onOpen={openChat}
         onNew={startNewChat}
@@ -491,18 +511,32 @@ export function Chat() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-white/70 bg-white/40 px-4 py-2 backdrop-blur-xl">
+        <div className="flex items-center gap-2 border-b border-line/40 bg-ink/30 px-4 py-2 backdrop-blur-xl">
           <button
             type="button"
             onClick={() => setShowChats((v) => !v)}
-            className="label border border-line px-2 py-1 text-muted md:hidden"
+            className="label rounded-full border border-line px-2.5 py-1 text-muted md:hidden"
           >
             Chats
+          </button>
+          <button
+            type="button"
+            onClick={toggleChats}
+            aria-label={chatsHidden ? "Show the chat list" : "Hide the chat list"}
+            aria-pressed={!chatsHidden}
+            title={chatsHidden ? "Show the chat list" : "Hide the chat list"}
+            className="hidden h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-raised hover:text-paper md:flex"
+          >
+            <span aria-hidden="true">{chatsHidden ? "☰" : "⟨"}</span>
           </button>
           <p className="min-w-0 flex-1 truncate font-display text-sm font-medium text-soft">
             {title}
           </p>
-          <div role="radiogroup" aria-label="Models" className="flex border border-line-strong">
+          <div
+            role="radiogroup"
+            aria-label="Models"
+            className="flex rounded-full border border-line bg-panel/60 p-0.5"
+          >
             {MODES.map((option) => (
               <button
                 key={option.value}
@@ -511,8 +545,8 @@ export function Chat() {
                 aria-checked={mode === option.value}
                 title={option.hint}
                 onClick={() => chooseMode(option.value)}
-                className={`whitespace-nowrap px-2.5 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                  mode === option.value ? "bg-paper text-ink" : "text-muted hover:text-paper"
+                className={`whitespace-nowrap rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
+                  mode === option.value ? "bg-signal text-white shadow-glow" : "text-muted hover:text-paper"
                 }`}
               >
                 {option.label}
@@ -595,7 +629,11 @@ export function Chat() {
                     }
                     onGapsFound={(gaps) => updateAnswer(message.id, message.response, { gaps })}
                   />
-                  <div className="mt-1.5 flex items-center gap-1 pl-1">
+                  <div
+                    role="toolbar"
+                    aria-label="Answer tools"
+                    className="mt-2 inline-flex items-center gap-0.5 rounded-full border border-line/60 bg-panel/50 px-1 py-0.5 backdrop-blur"
+                  >
                     <ActionButton label="Copy answer" onClick={() => void copyAnswer(message.response.answer)}>
                       ⧉ Copy
                     </ActionButton>
@@ -617,7 +655,7 @@ export function Chat() {
                         ↻ Regenerate
                       </ActionButton>
                     )}
-                    <span className="label ml-auto text-faint">{timeOf(message.at)}</span>
+                    <span className="label px-2 text-faint">{timeOf(message.at)}</span>
                   </div>
                 </div>
               );
@@ -920,7 +958,7 @@ function UserMessage({
         </form>
       ) : (
         <>
-          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-paper px-4 py-2.5 text-[15px] text-ink shadow-float">
+          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-gradient-to-br from-signal to-[#5b8cff] px-4 py-2.5 text-[15px] text-white shadow-glow">
             {message.text}
           </p>
           <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
@@ -958,7 +996,7 @@ function ActionButton({
       aria-label={label}
       aria-pressed={pressed}
       title={label}
-      className={`label px-2 py-1 transition-colors ${pressed ? "text-acid" : "text-muted hover:text-paper"}`}
+      className={`label rounded-full px-2.5 py-1 transition-colors ${pressed ? "bg-acid/15 text-acid" : "text-muted hover:bg-raised hover:text-paper"}`}
     >
       {children}
     </button>
@@ -982,7 +1020,7 @@ function HeaderButton({
       onClick={onClick}
       disabled={disabled}
       title={title ?? label}
-      className="label border border-line px-2 py-1.5 text-muted transition-colors hover:border-line-strong hover:text-paper disabled:opacity-40 sm:px-2.5"
+      className="label rounded-full border border-line px-2.5 py-1.5 text-muted transition-colors hover:border-line-strong hover:text-paper disabled:opacity-40 sm:px-3"
     >
       {label}
     </button>

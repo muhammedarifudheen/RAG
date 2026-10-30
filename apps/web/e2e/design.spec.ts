@@ -126,3 +126,32 @@ test("high contrast is switched on in Settings and kept on every page", async ({
   await page.goto("/health");
   await expect(page.locator("html")).toHaveAttribute("data-contrast", "high");
 });
+
+test("the theme is dark by default, switched in the top bar and kept on every page", async ({
+  page,
+}) => {
+  await mock(page, []);
+  await page.goto("/chat");
+  const html = page.locator("html");
+  await expect(html).not.toHaveAttribute("data-theme", "light");
+  await page.getByRole("button", { name: "Switch to the light theme" }).click();
+  await expect(html).toHaveAttribute("data-theme", "light");
+
+  await page.goto("/health");
+  await expect(html).toHaveAttribute("data-theme", "light");
+  await page.getByRole("button", { name: "Switch to the dark theme" }).click();
+  await expect(html).not.toHaveAttribute("data-theme", "light");
+});
+
+test("the chat list folds away for one centred column, and stays so", async ({ page }) => {
+  await mock(page, []);
+  await page.goto("/chat");
+  const chats = page.getByRole("complementary", { name: "Saved chats" });
+  await expect(chats).toBeVisible();
+  await page.getByRole("button", { name: "Hide the chat list" }).click();
+  await expect(chats).toBeHidden();
+  await page.reload();
+  await expect(chats).toBeHidden();
+  await page.getByRole("button", { name: "Show the chat list" }).click();
+  await expect(chats).toBeVisible();
+});

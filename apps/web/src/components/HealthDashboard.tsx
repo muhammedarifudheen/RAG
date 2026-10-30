@@ -20,7 +20,7 @@ import { useApi } from "@/lib/useApi";
 import { KnowledgeAudit } from "./KnowledgeAudit";
 import { ErrorMessage, Loading, NothingIngested } from "./States";
 
-const BAR = "#6b5cff";
+const BAR = "#8b7cff";
 const RED = "#dc2626";
 const AMBER = "#f59e0b";
 const CHART_ROWS = 12;
@@ -247,7 +247,7 @@ function Bars({
   return (
     <ResponsiveContainer width="100%" height="100%">
       <BarChart data={data} layout="vertical" margin={{ top: 4, right: 24, bottom: 4, left: 8 }}>
-        <CartesianGrid horizontal={false} stroke="#e3e4ee" />
+        <CartesianGrid horizontal={false} stroke="rgba(146, 151, 180, 0.25)" />
         <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} />
         <YAxis
           type="category"

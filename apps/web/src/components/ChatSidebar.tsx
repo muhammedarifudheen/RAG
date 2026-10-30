@@ -8,6 +8,8 @@ interface Props {
   chats: SavedChat[];
   currentId: string | null;
   open: boolean;
+  /** Folded away on wide screens (the header's toggle). */
+  collapsed?: boolean;
   busy: boolean;
   onOpen: (chat: SavedChat) => void;
   onNew: () => void;
@@ -20,7 +22,20 @@ interface Props {
 
 /** The saved chats, pinned first: search, open, rename, pin and delete. */
 export const ChatSidebar = forwardRef<HTMLInputElement, Props>(function ChatSidebar(
-  { chats, currentId, open, busy, onOpen, onNew, onDelete, onRename, onPin, onSettings, onShortcuts },
+  {
+    chats,
+    currentId,
+    open,
+    collapsed = false,
+    busy,
+    onOpen,
+    onNew,
+    onDelete,
+    onRename,
+    onPin,
+    onSettings,
+    onShortcuts,
+  },
   searchRef,
 ) {
   const [filter, setFilter] = useState("");
@@ -48,14 +63,14 @@ export const ChatSidebar = forwardRef<HTMLInputElement, Props>(function ChatSide
   return (
     <aside
       aria-label="Saved chats"
-      className={`${open ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 shrink-0 flex-col border-r border-white/70 bg-white/55 backdrop-blur-xl md:static md:flex md:w-64`}
+      className={`${open ? "flex" : "hidden"} absolute inset-y-0 left-0 z-30 w-72 shrink-0 flex-col border-r border-line/50 bg-panel/70 backdrop-blur-xl md:static md:w-60 ${collapsed ? "md:hidden" : "md:flex"}`}
     >
       <div className="space-y-2 p-3">
         <button
           type="button"
           onClick={onNew}
           disabled={busy}
-          className="w-full rounded-full bg-paper px-4 py-2 text-left font-display text-[13px] font-medium text-ink shadow-block transition-colors hover:bg-signal disabled:opacity-50"
+          className="w-full rounded-full bg-signal px-4 py-2 text-left font-display text-[13px] font-medium text-white shadow-glow transition-colors hover:bg-signal-hover disabled:opacity-50"
         >
           + New chat
         </button>

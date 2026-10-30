@@ -14,6 +14,7 @@ import {
   type SavedChat,
 } from "@/lib/chats";
 import { copyText } from "@/lib/exporting";
+import { applyTheme, currentTheme } from "@/lib/theme";
 
 /** A modal built on <dialog>: Escape and the close button end it, focus stays inside. */
 export function Dialog({
@@ -42,7 +43,7 @@ export function Dialog({
       onClick={(event) => {
         if (event.target === ref.current) onClose(); // a click on the backdrop
       }}
-      className={`m-auto w-[calc(100%-2rem)] ${wide ? "max-w-2xl" : "max-w-lg"} rounded-[24px] border border-white bg-white/95 p-0 text-paper shadow-float backdrop:bg-[rgba(22,24,39,0.22)] backdrop:backdrop-blur-sm`}
+      className={`m-auto w-[calc(100%-2rem)] ${wide ? "max-w-2xl" : "max-w-lg"} rounded-[24px] border border-line bg-panel/95 p-0 text-paper shadow-float backdrop:bg-[rgba(22,24,39,0.22)] backdrop:backdrop-blur-sm`}
     >
       <header className="flex items-center justify-between border-b border-line px-5 py-3">
         <h2 className="font-display text-[15px] font-semibold">{title}</h2>
@@ -100,7 +101,7 @@ export function SettingsDialog({
             aria-selected={tab === item.id}
             onClick={() => setTab(item.id)}
             className={`flex-1 rounded-full px-3 py-1.5 text-[13px] transition-colors ${
-              tab === item.id ? "bg-white text-paper shadow-block" : "text-muted hover:text-paper"
+              tab === item.id ? "bg-panel text-paper shadow-block" : "text-muted hover:text-paper"
             }`}
           >
             {item.label}
@@ -397,7 +398,7 @@ function Select<T extends string | number | null>({
         id={id}
         value={index}
         onChange={(event) => onChange(options[Number(event.target.value)].value)}
-        className="mt-1 w-full border border-line bg-white px-3 py-2 text-sm outline-none focus:border-signal"
+        className="mt-1 w-full border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-signal"
       >
         {options.map((option, i) => (
           <option key={String(option.value)} value={i}>
@@ -653,6 +654,8 @@ function TransparencyTab({ settings, set }: { settings: ChatSettings; set: Patch
         checked={settings.cacheAnswers}
         onChange={(cacheAnswers) => set({ cacheAnswers })}
       />
+      <h3 className="label mt-6 text-muted">Appearance</h3>
+      <ThemeToggle />
       <Toggle
         label="High contrast"
         hint="Darker text, stronger borders and solid panels."
@@ -666,6 +669,23 @@ function TransparencyTab({ settings, set }: { settings: ChatSettings; set: Patch
         and for code reviews the analyser&apos;s full report.
       </p>
     </section>
+  );
+}
+
+/** Dark (midnight glass) or light; kept in this browser, like the nav bar's switch. */
+function ThemeToggle() {
+  const [light, setLight] = useState(false);
+  useEffect(() => setLight(currentTheme() === "light"), []);
+  return (
+    <Toggle
+      label="Light theme"
+      hint="The airy light look instead of midnight glass. The ☀ button in the top bar does the same."
+      checked={light}
+      onChange={(on) => {
+        setLight(on);
+        applyTheme(on ? "light" : "dark");
+      }}
+    />
   );
 }
 

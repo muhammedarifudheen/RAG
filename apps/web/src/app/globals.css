@@ -2,25 +2,63 @@
 @tailwind components;
 @tailwind utilities;
 
-/* The palette, for the few places outside Tailwind classes (charts, graph, Markdown). */
+/* "Midnight glass": a deep navy-black page with slow violet and cyan auroras, frosted
+   dark glass panels and light text. The light theme (Settings → Appearance) keeps the
+   airy "liquid light" look. Colours are RGB triplets, so Tailwind's /opacity works:
+   rgb(var(--signal) / 0.4). */
 :root {
-  color-scheme: light;
-  --ink: #f6f6fb;
-  --panel: #ffffff;
-  --raised: #f0f1f8;
-  --line: #e3e4ee;
-  --paper: #161827;
-  --soft: #3d4057;
-  --muted: #6b6f86;
-  --signal: #6b5cff;
-  --acid: #0fa985;
-  --cyan: #0a7fb8;
+  color-scheme: dark;
+  --ink: 9 11 20; /* page */
+  --panel: 20 23 38; /* cards, bars */
+  --raised: 30 34 54; /* hover, inputs */
+  --line: 46 51 78;
+  --line-strong: 70 76 110;
+  --paper: 236 238 250; /* text */
+  --soft: 196 200 222;
+  --muted: 146 151 180;
+  --faint: 104 109 138;
+  --signal: 139 124 255;
+  --signal-hover: 160 148 255;
+  --acid: 52 211 153;
+  --cyan: 56 189 248;
+  --danger: 248 113 113;
+  --warn: 251 191 36;
+  --ok: 74 222 128;
   --radius: 14px;
+  --glass: rgba(22, 25, 42, 0.62);
+  --glass-edge: rgba(255, 255, 255, 0.08);
+  --shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.03);
+  --glow: 0 0 28px -6px rgba(139, 124, 255, 0.45);
+  --code-inline: 196 181 253;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+  --ink: 246 246 251;
+  --panel: 255 255 255;
+  --raised: 240 241 248;
+  --line: 227 228 238;
+  --line-strong: 201 203 219;
+  --paper: 22 24 39;
+  --soft: 61 64 87;
+  --muted: 107 111 134;
+  --faint: 154 157 178;
+  --signal: 107 92 255;
+  --signal-hover: 90 75 240;
+  --acid: 15 169 133;
+  --cyan: 10 127 184;
+  --danger: 217 61 66;
+  --warn: 184 116 0;
+  --ok: 15 157 88;
   --glass: rgba(255, 255, 255, 0.72);
+  --glass-edge: rgba(255, 255, 255, 0.9);
+  --shadow: 0 24px 60px -30px rgba(76, 64, 190, 0.35), 0 6px 18px -10px rgba(22, 24, 39, 0.1);
+  --glow: 0 0 18px -4px rgba(107, 92, 255, 0.45);
+  --code-inline: 75 63 217;
 }
 
 html {
-  background-color: var(--ink);
+  background-color: rgb(rgb(var(--ink)));
 }
 
 body {
@@ -29,34 +67,46 @@ body {
   background-color: transparent;
 }
 
-/* Liquid light: pastel blobs drifting slowly behind everything… */
+/* Auroras drifting slowly behind everything: violet, cyan and a little teal. */
 body::before {
   position: fixed;
   z-index: -2;
   inset: -20%;
+  background:
+    radial-gradient(34% 30% at 16% 18%, rgba(124, 92, 255, 0.28), transparent 70%),
+    radial-gradient(30% 28% at 84% 14%, rgba(56, 189, 248, 0.2), transparent 70%),
+    radial-gradient(32% 30% at 74% 82%, rgba(52, 211, 153, 0.14), transparent 70%),
+    radial-gradient(26% 24% at 22% 86%, rgba(236, 72, 153, 0.1), transparent 70%);
+  filter: blur(40px);
+  content: "";
+  animation: drift 36s ease-in-out infinite;
+  pointer-events: none;
+}
+
+/* A faint dotted grid over the dark, fading towards the edges. */
+body::after {
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
+  background-size: 26px 26px;
+  content: "";
+  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 85%);
+  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 85%);
+  pointer-events: none;
+}
+
+:root[data-theme="light"] body::before {
   background:
     radial-gradient(38% 34% at 18% 22%, rgba(186, 172, 255, 0.55), transparent 70%),
     radial-gradient(32% 30% at 82% 18%, rgba(158, 222, 255, 0.5), transparent 70%),
     radial-gradient(36% 34% at 72% 78%, rgba(160, 238, 210, 0.45), transparent 70%),
     radial-gradient(30% 28% at 24% 82%, rgba(255, 205, 214, 0.4), transparent 70%);
   filter: blur(30px);
-  content: "";
-  animation: drift 32s ease-in-out infinite;
-  pointer-events: none;
 }
 
-/* …and soft waves rolling along the bottom of the screen. */
-body::after {
-  position: fixed;
-  z-index: -1;
-  inset: auto 0 0 0;
-  height: 46vh;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 400' preserveAspectRatio='none'%3E%3Cpath d='M0 220 C 240 150 420 300 720 230 S 1200 140 1440 210 L1440 400 L0 400 Z' fill='%23b9acff' fill-opacity='0.16'/%3E%3Cpath d='M0 270 C 300 210 520 340 820 270 S 1260 200 1440 260 L1440 400 L0 400 Z' fill='%2392dcff' fill-opacity='0.14'/%3E%3Cpath d='M0 320 C 260 280 560 380 900 320 S 1300 280 1440 320 L1440 400 L0 400 Z' fill='%2390e8c8' fill-opacity='0.14'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-size: 200% 100%;
-  content: "";
-  animation: waves 28s ease-in-out infinite alternate;
-  pointer-events: none;
+:root[data-theme="light"] body::after {
+  background-image: radial-gradient(rgba(22, 24, 39, 0.05) 1px, transparent 1px);
 }
 
 @keyframes drift {
@@ -72,28 +122,20 @@ body::after {
   }
 }
 
-@keyframes waves {
-  from {
-    background-position: 0% 100%;
-  }
-  to {
-    background-position: 100% 100%;
-  }
-}
-
 ::selection {
-  background: rgba(107, 92, 255, 0.22);
-  color: var(--paper);
+  background: rgb(var(--signal) / 0.3);
+  color: rgb(var(--paper));
 }
 
 * {
-  scrollbar-color: #c9cbdb transparent;
+  scrollbar-color: rgb(var(--line-strong)) transparent;
   scrollbar-width: thin;
 }
 
 :focus-visible {
-  outline: 2px solid var(--signal);
+  outline: 2px solid rgb(var(--signal));
   outline-offset: 2px;
+  box-shadow: var(--glow);
 }
 
 /* Everything soft-edged: controls, cards, dialogs and bordered boxes. Zero specificity,
@@ -131,7 +173,7 @@ body::after {
 @layer components {
   /* The gradient lettering of headings and the mark. */
   .chrome-text {
-    background: linear-gradient(100deg, #6b5cff 0%, #3aa0ff 45%, #12b88f 100%);
+    background: linear-gradient(100deg, #a594ff 0%, #5cc8ff 50%, #4ee0b0 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -145,17 +187,15 @@ body::after {
   }
   /* A floating glass card. */
   .slab {
-    border: 1px solid rgba(255, 255, 255, 0.9);
+    border: 1px solid var(--glass-edge);
     border-radius: 22px;
     background: var(--glass);
-    box-shadow:
-      0 24px 60px -30px rgba(76, 64, 190, 0.35),
-      0 6px 18px -10px rgba(22, 24, 39, 0.1);
+    box-shadow: var(--shadow);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
   }
   .glass {
-    border: 1px solid rgba(255, 255, 255, 0.85);
+    border: 1px solid var(--glass-edge);
     background: var(--glass);
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
@@ -164,7 +204,7 @@ body::after {
 
 /* Rendered Markdown in chat answers. */
 .markdown {
-  color: var(--paper);
+  color: rgb(var(--paper));
 }
 .markdown > * + * {
   margin-top: 0.8rem;
@@ -174,14 +214,14 @@ body::after {
   padding-left: 1.25rem;
 }
 .markdown ul li::marker {
-  color: var(--signal);
+  color: rgb(var(--signal));
 }
 .markdown ol {
   list-style: decimal;
   padding-left: 1.4rem;
 }
 .markdown ol li::marker {
-  color: var(--muted);
+  color: rgb(var(--muted));
   font-family: var(--font-mono), monospace;
   font-size: 0.85em;
 }
@@ -195,7 +235,7 @@ body::after {
   font-family: var(--font-display), sans-serif;
   font-weight: 650;
   letter-spacing: -0.015em;
-  color: var(--paper);
+  color: rgb(var(--paper));
 }
 .markdown h1 {
   font-size: 1.3rem;
@@ -207,17 +247,17 @@ body::after {
   font-size: 1rem;
 }
 .markdown strong {
-  color: var(--paper);
+  color: rgb(var(--paper));
   font-weight: 650;
 }
 .markdown code {
-  border: 1px solid var(--line);
+  border: 1px solid rgb(var(--line));
   border-radius: 6px;
-  background: var(--raised);
+  background: rgb(var(--raised));
   padding: 0.08rem 0.35rem;
   font-family: var(--font-mono), monospace;
   font-size: 0.84em;
-  color: #4b3fd9;
+  color: rgb(var(--code-inline));
 }
 .markdown pre {
   overflow-x: auto;
@@ -232,22 +272,22 @@ body::after {
   color: inherit;
 }
 .markdown a {
-  color: var(--cyan);
+  color: rgb(var(--cyan));
   text-decoration: underline;
-  text-decoration-color: rgba(10, 127, 184, 0.35);
+  text-decoration-color: rgb(var(--cyan) / 0.4);
   text-underline-offset: 3px;
 }
 .markdown a:hover {
-  text-decoration-color: var(--cyan);
+  text-decoration-color: rgb(var(--cyan));
 }
 .markdown blockquote {
-  border-left: 3px solid var(--signal);
+  border-left: 3px solid rgb(var(--signal));
   border-radius: 0;
   padding-left: 0.9rem;
-  color: var(--soft);
+  color: rgb(var(--soft));
 }
 .markdown hr {
-  border-color: var(--line);
+  border-color: rgb(var(--line));
 }
 .markdown table {
   display: block;
@@ -258,17 +298,17 @@ body::after {
 }
 .markdown th,
 .markdown td {
-  border-bottom: 1px solid var(--line);
+  border-bottom: 1px solid rgb(var(--line));
   padding: 0.45rem 0.75rem;
   text-align: left;
 }
 .markdown th {
-  background: var(--raised);
+  background: rgb(var(--raised));
   font-family: var(--font-mono), monospace;
   font-size: 0.78em;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: rgb(var(--muted));
 }
 .markdown .katex-display {
   overflow-x: auto;
@@ -316,54 +356,54 @@ body::after {
   width: auto;
   border: 1px solid #cbd5e1;
   border-radius: 12px;
-  background: var(--panel);
+  background: rgb(var(--panel));
   padding: 0.4rem 0.75rem;
-  color: var(--paper);
+  color: rgb(var(--paper));
   font-family: var(--font-mono), monospace;
   font-size: 11.5px;
-  box-shadow: 0 10px 24px -16px rgba(76, 64, 190, 0.4);
+  box-shadow: 0 10px 24px -16px rgba(0, 0, 0, 0.6);
 }
 .react-flow__node.file-node.in-cycle {
   border: 2px solid #dc2626;
-  background: #fff1f0;
-  color: #b42318;
+  background: rgb(var(--danger) / 0.14);
+  color: rgb(var(--danger));
 }
 .react-flow__node.file-node.selected {
-  box-shadow: 0 0 0 3px rgba(107, 92, 255, 0.35);
+  box-shadow: 0 0 0 3px rgb(var(--signal) / 0.45);
 }
 .react-flow__background {
   background: transparent;
 }
 .react-flow__controls-button {
-  border-bottom-color: var(--line) !important;
-  background: var(--panel) !important;
-  fill: var(--paper) !important;
+  border-bottom-color: rgb(var(--line)) !important;
+  background: rgb(var(--panel)) !important;
+  fill: rgb(var(--paper)) !important;
 }
 .react-flow__controls-button:hover {
-  background: var(--raised) !important;
+  background: rgb(var(--raised)) !important;
 }
 .react-flow__minimap {
   border-radius: 14px;
-  background: var(--panel) !important;
+  background: rgb(var(--panel)) !important;
 }
 .react-flow__attribution {
   background: transparent !important;
 }
 .react-flow__attribution a {
-  color: var(--muted) !important;
+  color: rgb(var(--muted)) !important;
 }
 
 /* Recharts on the health page. */
 .recharts-cartesian-axis-tick-value {
-  fill: var(--muted);
+  fill: rgb(var(--muted));
   font-family: var(--font-mono), monospace;
   font-size: 11px;
 }
 .recharts-default-tooltip {
-  border-color: var(--line) !important;
+  border-color: rgb(var(--line)) !important;
   border-radius: 12px;
-  background: var(--panel) !important;
-  color: var(--paper);
+  background: rgb(var(--panel)) !important;
+  color: rgb(var(--paper));
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -375,45 +415,52 @@ body::after {
   }
 }
 
-/* High contrast (Settings → Transparency): darker text, stronger borders, solid panels,
-   no translucent glass or moving background. */
+/* High contrast (Settings → Appearance): stronger text and borders, solid panels, no
+   glass or moving background; in either theme. */
 html[data-contrast="high"] {
-  --ink: #ffffff;
-  --line: #4b4f66;
-  --paper: #000000;
-  --soft: #14162a;
-  --muted: #2b2e45;
-  --signal: #3b2bd6;
-  --cyan: #00507a;
-  --acid: #006b52;
+  --ink: 0 0 0;
+  --panel: 8 8 12;
+  --raised: 24 24 32;
+  --line: 150 150 170;
+  --line-strong: 200 200 215;
+  --paper: 255 255 255;
+  --soft: 240 240 248;
+  --muted: 225 225 236;
+  --faint: 205 205 220;
+  --signal: 180 170 255;
+  --cyan: 125 211 252;
+  --acid: 110 231 183;
+  --glass: rgb(8, 8, 12);
+  --glass-edge: rgb(150, 150, 170);
+}
+html[data-theme="light"][data-contrast="high"] {
+  --ink: 255 255 255;
+  --panel: 255 255 255;
+  --raised: 236 236 242;
+  --line: 75 79 102;
+  --line-strong: 40 42 60;
+  --paper: 0 0 0;
+  --soft: 20 22 42;
+  --muted: 29 31 51;
+  --faint: 43 46 69;
+  --signal: 59 43 214;
+  --cyan: 0 80 122;
+  --acid: 0 107 82;
   --glass: #ffffff;
+  --glass-edge: rgb(75, 79, 102);
 }
 html[data-contrast="high"] body::before,
 html[data-contrast="high"] body::after {
   display: none;
 }
-html[data-contrast="high"] .text-soft,
-html[data-contrast="high"] .text-muted,
-html[data-contrast="high"] .text-faint {
-  color: #1d1f33 !important;
-}
-html[data-contrast="high"] .text-cyan {
-  color: #00507a !important;
-}
-html[data-contrast="high"] .text-signal {
-  color: #3b2bd6 !important;
-}
-html[data-contrast="high"] [class~="border"],
-html[data-contrast="high"] .border-line {
-  border-color: #4b4f66 !important;
-}
 html[data-contrast="high"] .slab,
 html[data-contrast="high"] .glass {
-  background: #ffffff !important;
+  background: rgb(rgb(var(--panel))) !important;
+  -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
-  border: 1px solid #4b4f66 !important;
+  border: 1px solid rgb(rgb(var(--line))) !important;
 }
 html[data-contrast="high"] :focus-visible {
-  outline: 3px solid #000000 !important;
+  outline: 3px solid rgb(rgb(var(--paper))) !important;
   outline-offset: 2px;
 }

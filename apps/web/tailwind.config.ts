@@ -1,29 +1,30 @@
 import type { Config } from "tailwindcss";
 
-// "Liquid light": an airy off-white page with slow pastel waves behind it, white glass
-// panels floating on soft shadows, one violet accent and a mint highlight. The token
-// names are kept from the first design (ink is the page, paper the text). The colours
-// are also in globals.css.
+// "Midnight glass" (and a light theme): the colours are CSS variables, RGB triplets set
+// in globals.css per theme, so every class follows the theme. The token names are kept
+// from the first design (ink is the page, paper the text).
+const v = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
+
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        ink: "#f6f6fb", // page
-        panel: "#ffffff", // cards, bars
-        raised: "#f0f1f8", // hover, inputs
-        line: "#e3e4ee",
-        "line-strong": "#c9cbdb",
-        paper: "#161827", // text
-        soft: "#3d4057",
-        muted: "#6b6f86",
-        faint: "#9a9db2",
-        signal: { DEFAULT: "#6b5cff", hover: "#5a4bf0" },
-        acid: "#0fa985",
-        cyan: "#0a7fb8",
-        danger: "#d93d42",
-        warn: "#b87400",
-        ok: "#0f9d58",
+        ink: v("ink"), // page
+        panel: v("panel"), // cards, bars
+        raised: v("raised"), // hover, inputs
+        line: v("line"),
+        "line-strong": v("line-strong"),
+        paper: v("paper"), // text
+        soft: v("soft"),
+        muted: v("muted"),
+        faint: v("faint"),
+        signal: { DEFAULT: v("signal"), hover: v("signal-hover") },
+        acid: v("acid"),
+        cyan: v("cyan"),
+        danger: v("danger"),
+        warn: v("warn"),
+        ok: v("ok"),
       },
       fontFamily: {
         sans: ["var(--font-body)", "system-ui", "sans-serif"],
@@ -31,9 +32,10 @@ const config: Config = {
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       boxShadow: {
-        block: "0 18px 40px -18px rgba(76, 64, 190, 0.35), 0 2px 6px -2px rgba(22, 24, 39, 0.08)",
-        "block-acid": "0 14px 32px -16px rgba(15, 169, 133, 0.45)",
-        float: "0 30px 70px -30px rgba(76, 64, 190, 0.35), 0 8px 20px -12px rgba(22, 24, 39, 0.12)",
+        block: "0 18px 40px -18px rgba(0, 0, 0, 0.55), 0 0 22px -10px rgb(var(--signal) / 0.5)",
+        "block-acid": "0 14px 32px -16px rgb(var(--acid) / 0.5)",
+        float: "var(--shadow)",
+        glow: "var(--glow)",
       },
       borderRadius: {
         glass: "22px",

@@ -144,7 +144,7 @@ export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatCompo
     >
       <div
         className={`glass mx-auto max-w-3xl rounded-[24px] border shadow-float transition-colors ${
-          dragging ? "border-acid" : draw ? "border-signal" : "border-line-strong focus-within:border-paper/50"
+          dragging ? "border-acid" : draw ? "border-signal" : "border-line-strong focus-within:border-signal/60 focus-within:shadow-glow"
         }`}
       >
         {files.length > 0 && (
@@ -275,7 +275,7 @@ export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatCompo
             <button
               type="submit"
               disabled={text.trim() === "" || reading}
-              className="rounded-full bg-paper px-5 py-1.5 font-display text-[13px] font-medium text-ink shadow-block transition-colors hover:bg-signal disabled:cursor-not-allowed disabled:bg-raised disabled:text-faint disabled:shadow-none"
+              className="rounded-full bg-signal px-5 py-1.5 font-display text-[13px] font-medium text-white shadow-glow transition-colors hover:bg-signal-hover disabled:cursor-not-allowed disabled:bg-raised disabled:text-faint disabled:shadow-none"
             >
               Ask
             </button>
