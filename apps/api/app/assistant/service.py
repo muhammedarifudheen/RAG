@@ -41,7 +41,7 @@ from app.schemas import (
     Reranking,
     WebSource,
 )
-from app.services.search import extract_citations
+from app.services.search import extract_citations, tidy_citations
 
 from .agent import (
     MAX_TOOL_CALLS,
@@ -875,6 +875,7 @@ class Assistant:
                 route,
                 time.monotonic() - started,
             )
+            answer = tidy_citations(answer, shown)
             response = AskResponse(
                 question=question,
                 answer=answer,
@@ -1220,6 +1221,7 @@ class Assistant:
         drafts: Sequence[Draft],
         keep_drafts: bool = False,
     ) -> AskResponse:
+        answer = tidy_citations(answer, shown)
         return AskResponse(
             question=question,
             answer=answer,

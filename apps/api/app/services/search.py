@@ -165,6 +165,33 @@ def _chunks(rows: Sequence, max_lines: int) -> list[CodeChunk]:
     return chunks
 
 
+# Hyphens models put in line ranges: non-breaking, and en and figure dashes.
+_DASHES = str.maketrans({"‐": "-", "‑": "-", "‒": "-", "–": "-"})
+_CODE_SPAN = re.compile(r"`([^`\n]+?):(\d+)(?:\s*[-‐-–]\s*(\d+))?`")
+
+
+def tidy_citations(answer: str, chunks: Sequence[CodeChunk]) -> str:
+    """Citations as [path:start-end] however a model wrote them: in a code span
+    (`path:42-58`), or with a non-breaking or en dash. Only paths of excerpts the model
+    was shown are changed, so other code spans stay as written."""
+    paths = {chunk.file for chunk in chunks}
+    if not paths:
+        return answer
+
+    def bracket(match: re.Match) -> str:
+        path, start, end = match[1].strip(), match[2], match[3]
+        if path not in paths:
+            return match[0]
+        return f"[{path}:{start}-{end}]" if end else f"[{path}:{start}]"
+
+    answer = _CODE_SPAN.sub(bracket, answer)
+    # Dashes inside the brackets that cite a shown path.
+    return _BRACKET.sub(
+        lambda m: f"[{m[1].translate(_DASHES)}]" if any(p in m[1] for p in paths) else m[0],
+        answer,
+    )
+
+
 def extract_citations(answer: str, chunks: list[CodeChunk]) -> list[Citation]:
     """Citations written in an answer, each checked against the chunks the model was given."""
     # The lines the model was shown, per file. A citation is verified when every line

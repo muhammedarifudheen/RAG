@@ -222,3 +222,17 @@ def test_the_assistant_gets_five_excerpts_unless_asked(client):
     assert len(body["chunks"]) == 5
     assert body["timings"].keys() >= {"search", "answer"}
     assert SimpleNamespace  # keeps the import for the fakes above
+
+
+def test_citations_in_code_spans_or_with_odd_dashes_become_citations():
+    from app.services.search import tidy_citations
+
+    shown = [chunk()]
+    answer = (
+        "It checks in `a/signer.py:10‑20` and [a/signer.py:12–15], "
+        "not `other.py:1-2` or `x = a[1:2]`."
+    )
+    assert tidy_citations(answer, shown) == (
+        "It checks in [a/signer.py:10-20] and [a/signer.py:12-15], "
+        "not `other.py:1-2` or `x = a[1:2]`."
+    )
