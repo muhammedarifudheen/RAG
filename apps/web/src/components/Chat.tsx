@@ -8,6 +8,7 @@ import type {
   CodeAnalysis,
   CouncilAgent,
   GeneratedImage,
+  ResearchStep,
   WebSource,
 } from "@atlas/shared";
 import dynamic from "next/dynamic";
@@ -37,7 +38,7 @@ import type { CodeRange } from "@/lib/citations";
 import { chatToMarkdown, copyText, download, exportAllChats, fileNameOf } from "@/lib/exporting";
 import { useSpeaker } from "@/lib/speech";
 
-import { Answer, Gallery, StreamingAnswer } from "./Answer";
+import { Answer, Gallery, ResearchSteps, StreamingAnswer } from "./Answer";
 import { ChatComposer, type ComposerHandle } from "./ChatComposer";
 import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
 import { ChatSidebar } from "./ChatSidebar";
@@ -78,6 +79,7 @@ interface Progress {
   web: WebSource[] | null;
   agents: CouncilAgent[];
   merging: number | null;
+  research: ResearchStep[];
   images: GeneratedImage[];
 }
 
@@ -89,6 +91,7 @@ const NO_PROGRESS: Progress = {
   web: null,
   agents: [],
   merging: null,
+  research: [],
   images: [],
 };
 
@@ -248,6 +251,7 @@ export function Chat() {
           includeDrafts: settings.showDrafts,
           strict: settings.strict,
           planQueries: settings.planQueries,
+          research: settings.research ? true : settings.researchAuto ? undefined : false,
           rerank: settings.rerank,
           rankPassages: settings.rankPassages,
           rerankCutoff: settings.rerankCutoff,
@@ -274,6 +278,7 @@ export function Chat() {
               return { ...p, agents };
             }),
           onMerging: (drafts) => setProgress((p) => ({ ...p, merging: drafts })),
+          onResearch: (step) => setProgress((p) => ({ ...p, research: [...p.research, step] })),
           onImage: (image) => setProgress((p) => ({ ...p, images: [...p.images, image] })),
         },
         controller.signal,
@@ -622,6 +627,8 @@ export function Chat() {
                       : "Writing a description and drawing your picture…"
                     : progress.merging
                       ? `Merging the best points of ${progress.merging} answers…`
+                      : progress.research.length && !progress.agents.length
+                        ? `Researching: ${progress.research.length} of up to 6 steps…`
                       : progress.agents.length
                         ? `The council is answering: ${progress.agents.filter((a) => a.state === "done").length} of ${progress.agents.length} agents done…`
                         : progress.analysis
@@ -637,6 +644,7 @@ export function Chat() {
                 {!drawing && progress.web && progress.web.length > 0 && (
                   <WebPanel sources={progress.web} />
                 )}
+                {!drawing && progress.research.length > 0 && <ResearchSteps steps={progress.research} />}
                 {!drawing && progress.agents.length > 0 && <CouncilPanel agents={progress.agents} />}
                 {drawing && progress.images.length > 0 && <Gallery images={progress.images} />}
               </div>
@@ -681,6 +689,8 @@ export function Chat() {
           onSend={(text, attachments, draw) => void send(text, attachments, draw)}
           strict={settings.strict}
           onStrict={(strict) => changeSettings({ ...settings, strict })}
+          research={settings.research}
+          onResearch={(research) => changeSettings({ ...settings, research })}
           onStop={() => abort.current?.abort()}
           onEditLast={editLast}
         />

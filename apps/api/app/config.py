@@ -121,6 +121,8 @@ class Settings(BaseSettings):
     # prompt); the excerpts are reordered by it and those under the cut-off left out.
     assistant_reranker: bool = True
     assistant_rerank_cutoff: int = 4
+    # Deep research for questions that look complex, when the user has not chosen.
+    assistant_research_auto: bool = True
     # The judge's and ranker's services, first to last: about 17 small calls a question,
     # so services other than the answers' main ones (Groq, Gemini) go first.
     assistant_judge_services: str = "nvidia,cerebras,sambanova,mistral,github,groq,gemini"

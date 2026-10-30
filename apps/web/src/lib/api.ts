@@ -25,6 +25,7 @@ import type {
   IngestRequest,
   IngestResult,
   KnowledgeAudit,
+  ResearchStep,
   SharedChat,
   SiteConfig,
   SourceItem,
@@ -149,6 +150,8 @@ export interface AssistantHandlers {
   onAgent?: (agent: CouncilAgent) => void;
   /** The agents' drafts are being merged into one answer. */
   onMerging?: (drafts: number) => void;
+  /** Deep research: one tool call of the agent. */
+  onResearch?: (step: ResearchStep) => void;
   /** A picture of the gallery is ready. */
   onImage?: (image: GeneratedImage) => void;
 }
@@ -177,6 +180,8 @@ export interface AssistantQuestion {
   planQueries?: boolean;
   rerank?: boolean;
   rankPassages?: boolean;
+  /** True always, false never, unset when the server decides. */
+  research?: boolean;
   rerankCutoff?: number | null;
 }
 
@@ -206,6 +211,7 @@ export function askBody(asked: AssistantQuestion): AskRequest {
   if (asked.strict) body.strict = true;
   if (asked.planQueries === false) body.plan_queries = false;
   if (asked.rerank === false) body.rerank = false;
+  if (asked.research !== undefined) body.research = asked.research;
   if (asked.rankPassages === false) body.rank_passages = false;
   if (asked.rerankCutoff !== undefined && asked.rerankCutoff !== null) {
     body.rerank_cutoff = asked.rerankCutoff;
@@ -262,6 +268,8 @@ export async function askAssistant(
       handlers.onAgent?.(data as unknown as CouncilAgent);
     } else if (event.event === "merging") {
       handlers.onMerging?.(Number(data.drafts) || 0);
+    } else if (event.event === "researching") {
+      handlers.onResearch?.(data as unknown as ResearchStep);
     } else if (event.event === "image") {
       handlers.onImage?.(data as unknown as GeneratedImage);
     } else if (event.event === "done") {

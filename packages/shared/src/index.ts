@@ -90,6 +90,8 @@ export interface AskRequest {
   include_drafts?: boolean;
   /** Strict sources only: the knowledge base and attached files, cited, or "not there". */
   strict?: boolean;
+  /** Deep research: true always, false never; unset only for questions that look complex. */
+  research?: boolean;
   /** Plan several knowledge-base searches (keywords, a hypothetical answer…); default true. */
   plan_queries?: boolean;
   /** Judge each excerpt's relevance (0-10) and rerank; default true. */
@@ -98,6 +100,16 @@ export interface AskRequest {
   rank_passages?: boolean;
   /** Judged excerpts scoring below this are left out; unset is the server's (4). */
   rerank_cutoff?: number;
+}
+
+/** One tool call of deep research. */
+export interface ResearchStep {
+  step: number;
+  tool: "search" | "read" | "note";
+  /** The query, the span read, or the note. */
+  input: string;
+  /** What came of it, briefly ("5 results", "read"). */
+  result: string;
 }
 
 /** What the knowledge base covers and lacks for a question (task "gaps"). */
@@ -230,6 +242,8 @@ export interface AskResponse {
   reranking?: Reranking | null;
   /** The fact-checker's report, when asked for (task "check"). */
   fact_check?: FactCheck | null;
+  /** Deep research: each tool call the agent made, in order. */
+  research_steps?: ResearchStep[];
   /** What the knowledge base lacks for the question, when asked for (task "gaps"). */
   gaps?: GapReport | null;
   /** True for a strict answer: the page asks for its fact-check once it is shown. */

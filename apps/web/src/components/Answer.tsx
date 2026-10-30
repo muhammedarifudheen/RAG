@@ -1,6 +1,12 @@
 "use client";
 
-import type { AskResponse, FactCheck, GapReport, GeneratedImage } from "@atlas/shared";
+import type {
+  AskResponse,
+  FactCheck,
+  GapReport,
+  GeneratedImage,
+  ResearchStep,
+} from "@atlas/shared";
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
@@ -151,6 +157,16 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
             ))}
           </ul>
         </div>
+      )}
+
+      {response.research_steps && response.research_steps.length > 0 && (
+        <details className="mt-4 border-t border-line pt-3 text-xs text-soft">
+          <summary className="cursor-pointer select-none text-muted hover:text-paper">
+            Researched in {response.research_steps.length}{" "}
+            {response.research_steps.length === 1 ? "step" : "steps"}
+          </summary>
+          <ResearchSteps steps={response.research_steps} />
+        </details>
       )}
 
       {response.search_queries && response.search_queries.length > 1 && (
@@ -315,6 +331,28 @@ function FactCheckPanel({
       )}
       {report.checked_by && <p className="mt-2 text-xs text-faint">Checked by {report.checked_by}</p>}
     </section>
+  );
+}
+
+const TOOL_MARK: Record<ResearchStep["tool"], string> = { search: "⌕", read: "▤", note: "✎" };
+
+/** Deep research's tool calls, in order. */
+export function ResearchSteps({ steps }: { steps: ResearchStep[] }) {
+  return (
+    <ol aria-label="Research steps" className="mt-2 space-y-1 text-xs text-soft">
+      {steps.map((step) => (
+        <li key={step.step} className="flex gap-2">
+          <span aria-hidden="true" className="w-4 text-signal">
+            {TOOL_MARK[step.tool]}
+          </span>
+          <span className="font-medium text-paper">{step.tool}</span>
+          <span className="min-w-0 flex-1 truncate font-mono" title={step.input}>
+            {step.input}
+          </span>
+          <span className="text-faint">{step.result}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 

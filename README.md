@@ -118,6 +118,22 @@ The chat page answers any question, not only questions about your sources:
   names its top pick. Each excerpt shows its score and the judge's reason (Settings →
   Retrieval turns either off or moves the cut-off; `rerank: false`, `rank_passages: false`
   or `rerank_cutoff` on `/ask`).
+- **Deep research.** For comparisons, flows through the code and many-part questions
+  (or every question, with the composer's ⌖ Research switch), an agent searches the
+  knowledge base, reads the spans it needs and takes notes, up to six tool calls, and the
+  answer is written from its notes and what it read. Its steps show as they happen and
+  under the answer (`research: true` or `false` on `/ask`; unset, Atlas decides).
+- **Code-aware answers.** A code question answered from code excerpts names the file,
+  function and class, shows the call chain and the line that does it.
+- **Checked against the sources.** Strict answers are fact-checked as soon as they show
+  (every claim supported? citations real? question answered?), and any cited answer has
+  a ✓ Fact-check button. When the knowledge base falls short, the answer says what it
+  covers, what is missing and the best source to add, with **+ Add this source**
+  (`task: check` and `task: gaps` on `/ask`).
+- **Audited every week.** A model audits every source (coverage, staleness, overlap, the
+  questions it cannot answer); the table is on the Health page, refreshed every Monday
+  and after each deploy by the *Audit the knowledge base* workflow, which needs the
+  `ATLAS_ADMIN_TOKEN` secret (`POST /health`, admin).
 - **Today's facts, every time.** Before answering (anything but small talk) it searches
   the web and gives every agent the results, so versions, news, prices, scores and
   who-holds-what come from today, with dates and links: Google News and Wikipedia (no

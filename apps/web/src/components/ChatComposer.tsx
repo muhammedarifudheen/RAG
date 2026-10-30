@@ -30,6 +30,9 @@ interface Props {
   /** Strict sources only, a setting kept in this browser. */
   strict?: boolean;
   onStrict?: (strict: boolean) => void;
+  /** Deep research for every question, a setting kept in this browser. */
+  research?: boolean;
+  onResearch?: (research: boolean) => void;
 }
 
 const ACCEPT =
@@ -43,7 +46,7 @@ interface Pending {
 }
 
 export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatComposer(
-  { pending, onSend, onStop, onEditLast, strict = false, onStrict },
+  { pending, onSend, onStop, onEditLast, strict = false, onStrict, research = false, onResearch },
   ref,
 ) {
   const [text, setText] = useState("");
@@ -234,6 +237,15 @@ export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatCompo
               onClick={() => onStrict(!strict)}
             >
               <span aria-hidden="true">◇</span> Strict
+            </ToolButton>
+          )}
+          {onResearch && (
+            <ToolButton
+              label="Deep research"
+              pressed={research}
+              onClick={() => onResearch(!research)}
+            >
+              <span aria-hidden="true">⌖</span> Research
             </ToolButton>
           )}
           {dictation.supported && (

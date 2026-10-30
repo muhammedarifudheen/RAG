@@ -52,6 +52,10 @@ export interface ChatSettings {
   webSearch: boolean;
   /** Strict sources only: answers from the knowledge base alone, citing every claim. */
   strict: boolean;
+  /** Deep research for every question (the composer's switch). */
+  research: boolean;
+  /** Deep research by itself for questions that look complex. */
+  researchAuto: boolean;
   /** Plan several searches per question (keywords, a hypothetical answer, a variant). */
   planQueries: boolean;
   /** Fast models judge each excerpt's relevance; the best are kept, the weak left out. */
@@ -80,6 +84,8 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   minScore: null,
   webSearch: true,
   strict: false,
+  research: false,
+  researchAuto: true,
   planQueries: true,
   rerank: true,
   rankPassages: true,

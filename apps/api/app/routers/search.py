@@ -10,9 +10,11 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.assistant import Assistant, AssistantError, Options, get_assistant
+from app.assistant.agent import ResearchTools
 from app.assistant.gaps import suggested_source
 from app.assistant.planner import fuse
 from app.assistant.rerank import rerank
+from app.assistant.router import wants_research
 from app.config import settings
 from app.db import get_db
 from app.embedding import Embedder, get_embedder
@@ -21,6 +23,7 @@ from app.ratelimit import rate_limit
 from app.schemas import AskRequest, AskResponse, GapReport, Reranking, SearchResponse
 from app.services.catalog import source_catalog
 from app.services.search import extract_citations, search_symbols
+from app.services.spans import read_span
 
 # How long to wait for the ranker once the judge is done (it has its own time limit).
 RANK_WAIT = 10.0
@@ -157,9 +160,22 @@ def ask(
         previous = next((t.content for t in reversed(body.history) if t.role == "user"), "")
         query = f"{previous[:500]}\n{question}" if previous else question
         queries = [query]
-        if body.use_sources and body.plan_queries and getattr(assistant, "planner", False):
+        research = body.use_sources and (
+            body.research
+            if body.research is not None
+            else settings.assistant_research_auto and wants_research(question)
+        )
+        # Researching, the agent plans its own searches and reads what it needs: no
+        # planner or judge.
+        planning = body.use_sources and body.plan_queries and getattr(assistant, "planner", False)
+        if planning and not research:
             queries = assistant.plan_queries(query)
-        judging = body.use_sources and body.rerank and getattr(assistant, "reranker", False)
+        judging = (
+            not research
+            and body.use_sources
+            and body.rerank
+            and getattr(assistant, "reranker", False)
+        )
         # The judge picks from a few more excerpts than are shown.
         pool = min(body.top_k + 4, 20) if judging else body.top_k
         chunks = (
@@ -230,6 +246,12 @@ def ask(
             strict=body.strict,
             search_queries=tuple(queries) if len(queries) > 1 else (),
             reranking=reranking,
+            research=ResearchTools(
+                search=lambda q: search_symbols(db, embedder, q, 6, settings.snippet_max_lines),
+                read=lambda path, start, end: read_span(db, path, start, end),
+            )
+            if research
+            else None,
         )
         if streaming:
             events = assistant.respond(question, chunks, body.history, mode, options)

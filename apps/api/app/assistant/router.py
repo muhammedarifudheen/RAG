@@ -143,6 +143,24 @@ def classify(question: str, top_score: float | None, *, images: bool = False) ->
     return "general"
 
 
+# Questions that need several searches: comparisons, flows, several parts.
+_COMPLEX = re.compile(
+    r"\b(compare|comparison|differences?\s+between|versus|vs\.?|trace|tracing|end[- ]to[- ]end|"
+    r"step[- ]by[- ]step|walk (me )?through|relationship between|interact(s|ion)?|"
+    r"all (the )?(places|callers|uses|ways)|who calls|call chain|call graph|architecture|"
+    r"how does .{3,80}? (flow|connect|fit together|end up|get from))\b",
+    re.IGNORECASE,
+)
+
+
+def wants_research(question: str) -> bool:
+    """True if a question looks like one to research in several steps: a comparison, a
+    flow through the code, or several questions at once."""
+    if len(question.split()) < 6:
+        return False
+    return bool(_COMPLEX.search(question)) or question.count("?") >= 2
+
+
 # Excerpts in these languages are prose, not code.
 _PROSE = {"markdown", "text", "plaintext", "rst", "html"}
 

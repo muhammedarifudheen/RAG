@@ -538,6 +538,12 @@ function RetrievalTab({ settings, set }: { settings: ChatSettings; set: Patch })
           onChange={(strict) => set({ strict })}
         />
         <Toggle
+          label="Deep research for complex questions"
+          hint="For comparisons, flows through the code and many-part questions, an agent searches, reads the best spans and takes notes (up to 6 steps) before the answer is written. The composer's Research switch does it for every question."
+          checked={settings.researchAuto}
+          onChange={(researchAuto) => set({ researchAuto })}
+        />
+        <Toggle
           label="Search your sources"
           hint="Answer from the ingested repositories, pages and documents, citing exact lines."
           checked={settings.useSources}

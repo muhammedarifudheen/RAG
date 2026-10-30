@@ -41,6 +41,14 @@ from app.schemas import (
 )
 from app.services.search import extract_citations
 
+from .agent import (
+    MAX_TOOL_CALLS,
+    ResearchTools,
+    hits_text,
+    notes_block,
+    parse_action,
+    read_text,
+)
 from .factcheck import parse_fact_check
 from .horde import HordeTextProvider
 from .images import (
@@ -60,6 +68,7 @@ from .prompt import (
     MERGE,
     NOT_IN_SOURCES,
     QUERY_PLANNER,
+    RESEARCH_PROTOCOL,
     REVIEW,
     FollowUpSplitter,
     audit_prompt,
@@ -69,6 +78,7 @@ from .prompt import (
     gap_prompt,
     judge_prompt,
     rank_prompt,
+    research_prompt,
     strict_prompt,
     system_prompt,
     with_drafts,
@@ -133,6 +143,7 @@ class Options:
     strict: bool = False  # sources only, with the user's strict rules
     search_queries: Sequence[str] = ()  # what the query planner had searched for
     reranking: Reranking | None = None  # what the relevance judge did
+    research: ResearchTools | None = None  # deep research: the agent's tools
 
 
 # The query planner's time; after it the question alone is searched.
@@ -147,6 +158,9 @@ FACT_CHECK_SECONDS = 30.0
 # The gap finder's and the knowledge-base audit's time.
 GAP_SECONDS = 40.0
 AUDIT_SECONDS = 120.0
+# Deep research: the agent's time for all its tool calls, and the excerpts kept from it.
+RESEARCH_SECONDS = 75.0
+RESEARCH_EXCERPTS = 16
 
 # Services too slow to wait for when a quick reply is all that is needed.
 SLOW_SERVICES = ("horde",)
@@ -291,7 +305,12 @@ class Assistant:
         reranking = options.reranking if options else None
         if reranking is not None:
             yield "judged", reranking.model_dump()
+        steps: list[dict] = []
         for name, data in self._respond(question, chunks, history, mode, options, review):
+            if name == "researching":
+                steps.append(data)
+            if name == "done" and steps:
+                data = {**data, "research_steps": steps}
             if name == "done" and review.get("schema") is not None:
                 data = {**data, "analysis": review["schema"].model_dump()}
             if name == "done" and planned:
@@ -458,6 +477,80 @@ class Assistant:
             for m in self.providers[n].models[: self.models_per_provider]
         ]
 
+    def _research(self, question: str, tools: ResearchTools, out: dict) -> Iterator[Event]:
+        """The user's research loop: a model of the judge's services (quick, and not the
+        answers' quotas) calls search, read and note, one at a time, up to MAX_TOOL_CALLS
+        within RESEARCH_SECONDS, each step sent as a `researching` event. `out` gets the
+        excerpts it found and read, and its notes."""
+        models = [p for p in self._judges() if not self._resting(p)]
+        turns = [Turn("user", research_prompt(question[:4000]))]
+        gathered: dict[int, CodeChunk] = {}
+        notes: list[str] = []
+        calls, unreadable, current = 0, 0, 0
+        give_up = time.monotonic() + RESEARCH_SECONDS
+        while calls < MAX_TOOL_CALLS and current < len(models) and time.monotonic() < give_up:
+            name, model = models[current]
+            try:
+                reply = "".join(
+                    self.providers[name].stream(
+                        model, RESEARCH_PROTOCOL, turns, Outcome(), web=False, max_tokens=1500
+                    )
+                )
+            except (ProviderError, ValueError, KeyError) as error:
+                self._note_failure((name, model), str(error))
+                logger.info("research agent %s %s failed (%s)", name, model, error)
+                current += 1
+                continue
+            action = parse_action(reply)
+            if action is None:
+                unreadable += 1
+                if unreadable >= 2:
+                    break
+                turns += [
+                    Turn("assistant", reply[:2000]),
+                    Turn("user", "Reply with one tool call as a JSON object, and nothing else."),
+                ]
+                continue
+            if action.tool == "done":
+                break
+            calls += 1
+            if action.tool == "search":
+                hits = tools.search(action.query)
+                for hit in hits[:3]:
+                    gathered.setdefault(hit.symbol_id, hit)
+                result = hits_text(hits)
+                summary = f"{len(hits)} results"
+            elif action.tool == "read":
+                span = tools.read(action.path, action.start, action.end)
+                if span is not None:
+                    gathered[span.symbol_id] = span
+                result = read_text(span)
+                summary = "read" if span else "nothing there"
+            else:
+                notes.append(action.text)
+                result, summary = "Saved.", "saved"
+            yield (
+                "researching",
+                {
+                    "step": calls,
+                    "tool": action.tool,
+                    "input": action.described()[:300],
+                    "result": summary,
+                },
+            )
+            if calls == MAX_TOOL_CALLS - 1 and not notes:
+                # The answer is written from the notes: make sure there are some.
+                result += "\n\nOne tool call left: save your findings with note()."
+            turns += [
+                Turn("assistant", reply.strip()[:2000]),
+                Turn("user", f"Result of {action.tool}:\n{result}"),
+            ]
+        # Reads first: they are the spans the agent chose.
+        reads = [c for c in gathered.values() if c.symbol_id < 0]
+        out["chunks"] = [*reads, *(c for c in gathered.values() if c.symbol_id >= 0)]
+        out["notes"] = notes
+        logger.info("research agent: %d tool calls, %d notes", calls, len(notes))
+
     def judge_chunks(
         self, question: str, chunks: Sequence[CodeChunk]
     ) -> dict[int, tuple[int, str]]:
@@ -600,6 +693,15 @@ class Assistant:
             yield "error", {"status": 503, "detail": "No AI service is configured; add an API key."}
             return
 
+        notes = ""
+        if options.research is not None and not review:
+            research: dict = {}
+            yield from self._research(question, options.research, research)
+            # What the agent read and found first, then the first search's excerpts.
+            merged = {c.symbol_id: c for c in [*research["chunks"], *shown]}
+            shown = list(merged.values())[:RESEARCH_EXCERPTS]
+            notes = notes_block(research["notes"])
+
         found: list[WebResult] = []
         if (
             options.strict
@@ -645,7 +747,7 @@ class Assistant:
         if options.max_tokens:
             tuning["max_tokens"] = options.max_tokens
         today = datetime.now(UTC).date()
-        findings = review.get("text", "")
+        findings = review.get("text", "") or notes
         # Code questions over code excerpts: the user's code-aware prompt.
         code = (
             not options.strict

@@ -183,6 +183,38 @@ def audit_prompt(source_list: str) -> str:
     return KB_AUDIT.replace("{source_list}", "\n" + source_list)
 
 
+# Deep research: the user's agent prompt, word for word, then how to call the tools here.
+RESEARCH_AGENT = """\
+You are a research agent with tools.
+Tools:
+- search(query): search the knowledge base
+- read(source_id, line_range): read a specific span
+- note(text): save an intermediate finding
+
+Loop:
+1. Decompose the question into sub-questions.
+2. For each sub-question, call search(), then read() the best hits.
+3. Save findings with note().
+4. Synthesize only from notes, with citations.
+5. Stop when every sub-question is answered or you've made 6 tool calls.
+
+Question: {question}"""
+
+RESEARCH_PROTOCOL = """\
+Call one tool per reply, as one JSON object and nothing else:
+{"tool": "search", "query": "..."}
+{"tool": "read", "source_id": "path/of/file.py", "line_range": "120-160"}
+{"tool": "note", "text": "a finding, with its [path:start-end]"}
+{"tool": "done"} when every sub-question is answered.
+Each tool's result comes back in the next message. A source_id is a path from the search \
+results. The final answer is written afterwards from your notes and what you read, so \
+put every finding in a note, with its citation."""
+
+
+def research_prompt(question: str) -> str:
+    return RESEARCH_AGENT.replace("{question}", question)
+
+
 # Code questions answered from the knowledge base: the user's code-aware prompt, word for
 # word, is the question's message ({context} and {question} filled in by code_message).
 CODE_AWARE = """\

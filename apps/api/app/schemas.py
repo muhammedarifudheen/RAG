@@ -137,6 +137,12 @@ class AskRequest(BaseModel):
     rerank_cutoff: int | None = Field(
         default=None, ge=0, le=10, description="Excerpts the judge scores below this are left out."
     )
+    research: bool | None = Field(
+        default=None,
+        description="Deep research: a model searches the knowledge base, reads spans and "
+        "takes notes (up to 6 tool calls) before the answer is written. Unset: only for "
+        "questions that look complex; false: never.",
+    )
     strict: bool = Field(
         default=False,
         description="Strict sources only: answer from the knowledge base (and attached files) "
@@ -200,6 +206,7 @@ class AskRequest(BaseModel):
             or not self.rank_passages
             or self.rerank_cutoff is not None
             or self.strict
+            or self.research is not None
             or self.max_tokens is not None
             or self.format != "markdown"
             or self.include_drafts
@@ -241,6 +248,13 @@ class Reranking(BaseModel):
         default=False, description="True if the listwise ranker then ordered the kept excerpts."
     )
     top_pick: str | None = Field(default=None, description="The ranker's reason for its first.")
+
+
+class ResearchStep(BaseModel):
+    step: int
+    tool: Literal["search", "read", "note"]
+    input: str = Field(description="The query, the span read, or the note.")
+    result: str = Field(description='What came of it, briefly ("5 results", "read").')
 
 
 class AgentDraft(BaseModel):
@@ -360,6 +374,9 @@ class AskResponse(BaseModel):
     )
     fact_check: FactCheck | None = Field(
         default=None, description="The fact-checker's report, for `task: check`."
+    )
+    research_steps: list[ResearchStep] = Field(
+        default=[], description="Deep research: each tool call the agent made, in order."
     )
     gaps: GapReport | None = Field(
         default=None, description="For `task: gaps`: what the knowledge base lacks."
