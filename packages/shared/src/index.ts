@@ -66,8 +66,11 @@ export interface AskRequest {
   temperature?: number;
   /** Standing instructions to the assistant. */
   instructions?: string;
-  /** "image" draws a picture of the question. */
-  task?: "answer" | "image" | "review";
+  /** "image" draws a picture of the question; "check" fact-checks `answer` against `chunks`. */
+  task?: "answer" | "image" | "review" | "check";
+  /** For task "check": the answer to fact-check, and the excerpts it was given. */
+  answer?: string;
+  chunks?: CodeChunk[];
   /** Only these AI services answer; empty or absent is every configured one. */
   services?: string[];
   /** Agents answering in parallel (1-12); 1 is one model. */
@@ -95,6 +98,18 @@ export interface AskRequest {
   rank_passages?: boolean;
   /** Judged excerpts scoring below this are left out; unset is the server's (4). */
   rerank_cutoff?: number;
+}
+
+/** The fact-checker's report on an answer, against the excerpts it was given. */
+export interface FactCheck {
+  faithful: boolean;
+  /** Sentences no passage supports. */
+  unsupported: string[];
+  /** Citations that match no source ID and line range given. */
+  citation_errors: string[];
+  verdict: string;
+  /** "Service · model". */
+  checked_by: string;
 }
 
 /** What the relevance judge did with the excerpts. */
@@ -203,6 +218,10 @@ export interface AskResponse {
   search_queries?: string[];
   /** What the relevance judge did with the excerpts. */
   reranking?: Reranking | null;
+  /** The fact-checker's report, when asked for (task "check"). */
+  fact_check?: FactCheck | null;
+  /** True for a strict answer: the page asks for its fact-check once it is shown. */
+  fact_check_pending?: boolean;
 }
 
 // --- The code analyser (a review's `analysis`) --------------------------------

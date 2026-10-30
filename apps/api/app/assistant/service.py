@@ -18,6 +18,7 @@ from collections.abc import Callable, Iterator, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from functools import cache
+from typing import TypeVar
 
 import anthropic
 import httpx2
@@ -33,12 +34,14 @@ from app.schemas import (
     Attachment,
     ChatTurn,
     CodeChunk,
+    FactCheck,
     GeneratedImage,
     Reranking,
     WebSource,
 )
 from app.services.search import extract_citations
 
+from .factcheck import parse_fact_check
 from .horde import HordeTextProvider
 from .images import (
     CloudflareImages,
@@ -59,7 +62,11 @@ from .prompt import (
     QUERY_PLANNER,
     REVIEW,
     FollowUpSplitter,
+    audit_prompt,
+    context_blocks,
     conversation,
+    fact_check_prompt,
+    gap_prompt,
     judge_prompt,
     rank_prompt,
     strict_prompt,
@@ -76,11 +83,20 @@ from .providers import (
     Turn,
 )
 from .rerank import PASSAGE_CHARS, chunk_text, parse_judgement, parse_ranking
-from .router import Mode, Route, classify, model_order, provider_order, wants_image
+from .router import (
+    Mode,
+    Route,
+    classify,
+    model_order,
+    provider_order,
+    wants_code_answer,
+    wants_image,
+)
 from .services import configured, openrouter_free_models
 from .web import WebResult, WebSearch, search_query, web_block
 
 logger = logging.getLogger("atlas.api.assistant")
+T = TypeVar("T")
 
 # A repository is cloned and analysed one at a time (memory), and given this long.
 _REPO_ANALYSIS = threading.Lock()
@@ -126,6 +142,11 @@ JUDGE_SECONDS = 6.0
 JUDGE_MODELS = 8
 # The listwise ranker's time; after it the judge's order stands.
 RANK_SECONDS = 8.0
+# The fact-checker's time for one answer.
+FACT_CHECK_SECONDS = 30.0
+# The gap finder's and the knowledge-base audit's time.
+GAP_SECONDS = 40.0
+AUDIT_SECONDS = 120.0
 
 # Services too slow to wait for when a quick reply is all that is needed.
 SLOW_SERVICES = ("horde",)
@@ -277,7 +298,116 @@ class Assistant:
                 data = {**data, "search_queries": planned}
             if name == "done" and reranking is not None:
                 data = {**data, "reranking": reranking.model_dump()}
+            if (
+                name == "done"
+                and options is not None
+                and options.strict
+                and not review
+                and data.get("chunks")
+                and data.get("answer", "").strip() != NOT_IN_SOURCES
+            ):
+                # A check takes a reasoning model 15-30 s: the page asks for it (task
+                # "check") once the answer is shown, rather than holding the answer back.
+                data = {**data, "fact_check_pending": True}
             yield name, data
+
+    def fact_check(
+        self,
+        question: str,
+        answer: str,
+        chunks: Sequence[CodeChunk],
+        attachments: Sequence[Attachment] = (),
+    ) -> FactCheck | None:
+        """The fact-checker's report on `answer`, against the excerpts and files it was
+        given: the first readable one of two of the judge's services, asked at once (within
+        FACT_CHECK_SECONDS). None if neither checked it."""
+        context = context_blocks(chunks, attachments) or "(no passages)"
+        found = self._race(
+            "You check answers against their sources. Reply with the JSON asked for and "
+            "nothing else.",
+            fact_check_prompt(question[:4000], answer[:20000], context),
+            parse_fact_check,
+            FACT_CHECK_SECONDS,
+            max_tokens=2500,
+        )
+        if found is None:
+            return None
+        check, label = found
+        return check.model_copy(update={"checked_by": label})
+
+    def find_gaps(self, question: str, catalog: str) -> tuple[str, str] | None:
+        """The gap finder's report (markdown) on what the knowledge base, described by
+        `catalog`, covers and lacks for `question`, and who wrote it. None if no model
+        answered within GAP_SECONDS."""
+        return self._race(
+            "You review a knowledge base for a retrieval system. Answer in Markdown, under "
+            "the three numbered headings asked for; give the source to add as a link when "
+            "there is one.",
+            gap_prompt(question[:4000], catalog or "(the knowledge base is empty)"),
+            lambda text: text.strip() or None,
+            GAP_SECONDS,
+            max_tokens=2500,
+        )
+
+    def audit_sources(self, catalog: str) -> tuple[str, str] | None:
+        """The health check's markdown table for the sources in `catalog`, and who wrote
+        it. None if no model answered within AUDIT_SECONDS."""
+        return self._race(
+            "You audit knowledge bases. Reply with the Markdown table asked for and nothing "
+            "before it.",
+            audit_prompt(catalog),
+            lambda text: text.strip() if "|" in text else None,
+            AUDIT_SECONDS,
+            max_tokens=6000,
+        )
+
+    def _race(
+        self,
+        system: str,
+        prompt: str,
+        parse: Callable[[str], T | None],
+        seconds: float,
+        *,
+        max_tokens: int,
+        racers: int = 2,
+    ) -> tuple[T, str] | None:
+        """One prompt asked of `racers` of the judge's services at once: the first reply
+        `parse` accepts, with "Service · model"; None if none within `seconds`."""
+        candidates = [p for p in self._judges() if not self._resting(p)][:racers]
+        replies: queue.Queue = queue.Queue()
+
+        def run(name: str, model: str) -> None:
+            provider = self.providers[name]
+            try:
+                reply = "".join(
+                    provider.stream(
+                        model,
+                        system,
+                        [Turn("user", prompt)],
+                        Outcome(),
+                        web=False,
+                        max_tokens=max_tokens,
+                    )
+                )
+            except (ProviderError, ValueError, KeyError) as error:
+                self._note_failure((name, model), str(error))
+                replies.put(None)
+                return
+            parsed = parse(reply)
+            replies.put(None if parsed is None else (parsed, f"{provider.label} · {model}"))
+
+        for name, model in candidates:
+            threading.Thread(target=run, args=(name, model), daemon=True).start()
+        give_up = time.monotonic() + seconds
+        for _ in candidates:
+            try:
+                found = replies.get(timeout=max(0.0, give_up - time.monotonic()))
+            except queue.Empty:
+                break
+            if found is not None:
+                return found
+        logger.info("no reply within %.0fs to: %s", seconds, system[:60])
+        return None
 
     def plan_queries(self, question: str) -> list[str]:
         """Up to five knowledge-base searches for `question`: itself, then the query
@@ -516,6 +646,12 @@ class Assistant:
             tuning["max_tokens"] = options.max_tokens
         today = datetime.now(UTC).date()
         findings = review.get("text", "")
+        # Code questions over code excerpts: the user's code-aware prompt.
+        code = (
+            not options.strict
+            and not review
+            and wants_code_answer(question, route, [c.language for c in shown])
+        )
         turns = conversation(
             question,
             shown,
@@ -524,6 +660,7 @@ class Assistant:
             web=web_block(found, today) if found else "",
             analysis=findings,
             strict=options.strict and not review,
+            code=code,
         )
         panel = self._candidates(order, route, images)
         size = options.council_size or self.council_size
@@ -538,6 +675,7 @@ class Assistant:
                 web=web_block(found, today, brief=True) if found else "",
                 analysis=findings,
                 strict=options.strict and not review,
+                code=code,
             )
             yield from self._council(
                 question,

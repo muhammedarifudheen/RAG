@@ -154,11 +154,19 @@ class AskRequest(BaseModel):
     include_drafts: bool = Field(
         default=False, description="Return each council agent's own draft with the answer."
     )
-    task: Literal["answer", "image", "review"] = Field(
+    task: Literal["answer", "image", "review", "check", "gaps"] = Field(
         default="answer",
         description="`image` draws a picture of the question; `review` runs the code analyser "
         "on the attached code, code in the question, or a GitHub link, and the agents review "
-        "what it finds.",
+        "what it finds; `check` fact-checks `answer` against `chunks` (no new answer); "
+        "`gaps` reports what the knowledge base covers and lacks for the question.",
+    )
+    # task: check
+    answer: str | None = Field(
+        default=None, max_length=60000, description="For `check`: the answer to fact-check."
+    )
+    chunks: list[CodeChunk] = Field(
+        default=[], max_length=20, description="For `check`: the excerpts the answer was given."
     )
 
     @model_validator(mode="after")
@@ -300,6 +308,26 @@ class GeneratedImage(BaseModel):
     service: str | None = Field(default=None, description="The service that drew it.")
 
 
+class FactCheck(BaseModel):
+    faithful: bool = Field(description="True if every claim is supported and cited correctly.")
+    unsupported: list[str] = Field(default=[], description="Sentences no passage supports.")
+    citation_errors: list[str] = Field(
+        default=[], description="Citations that match no source ID and line range given."
+    )
+    verdict: str = Field(default="", description="The checker's one-line verdict.")
+    checked_by: str = Field(default="", description='"Service · model".')
+
+
+class GapReport(BaseModel):
+    report: str = Field(
+        description="Markdown: what the knowledge base covers, what it lacks, what to add."
+    )
+    suggestion_url: str | None = Field(
+        default=None, description="The link to the source it suggests adding, if it gave one."
+    )
+    found_by: str = Field(default="", description='"Service · model".')
+
+
 class AskResponse(BaseModel):
     question: str
     answer: str = Field(description="Claude's answer with inline [path:start-end] citations.")
@@ -329,6 +357,16 @@ class AskResponse(BaseModel):
     )
     reranking: Reranking | None = Field(
         default=None, description="What the relevance judge did with the excerpts."
+    )
+    fact_check: FactCheck | None = Field(
+        default=None, description="The fact-checker's report, for `task: check`."
+    )
+    gaps: GapReport | None = Field(
+        default=None, description="For `task: gaps`: what the knowledge base lacks."
+    )
+    fact_check_pending: bool = Field(
+        default=False,
+        description="True for a strict answer: check it with `task: check` (the page does).",
     )
 
 

@@ -10,7 +10,9 @@ import type {
   AttachmentText,
   ChatTurn,
   CodeAnalysis,
+  CodeChunk,
   CouncilAgent,
+  FactCheck,
   FileDetail,
   GeneratedImage,
   FileGraph,
@@ -267,6 +269,21 @@ export async function askAssistant(
     }
   }
   throw new ApiError(502, "The answer stopped before it was finished.");
+}
+
+/** Has the fact-checker check an answer against the excerpts it was given. */
+export async function factCheck(
+  question: string,
+  answer: string,
+  chunks: CodeChunk[],
+): Promise<FactCheck> {
+  const response = await request<AskResponse>("/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ question, task: "check", answer, chunks }),
+  });
+  if (!response.fact_check) throw new ApiError(503, "The fact-checker gave no report.");
+  return response.fact_check;
 }
 
 /** Reads a document's text (PDF, EPUB, HTML, code, plain text) for attaching to a question. */

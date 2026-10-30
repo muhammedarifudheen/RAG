@@ -16,6 +16,7 @@ hands over to the next.
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from typing import Literal
 
 Mode = Literal["auto", "best"]
@@ -140,6 +141,23 @@ def classify(question: str, top_score: float | None, *, images: bool = False) ->
     if _REASONING.search(question):
         return "reasoning"
     return "general"
+
+
+# Excerpts in these languages are prose, not code.
+_PROSE = {"markdown", "text", "plaintext", "rst", "html"}
+
+
+def wants_code_answer(question: str, route: Route, languages: Sequence[str]) -> bool:
+    """True if a question answered from excerpts in `languages` is about code: routed as
+    code, or a knowledge-base question in code words or over mostly code excerpts."""
+    if not languages:
+        return False
+    if route == "code":
+        return True
+    if route != "sources":
+        return False
+    code = sum(language.lower() not in _PROSE for language in languages)
+    return bool(_CODE.search(question)) or code * 2 > len(languages)
 
 
 def provider_order(mode: Mode, route: Route, best_order: str, available: set[str]) -> list[str]:

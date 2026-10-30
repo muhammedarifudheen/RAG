@@ -1,7 +1,7 @@
 "use client";
 
-import type { AskResponse, GeneratedImage } from "@atlas/shared";
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+import type { AskResponse, FactCheck, GeneratedImage } from "@atlas/shared";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import ReactMarkdown, { type Components } from "react-markdown";
 import rehypeKatex from "rehype-katex";
 import remarkGfm from "remark-gfm";
@@ -13,6 +13,7 @@ import {
   parseCitationHref,
   type CodeRange,
 } from "@/lib/citations";
+import { factCheck } from "@/lib/api";
 import { copyText } from "@/lib/exporting";
 import { normalizeMath } from "@/lib/markdown";
 
@@ -21,12 +22,14 @@ import { AnalysisReport } from "./AnalysisReport";
 interface Props {
   response: AskResponse;
   onCite: (range: CodeRange) => void;
+  /** A fact-check finished, to keep with the answer. */
+  onFactChecked?: (report: FactCheck) => void;
 }
 
 const REMARK = [remarkGfm, remarkMath];
 const REHYPE = [rehypeKatex];
 
-export function Answer({ response, onCite }: Props) {
+export function Answer({ response, onCite, onFactChecked }: Props) {
   const markdown = useMemo(
     () => normalizeMath(linkifyCitations(response.answer)),
     [response.answer],
@@ -79,6 +82,8 @@ export function Answer({ response, onCite }: Props) {
       </div>
 
       {response.images && response.images.length > 0 && <Gallery images={response.images} />}
+
+      <FactCheckPanel response={response} onChecked={onFactChecked} />
 
       {response.analysis && (
         <details className="mt-4 border-t border-line pt-3">
@@ -214,6 +219,98 @@ export function Answer({ response, onCite }: Props) {
         </details>
       )}
     </article>
+  );
+}
+
+/**
+ * The fact-checker's report, or, for an answer citing the sources, a button to ask for one.
+ * A strict answer asks for its check by itself, once shown.
+ */
+function FactCheckPanel({
+  response,
+  onChecked,
+}: {
+  response: AskResponse;
+  onChecked?: (report: FactCheck) => void;
+}) {
+  const [report, setReport] = useState<FactCheck | null>(response.fact_check ?? null);
+  const [state, setState] = useState<"idle" | "checking" | "failed">("idle");
+  const started = useRef(false);
+
+  const check = useCallback(() => {
+    setState("checking");
+    factCheck(response.question, response.answer, response.chunks)
+      .then((result) => {
+        setReport(result);
+        setState("idle");
+        onChecked?.(result);
+      })
+      .catch(() => setState("failed"));
+  }, [response, onChecked]);
+
+  useEffect(() => {
+    if (response.fact_check_pending && !response.fact_check && !started.current) {
+      started.current = true;
+      check();
+    }
+  }, [response, check]);
+
+  if (!report) {
+    if (response.citations.length === 0 || response.chunks.length === 0) return null;
+    return (
+      <div className="mt-3 flex items-center gap-3 text-xs">
+        <button
+          type="button"
+          disabled={state === "checking"}
+          onClick={check}
+          className="rounded-full border border-line px-3 py-1 text-cyan transition-colors hover:border-cyan/60 disabled:animate-pulse disabled:opacity-60"
+        >
+          {state === "checking"
+            ? "Fact-checking the answer against its sources…"
+            : "✓ Fact-check against the sources"}
+        </button>
+        {state === "failed" && (
+          <span className="text-warn">The fact-checker is busy; try again in a minute.</span>
+        )}
+      </div>
+    );
+  }
+  const problems = [...report.unsupported, ...report.citation_errors].length;
+  return (
+    <section
+      aria-label="Fact-check"
+      className={`mt-4 rounded-2xl border p-3 text-sm ${
+        report.faithful ? "border-acid/40 bg-acid/5" : "border-warn/50 bg-warn/5"
+      }`}
+    >
+      <p className="flex flex-wrap items-baseline gap-2">
+        <span className={`font-medium ${report.faithful ? "text-acid" : "text-warn"}`}>
+          {report.faithful ? "✓ Faithful to the sources" : `⚠ ${problems || "Some"} problems found`}
+        </span>
+        {report.verdict && <span className="text-soft">{report.verdict}</span>}
+      </p>
+      {report.unsupported.length > 0 && (
+        <div className="mt-2">
+          <p className="label text-muted">Not supported by a cited passage</p>
+          <ul aria-label="Unsupported sentences" className="mt-1 list-inside list-disc space-y-1 text-soft">
+            {report.unsupported.map((sentence) => (
+              <li key={sentence}>{sentence}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {report.citation_errors.length > 0 && (
+        <div className="mt-2">
+          <p className="label text-muted">Citation errors</p>
+          <ul aria-label="Citation errors" className="mt-1 list-inside list-disc space-y-1 text-soft">
+            {report.citation_errors.map((error) => (
+              <li key={error}>{error}</li>
+            ))}
+          </ul>
+        </div>
+      )}
+      {report.checked_by && <p className="mt-2 text-xs text-faint">Checked by {report.checked_by}</p>}
+    </section>
   );
 }
 

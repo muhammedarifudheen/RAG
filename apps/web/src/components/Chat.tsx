@@ -7,6 +7,7 @@ import type {
   ChatTurn,
   CodeAnalysis,
   CouncilAgent,
+  FactCheck,
   GeneratedImage,
   WebSource,
 } from "@atlas/shared";
@@ -301,6 +302,29 @@ export function Chat() {
     if (reply.role === "assistant" && settings.speak) speaker.speak(`m-${shown.id}`, reply.response.answer);
   }
 
+  /** Keeps a fact-check with its answer, so it is not asked for again. */
+  function saveFactCheck(messageId: number, checked: AskResponse, report: FactCheck) {
+    const owner = chatId;
+    setMessages((current) => {
+      const at = current.findIndex(
+        (m) =>
+          m.id === messageId &&
+          m.role === "assistant" &&
+          m.response.answer === checked.answer &&
+          m.response.question === checked.question,
+      );
+      if (at < 0) return current;
+      const next = [...current];
+      const message = next[at] as Extract<Message, { role: "assistant" }>;
+      next[at] = {
+        ...message,
+        response: { ...message.response, fact_check: report, fact_check_pending: false },
+      };
+      if (owner) remember(owner, next.map(({ id: _id, ...rest }) => rest));
+      return next;
+    });
+  }
+
   function stored(): StoredMessage[] {
     return messages.map(({ id: _id, ...message }) => message);
   }
@@ -549,7 +573,11 @@ export function Chat() {
               const speakingThis = speaker.speaking === `m-${message.id}`;
               return (
                 <div key={message.id}>
-                  <Answer response={message.response} onCite={setSelected} />
+                  <Answer
+                    response={message.response}
+                    onCite={setSelected}
+                    onFactChecked={(report) => saveFactCheck(message.id, message.response, report)}
+                  />
                   <div className="mt-1.5 flex items-center gap-1 pl-1">
                     <ActionButton label="Copy answer" onClick={() => void copyAnswer(message.response.answer)}>
                       ⧉ Copy

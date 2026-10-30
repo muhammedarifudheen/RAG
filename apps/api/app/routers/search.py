@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
 from app.assistant import Assistant, AssistantError, Options, get_assistant
+from app.assistant.gaps import suggested_source
 from app.assistant.planner import fuse
 from app.assistant.rerank import rerank
 from app.config import settings
@@ -17,8 +18,12 @@ from app.db import get_db
 from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
 from app.ratelimit import rate_limit
-from app.schemas import AskRequest, AskResponse, Reranking, SearchResponse
+from app.schemas import AskRequest, AskResponse, GapReport, Reranking, SearchResponse
+from app.services.catalog import source_catalog
 from app.services.search import extract_citations, search_symbols
+
+# How long to wait for the ranker once the judge is done (it has its own time limit).
+RANK_WAIT = 10.0
 
 RATE_LIMITED = {429: {"description": "Rate limit exceeded; see the Retry-After header."}}
 
@@ -107,6 +112,43 @@ def ask(
     if not question:
         raise HTTPException(422, "question must not be blank.")
 
+    if body.task == "check":
+        # A fact-check of an answer already given, against the excerpts it was given.
+        if not (body.answer or "").strip():
+            raise HTTPException(422, "answer must be given to check it.")
+        checker: Assistant = _resolve(request, get_assistant)
+        report = checker.fact_check(question, body.answer, body.chunks, body.attachments)
+        if report is None:
+            raise HTTPException(503, "The fact-checker is busy; try again in a minute.")
+        return AskResponse(
+            question=question,
+            answer=body.answer,
+            citations=extract_citations(body.answer, body.chunks),
+            chunks=body.chunks,
+            model=report.checked_by,
+            complete=True,
+            fact_check=report,
+        )
+
+    if body.task == "gaps":
+        # What the knowledge base would need to answer the question.
+        finder: Assistant = _resolve(request, get_assistant)
+        found = finder.find_gaps(question, source_catalog(db))
+        if found is None:
+            raise HTTPException(503, "The gap finder is busy; try again in a minute.")
+        report, found_by = found
+        return AskResponse(
+            question=question,
+            answer=report,
+            citations=[],
+            chunks=[],
+            model=found_by,
+            complete=True,
+            gaps=GapReport(
+                report=report, suggestion_url=suggested_source(report), found_by=found_by
+            ),
+        )
+
     streaming = "text/event-stream" in request.headers.get("accept", "")
     if streaming or body.for_assistant:
         assistant: Assistant = _resolve(request, get_assistant)
@@ -138,19 +180,38 @@ def ask(
                 if body.rerank_cutoff is None
                 else body.rerank_cutoff
             )
-            verdicts = assistant.judge_chunks(query, chunks)
-            candidates = len(chunks)
-            chunks = rerank(chunks, verdicts, cutoff, body.top_k)
-            ranking = assistant.rank_chunks(query, chunks) if body.rank_passages else None
-            if ranking is not None:
-                chunks = [chunks[i] for i in ranking[0]]
+            candidates = list(chunks)
+            # The ranker orders every candidate while the judge scores them, so the two
+            # take as long as the slower; its order is then applied to those kept.
+            ranked: queue.Queue = queue.Queue()
+            if body.rank_passages:
+                threading.Thread(
+                    target=lambda: ranked.put(assistant.rank_chunks(query, candidates)),
+                    daemon=True,
+                ).start()
+            verdicts = assistant.judge_chunks(query, candidates)
+            chunks = rerank(candidates, verdicts, cutoff, body.top_k)
+            ranking = None
+            if body.rank_passages:
+                try:
+                    ranking = ranked.get(timeout=RANK_WAIT)
+                except queue.Empty:
+                    ranking = None
+            applied = ranking is not None and len(chunks) >= 2
+            if applied:
+                place = {candidates[i].symbol_id: p for p, i in enumerate(ranking[0])}
+                chunks.sort(key=lambda c: place.get(c.symbol_id, len(place)))
+            first = candidates[ranking[0][0]].symbol_id if ranking else None
             reranking = Reranking(
-                candidates=candidates,
+                candidates=len(candidates),
                 judged=len(verdicts),
                 kept=len(chunks),
                 cutoff=cutoff,
-                ranked=ranking is not None,
-                top_pick=(ranking[1] or None) if ranking else None,
+                ranked=applied,
+                # Its reason, when its first choice is one the judge kept.
+                top_pick=(ranking[1] or None)
+                if applied and any(c.symbol_id == first for c in chunks)
+                else None,
             )
         options = Options(
             attachments=body.attachments,

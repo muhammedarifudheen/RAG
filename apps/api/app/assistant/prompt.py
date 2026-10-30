@@ -106,6 +106,13 @@ def strict_message(
 ) -> str:
     """The user's grounded-answer prompt with the context as [source_id:lines] blocks: the
     excerpts with numbered lines, then any attached files (their name as the source_id)."""
+    context = context_blocks(chunks, attachments) or "(nothing was retrieved)"
+    # replace, not format: the context may hold braces.
+    return STRICT_ANSWER.replace("{question}", question).replace("{context}", context, 1)
+
+
+def context_blocks(chunks: Sequence[CodeChunk], attachments: Sequence[Attachment] = ()) -> str:
+    """The excerpts and attached files as [source_id:lines] blocks with numbered lines."""
     blocks = []
     for chunk in chunks:
         lines = chunk.snippet.split("\n")
@@ -116,9 +123,86 @@ def strict_message(
             lines = a.text.split("\n")
             numbered = "\n".join(f"{i}| {line}" for i, line in enumerate(lines, 1))
             blocks.append(f"[{a.name.replace(']', '')}:1-{len(lines)}]\n{numbered}")
-    context = "\n\n".join(blocks) or "(nothing was retrieved)"
-    # replace, not format: the context may hold braces.
-    return STRICT_ANSWER.replace("{question}", question).replace("{context}", context, 1)
+    return "\n\n".join(blocks)
+
+
+# Checking an answer against its sources: the user's fact-checker prompt, word for word;
+# fact_check_prompt fills in the question, the answer and the context.
+FACT_CHECKER = """\
+You are a fact-checker.
+
+Question: {question}
+Answer: {answer}
+Context: {context}
+
+Check:
+1. Is every factual claim supported by a cited passage? If not, list the unsupported sentences.
+2. Are the citations real (do they match the provided source IDs and line ranges)?
+3. Does the answer actually address the question?
+
+Return JSON: {"faithful": true/false, "unsupported": [...], "citation_errors": [...], \
+"verdict": "<one line>"}"""
+
+
+def fact_check_prompt(question: str, answer: str, context: str) -> str:
+    # One pass, so text in the answer such as "{context}" stays as written.
+    fields = {"{question}": question, "{answer}": answer, "{context}": context}
+    return re.sub(
+        r"\{question\}|\{answer\}|\{context\}", lambda m: fields[m.group(0)], FACT_CHECKER
+    )
+
+
+# When the knowledge base falls short: the user's gap-finder prompt, word for word.
+GAP_FINDER = """\
+Given this knowledge base (sources listed below) and the user's question, identify:
+1. What the KB covers well.
+2. What it is missing to answer the question fully.
+3. The single best source to add next.
+
+Sources: {source_list}
+Question: {question}"""
+
+# The scheduled health check of the whole knowledge base: the user's prompt, word for word.
+KB_AUDIT = """\
+You are auditing a RAG knowledge base.
+For each source, report:
+- Coverage: what topics it answers well.
+- Staleness: does it look outdated?
+- Redundancy: which other source overlaps.
+- Gaps: 3 questions it cannot answer.
+
+Sources: {source_list}
+Return a markdown table."""
+
+
+def gap_prompt(question: str, source_list: str) -> str:
+    return GAP_FINDER.replace("{question}", question).replace("{source_list}", "\n" + source_list)
+
+
+def audit_prompt(source_list: str) -> str:
+    return KB_AUDIT.replace("{source_list}", "\n" + source_list)
+
+
+# Code questions answered from the knowledge base: the user's code-aware prompt, word for
+# word, is the question's message ({context} and {question} filled in by code_message).
+CODE_AWARE = """\
+You are a codebase assistant.
+When answering questions about code:
+- Name the exact file, function, and class.
+- Show the relevant call chain if the question is about flow ("who calls X").
+- Quote the signature and a short body snippet, not the whole file.
+- If the question is about behavior, trace it to the specific line that implements it.
+- Cite as [path/to/file.py:start-end].
+
+Context:
+{context}
+
+Question: {question}"""
+
+
+def code_message(question: str, chunks: Sequence[CodeChunk]) -> str:
+    context = context_blocks(chunks)
+    return CODE_AWARE.replace("{question}", question).replace("{context}", context, 1)
 
 
 # Query planning for the knowledge-base search: the user's own planner prompt, word for word.
@@ -218,6 +302,7 @@ def conversation(
     web: str = "",
     analysis: str = "",
     strict: bool = False,
+    code: bool = False,
 ) -> list[Turn]:
     """The earlier messages (the most recent `keep`), then the question with any attached
     files, excerpts, web results and the code analyser's findings. Strict, the question
@@ -229,7 +314,10 @@ def conversation(
     images = [Image(a.mime, a.data) for a in attachments if a.kind == "image" and a.mime and a.data]
     if strict:
         return [*turns, Turn("user", strict_message(question, chunks, attachments), images)]
-    last = build_prompt(question, list(chunks)) if chunks else question
+    if code and chunks:
+        last = code_message(question, chunks)
+    else:
+        last = build_prompt(question, list(chunks)) if chunks else question
     files = [a for a in attachments if a.kind == "text" and a.text]
     if files:
         attached = "\n\n".join(
