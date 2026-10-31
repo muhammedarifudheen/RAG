@@ -84,11 +84,13 @@ from .prompt import (
     epistemic_prompt,
     fact_check_prompt,
     gap_prompt,
+    intent_prompt,
     judge_prompt,
     rank_prompt,
     research_prompt,
     strict_prompt,
     system_prompt,
+    take_head,
     take_state,
     with_drafts,
 )
@@ -832,6 +834,10 @@ class Assistant:
             if options.strict
             else system_prompt(style=options.style, instructions=options.instructions)
         )
+        if route not in ("chat", "review"):
+            # The user's goal first: the literal question, the goal behind it, what would be
+            # a bad answer, and a one-line reframe when the goal differs.
+            system = intent_prompt(system)
         if sources_question:
             # The user's epistemic states: known, inferred, partial, absent, conflicted.
             system = epistemic_prompt(system)
@@ -1556,12 +1562,14 @@ def _with_state(data: dict, options: Options | None) -> dict:
     """The answer's epistemic state, taken off the answer (and its drafts): what the model
     declared for a question about the sources, or, for others, whether it came from
     general knowledge or the web."""
-    state, answer = take_state(data.get("answer", ""))
+    head, answer = take_head(data.get("answer", ""))
+    state = head.get("state")
     drafts = [
-        {**draft, "answer": take_state(draft.get("answer", ""))[1]}
+        {**draft, "answer": take_head(draft.get("answer", ""))[1]}
         for draft in data.get("drafts") or []
     ]
-    data = {**data, "answer": answer, "drafts": drafts}
+    intent = {k: head[k] for k in ("literal", "goal", "constraints", "reframe") if head.get(k)}
+    data = {**data, "answer": answer, "drafts": drafts, "intent": intent or None}
     route = data.get("route")
     about = route == "sources" or bool(options and (options.strict or options.about_sources))
     if answer.strip() == NOT_IN_SOURCES:

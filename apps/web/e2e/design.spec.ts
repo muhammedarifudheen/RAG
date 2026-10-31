@@ -185,3 +185,25 @@ test("every answer says where it stands, and an absent one asks what is missing"
   await expect(answers.nth(2).getByRole("note", { name: /Epistemic state: General knowledge/ })).toBeVisible();
   expect(sent.bodies.filter((b) => b.task === "gaps")).toHaveLength(1);
 });
+
+test("the goal behind a question folds away, and a reframe stays in view", async ({ page }) => {
+  await mock(page, [
+    reply("Use a signed serializer for the cookie value.", {
+      intent: {
+        literal: "how do I sign a cookie?",
+        goal: "keep a session cookie from being tampered with",
+        constraints: "no hand-rolled crypto",
+        reframe: "answering how to protect a session cookie, not just sign a string",
+      },
+    }),
+  ]);
+  await page.goto("/chat");
+  await ask(page, "how do I sign a cookie?");
+  const answer = page.getByRole("article", { name: "Answer" });
+  await expect(answer.getByRole("note", { name: /Reframed: answering how to protect/ })).toBeVisible();
+  const after = answer.getByRole("definition").first();
+  await expect(after).toBeHidden(); // folded until opened
+  await answer.getByText("What you're after").click();
+  await expect(answer.getByRole("term")).toHaveText(["Literal question", "Underlying goal", "Implied constraints"]);
+  await expect(answer).toContainText("keep a session cookie from being tampered with");
+});

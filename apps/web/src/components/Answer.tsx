@@ -8,6 +8,7 @@ import type {
   FactCheck,
   GapReport,
   GeneratedImage,
+  Intent,
   SelfChallenge,
   ResearchStep,
 } from "@atlas/shared";
@@ -111,6 +112,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
           )}
         </p>
       )}
+      {response.intent && <IntentNote intent={response.intent} />}
       <div className="markdown text-[15px] leading-relaxed">
         <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components}>
           {markdown}
@@ -477,6 +479,42 @@ function EpistemicBadge({ state }: { state: EpistemicState }) {
 }
 
 const WEIGHT_NAMES: Record<number, string> = { 3: "primary", 2: "secondary", 1: "derived" };
+
+/** What the user is after: the reframe, when the answer addresses the goal rather than the
+ * literal question, stays in view; the reconstruction folds away. */
+function IntentNote({ intent }: { intent: Intent }) {
+  const rows: [string, string | null | undefined][] = [
+    ["Literal question", intent.literal],
+    ["Underlying goal", intent.goal],
+    ["Implied constraints", intent.constraints],
+  ];
+  return (
+    <div className="mb-3 text-xs">
+      {intent.reframe && (
+        <p role="note" aria-label={`Reframed: ${intent.reframe}`} className="mb-1.5 italic text-signal">
+          ↪ Reframed: {intent.reframe}
+        </p>
+      )}
+      {rows.some(([, value]) => value) && (
+        <details className="text-soft">
+          <summary className="cursor-pointer select-none text-muted hover:text-paper">
+            What you&apos;re after
+          </summary>
+          <dl aria-label="What you're after" className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
+            {rows
+              .filter(([, value]) => value)
+              .map(([label, value]) => (
+                <div key={label} className="contents">
+                  <dt className="label text-muted">{label}</dt>
+                  <dd>{value}</dd>
+                </div>
+              ))}
+          </dl>
+        </details>
+      )}
+    </div>
+  );
+}
 
 const LEVEL: Record<Confidence["level"], { label: string; tone: string }> = {
   high: { label: "High confidence", tone: "border-acid/40 bg-acid/10 text-acid" },

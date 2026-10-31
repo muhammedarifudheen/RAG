@@ -106,6 +106,18 @@ export interface AskRequest {
   rerank_cutoff?: number;
 }
 
+/** What the user is trying to achieve, reconstructed before answering. */
+export interface Intent {
+  /** The question as typed. */
+  literal?: string | null;
+  /** What they are trying to do. */
+  goal?: string | null;
+  /** What they would consider a bad answer. */
+  constraints?: string | null;
+  /** One line, when the answer addresses the goal rather than the literal question. */
+  reframe?: string | null;
+}
+
 export type EpistemicState =
   | "known"
   | "inferred"
@@ -286,6 +298,8 @@ export interface AskResponse {
   /** Where the answer stands: for a question about the sources, as the model classified
    * it (known, inferred, partial, absent, conflicted); otherwise general or web. */
   epistemic?: EpistemicState | null;
+  /** What the user is trying to achieve, reconstructed before answering. */
+  intent?: Intent | null;
   /** The highest weight among the excerpts: secondary or derived means the answer rests
    * on secondary sources only. */
   source_basis?: "primary" | "secondary" | "derived" | null;

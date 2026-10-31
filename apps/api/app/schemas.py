@@ -368,6 +368,17 @@ class GapReport(BaseModel):
     found_by: str = Field(default="", description='"Service · model".')
 
 
+class Intent(BaseModel):
+    literal: str | None = Field(default=None, description="The question as typed.")
+    goal: str | None = Field(default=None, description="What the user is trying to do.")
+    constraints: str | None = Field(
+        default=None, description="What the user would consider a bad answer."
+    )
+    reframe: str | None = Field(
+        default=None, description="One line, when the answer addresses the goal instead."
+    )
+
+
 class Confidence(BaseModel):
     level: Literal["high", "medium", "low"]
     relevance: float = Field(description="How relevant the excerpts were, 0-1.")
@@ -417,6 +428,10 @@ class AskResponse(BaseModel):
         description="For a question about the sources: known, inferred, partial, absent or "
         "conflicted, as the model classified it; otherwise general (its own knowledge) or "
         "web.",
+    )
+    intent: Intent | None = Field(
+        default=None,
+        description="What the user is trying to achieve, as reconstructed before answering.",
     )
     source_basis: Literal["primary", "secondary", "derived"] | None = Field(
         default=None,

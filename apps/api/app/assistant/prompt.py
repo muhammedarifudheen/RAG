@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import re
 from collections.abc import Sequence
 from datetime import UTC, date, datetime
@@ -34,8 +35,8 @@ Never blur these states. The user must always know which one they're in."""
 
 EPISTEMIC_FORMAT = """\
 The context is the excerpts and files in the user's message. Write your state alone on \
-the first line, exactly as STATE: KNOWN (or INFERRED, PARTIAL, ABSENT, CONFLICTED), then \
-the answer. For ABSENT, write only one sentence saying the knowledge base does not \
+a line before the answer (after the goal lines, if you write them), exactly as \
+STATE: KNOWN (or INFERRED, PARTIAL, ABSENT, CONFLICTED), then the answer. For ABSENT, write only one sentence saying the knowledge base does not \
 contain it: the gap-finder runs after you. This question is about the user's own \
 sources, so these rules come before any rule above about answering from your own \
 knowledge."""
@@ -72,22 +73,91 @@ _STATE_LINE = re.compile(
     re.IGNORECASE,
 )
 # How a finished answer carries its state to the response: removed before it is sent.
-_STATE_MARK = re.compile(r"^\u2063state:(\w+)\u2063")
+_HEAD_MARK = re.compile(r"^\u2063head:(\{.*?\})\u2063", re.DOTALL)
+
+# The user's goal-reconstruction rule, word for word, for every answer; then how to lay
+# it out so the page can fold it away.
+INTENT = """\
+Before answering, reconstruct what the user is actually trying to achieve:
+- Literal question: <what they typed>
+- Underlying goal: <what they're trying to do>
+- Implied constraints: <what they'd consider a bad answer>
+
+If the underlying goal differs from the literal question, answer the underlying goal and \
+note the reframe in one line.
+
+Then answer."""
+
+INTENT_FORMAT = """\
+Write those three as the first lines of your reply, each on its own line and exactly \
+labelled "Literal question:", "Underlying goal:" and "Implied constraints:"; when the \
+goal differs from the literal question, add one line "Reframe: <the reframe>". Then a \
+line with only ---, then the answer. The page folds those lines away and shows the \
+reframe above the answer, so do not repeat them in it."""
+
+# Header lines a reply may open with: the goal lines, the reframe and the state.
+_HEAD_LABELS = (
+    "literal question",
+    "underlying goal",
+    "implied constraints",
+    "reframe",
+    "epistemic state",
+    "state",
+)
+_HEAD_LINE = re.compile(
+    r"^[\W_]*(literal question|underlying goal|implied constraints|reframe|epistemic state|"
+    r"state)\**\s*:\**\s*(.*?)\s*$",
+    re.IGNORECASE,
+)
+_HEAD_KEYS = {
+    "literal question": "literal",
+    "underlying goal": "goal",
+    "implied constraints": "constraints",
+    "reframe": "reframe",
+}
+
+
+_STANDING = "\n\nThe user's standing instructions"
+
+
+def _before_instructions(system: str, rules: str) -> str:
+    """`rules` added to the system prompt, before the user's standing instructions, which
+    stay last."""
+    at = system.find(_STANDING)
+    if at == -1:
+        return f"{system}\n\n{rules}"
+    return f"{system[:at]}\n\n{rules}{system[at:]}"
+
+
+def intent_prompt(system: str) -> str:
+    return _before_instructions(system, f"{INTENT}\n\n{INTENT_FORMAT}")
+
+
+def take_head(answer: str) -> tuple[dict, str]:
+    """(what a finished answer opened with: its state and the user's reconstructed goal,
+    the answer without it)."""
+    found = _HEAD_MARK.match(answer or "")
+    if not found:
+        return {}, answer
+    try:
+        head = json.loads(found[1])
+    except ValueError:
+        head = {}
+    return head, answer[found.end() :]
 
 
 def epistemic_prompt(system: str) -> str:
-    return (
-        f"{system}\n\n{EPISTEMIC}\n\n{EPISTEMIC_FORMAT}\n\n{SOURCE_WEIGHTS}\n\n"
-        "Each excerpt's weight is in <source_weights> in the user's message."
+    return _before_instructions(
+        system,
+        f"{EPISTEMIC}\n\n{EPISTEMIC_FORMAT}\n\n{SOURCE_WEIGHTS}\n\n"
+        "Each excerpt's weight is in <source_weights> in the user's message.",
     )
 
 
 def take_state(answer: str) -> tuple[str | None, str]:
     """(the state a finished answer carries, the answer without it)."""
-    found = _STATE_MARK.match(answer or "")
-    if not found:
-        return None, answer
-    return found[1], answer[found.end() :]
+    head, rest = take_head(answer)
+    return head.get("state"), rest
 
 
 SYSTEM = """\
@@ -459,27 +529,57 @@ class FollowUpSplitter:
         self.text = ""
         self.sent = 0
         self.cut: int | None = None
-        # The epistemic state, when the answer opens with "STATE: …" (removed from it).
-        self.state: str | None = None
+        # What the reply opened with, taken off it: the user's goal ("Literal question:",
+        # "Underlying goal:", "Implied constraints:", "Reframe:") and its "STATE: …".
+        self.head: dict[str, str] = {}
         self._head = False
 
+    @property
+    def state(self) -> str | None:
+        return self.head.get("state")
+
     def _read_head(self, final: bool = False) -> bool:
-        """Takes a leading "STATE: …" line off the answer; False while it may still be one."""
+        """Takes the header lines (the goal lines, a reframe, "STATE: …") off the reply;
+        False while the text so far may still be one. Any other opening streams at once."""
         if self._head:
             return True
-        stripped = self.text.lstrip()
-        # Held back only while it may still become "STATE: …" (or "**State:**", "Epistemic
-        # state"); any other opening streams at once.
-        core = re.sub(r"^[\W_]+", "", stripped).lower()
-        maybe = not core or any(
-            core.startswith(word) or word.startswith(core) for word in ("state", "epistemic")
-        )
-        if not final and maybe and "\n" not in stripped and len(stripped) < 80:
-            return False
-        found = _STATE_LINE.match(stripped)
-        if found:
-            self.state = found[1].lower()
-            self.text = stripped[found.end() :].lstrip("\n")
+        text, pos, head = self.text, 0, {}
+        while True:
+            rest = text[pos:]
+            end = rest.find("\n")
+            line = rest if end == -1 else rest[:end]
+            if end == -1 and not final:
+                core = re.sub(r"^[\W_]+", "", line).lower()
+                maybe = not core or any(
+                    core.startswith(label) or label.startswith(core) for label in _HEAD_LABELS
+                )
+                if maybe and len(line) < 300:
+                    return False  # wait for the rest of the line
+                break
+            if not line.strip() or re.fullmatch(r"\s*[-*_]{3,}\s*", line):
+                if not line.strip() or head:
+                    pos += len(line) + (end != -1)
+                    if end == -1:
+                        break
+                    continue
+                break
+            found = _HEAD_LINE.match(line)
+            if not found:
+                break
+            label, value = found[1].lower(), found[2].strip().strip("*").strip()
+            if label in ("state", "epistemic state"):
+                word = (value.split() or [""])[0].strip("*.:").lower()
+                if word not in STATES:
+                    break
+                head["state"] = word
+            else:
+                head[_HEAD_KEYS[label]] = value[:500]
+            pos += len(line) + (end != -1)
+            if end == -1:
+                break
+        if head:
+            self.head = head
+            self.text = text[pos:].lstrip("\n")
         self._head = True
         return True
 
@@ -506,7 +606,7 @@ class FollowUpSplitter:
             if self.cut is None:
                 found = _MARKER.search(self.text)
                 self.cut = found.start() if found else None
-        mark = f"\u2063state:{self.state}\u2063" if self.state else ""
+        mark = f"\u2063head:{json.dumps(self.head)}\u2063" if self.head else ""
         if self.cut is None:
             rest, self.sent = self.text[self.sent :], len(self.text)
             return rest, mark + self.text.strip(), []
