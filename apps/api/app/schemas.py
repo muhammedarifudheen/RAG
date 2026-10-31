@@ -379,6 +379,16 @@ class Intent(BaseModel):
     )
 
 
+class Uncertainty(BaseModel):
+    spent: int = Field(description="Units spent: the higher of the model's and the server's count.")
+    budget: int = 3
+    model: int | None = Field(default=None, description="The model's own count, if it gave one.")
+    reasons: list[str] = Field(
+        default=[], description="What the server saw spending units, such as a single source."
+    )
+    exceeded: bool = Field(description="True if over budget: the answer was withheld.")
+
+
 class Confidence(BaseModel):
     level: Literal["high", "medium", "low"]
     relevance: float = Field(description="How relevant the excerpts were, 0-1.")
@@ -428,6 +438,10 @@ class AskResponse(BaseModel):
         description="For a question about the sources: known, inferred, partial, absent or "
         "conflicted, as the model classified it; otherwise general (its own knowledge) or "
         "web.",
+    )
+    uncertainty: Uncertainty | None = Field(
+        default=None,
+        description="For an answer from the sources: the uncertainty budget spent, of 3.",
     )
     intent: Intent | None = Field(
         default=None,

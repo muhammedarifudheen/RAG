@@ -207,3 +207,36 @@ test("the goal behind a question folds away, and a reframe stays in view", async
   await expect(answer.getByRole("term")).toHaveText(["Literal question", "Underlying goal", "Implied constraints"]);
   await expect(answer).toContainText("keep a session cookie from being tampered with");
 });
+
+test("the uncertainty spent is a meter, and over budget the answer asks what is missing", async ({
+  page,
+}) => {
+  const sent = await mock(page, [
+    reply("It splits the value [src/signer.py:220-229].", {
+      epistemic: "known",
+      uncertainty: { spent: 1, budget: 3, model: 1, reasons: ["a single source"], exceeded: false },
+    }),
+    reply("Confidence too low to answer safely. Here's what I found and what's missing:\n\nOnly a note.", {
+      epistemic: "inferred",
+      uncertainty: { spent: 4, budget: 3, model: 4, reasons: ["secondary sources only"], exceeded: true },
+    }),
+  ]);
+  await page.route("**/api/ask", async (route) => {
+    const body = route.request().postDataJSON() as AskRequest;
+    if (body.task !== "gaps") return route.fallback();
+    sent.bodies.push(body);
+    return route.fulfill({
+      json: reply("2. Missing: a primary source.", {
+        gaps: { report: "2. Missing: a primary source.", suggestion_url: null, found_by: "x" },
+      }),
+    });
+  });
+  await page.goto("/chat");
+  await ask(page, "How is it split?");
+  const answers = page.getByRole("article", { name: "Answer" });
+  await expect(answers.nth(0).getByRole("note", { name: /Uncertainty spent: 1 of 3. Spent on: a single source/ })).toContainText("●○○");
+
+  await ask(page, "And what else?");
+  await expect(answers.nth(1).getByRole("note", { name: /Over the uncertainty budget: 4 of 3/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "What's missing" })).toContainText("a primary source");
+});

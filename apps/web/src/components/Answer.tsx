@@ -10,6 +10,7 @@ import type {
   GeneratedImage,
   Intent,
   SelfChallenge,
+  Uncertainty,
   ResearchStep,
 } from "@atlas/shared";
 import Link from "next/link";
@@ -92,9 +93,10 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
 
   return (
     <article aria-label="Answer" className="slab bg-panel/80 py-4 pl-5 pr-4">
-      {(response.epistemic || response.challenge?.valid || response.source_basis) && (
+      {(response.epistemic || response.challenge?.valid || response.source_basis || response.uncertainty) && (
         <p className="mb-2 flex flex-wrap items-center gap-2">
           {response.epistemic && <EpistemicBadge state={response.epistemic} />}
+          {response.uncertainty && <UncertaintyMeter uncertainty={response.uncertainty} />}
           {(response.source_basis === "secondary" || response.source_basis === "derived") && (
             <span
               role="note"
@@ -480,6 +482,33 @@ function EpistemicBadge({ state }: { state: EpistemicState }) {
 
 const WEIGHT_NAMES: Record<number, string> = { 3: "primary", 2: "secondary", 1: "derived" };
 
+/** How much of the uncertainty budget (3) an answer spent: a meter, and why. */
+function UncertaintyMeter({ uncertainty }: { uncertainty: Uncertainty }) {
+  const { spent, budget, reasons, exceeded } = uncertainty;
+  const why = reasons.length ? reasons.join(", ") : "nothing the server could see";
+  const label = exceeded
+    ? `Over the uncertainty budget: ${spent} of ${budget}; the answer was withheld`
+    : `Uncertainty spent: ${spent} of ${budget}`;
+  const tone = exceeded
+    ? "border-danger/40 bg-danger/10 text-danger"
+    : spent >= budget
+      ? "border-warn/40 bg-warn/10 text-warn"
+      : "border-line bg-raised/60 text-soft";
+  return (
+    <span
+      role="note"
+      aria-label={`${label}. Spent on: ${why}.`}
+      title={`Spent on: ${why}`}
+      className={`label inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 ${tone}`}
+    >
+      <span aria-hidden="true" className="tracking-[0.2em]">
+        {Array.from({ length: budget }, (_, i) => (i < spent ? "●" : "○")).join("")}
+      </span>
+      {exceeded ? `Over budget ${spent}/${budget}` : `${spent}/${budget}`}
+    </span>
+  );
+}
+
 /** What the user is after: the reframe, when the answer addresses the goal rather than the
  * literal question, stays in view; the reconstruction folds away. */
 function IntentNote({ intent }: { intent: Intent }) {
@@ -659,6 +688,7 @@ function GapsPanel({
   const started = useRef(false);
   const short =
     response.epistemic === "absent" ||
+    Boolean(response.uncertainty?.exceeded) ||
     response.answer.trim() === NOT_IN_SOURCES ||
     (response.fact_check?.unsupported.length ?? 0) > 0;
 

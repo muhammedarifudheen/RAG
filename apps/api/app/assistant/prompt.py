@@ -11,6 +11,7 @@ from app.llm import build_prompt
 from app.schemas import Attachment, ChatTurn, CodeChunk
 
 from .providers import Image, Turn
+from .uncertainty import UNCERTAINTY, UNCERTAINTY_FORMAT
 
 FOLLOW_UPS = "<<follow-ups>>"
 
@@ -150,7 +151,8 @@ def epistemic_prompt(system: str) -> str:
     return _before_instructions(
         system,
         f"{EPISTEMIC}\n\n{EPISTEMIC_FORMAT}\n\n{SOURCE_WEIGHTS}\n\n"
-        "Each excerpt's weight is in <source_weights> in the user's message.",
+        "Each excerpt's weight is in <source_weights> in the user's message.\n\n"
+        f"{UNCERTAINTY}\n\n{UNCERTAINTY_FORMAT}",
     )
 
 

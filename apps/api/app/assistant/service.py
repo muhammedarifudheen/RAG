@@ -114,6 +114,7 @@ from .router import (
     wants_image,
 )
 from .services import configured, openrouter_free_models
+from .uncertainty import BUDGET, TOO_LOW, server_units, take_tag
 from .web import WebResult, WebSearch, search_query, web_block
 
 logger = logging.getLogger("atlas.api.assistant")
@@ -353,6 +354,7 @@ class Assistant:
                     shown,
                     [Citation(**c) for c in data.get("citations", [])],
                     data.get("epistemic"),
+                    (data.get("uncertainty") or {}).get("spent"),
                 )
                 if rated is not None:
                     data = {**data, "confidence": rated.model_dump()}
@@ -416,7 +418,7 @@ class Assistant:
         if found is None:
             return None
         outcome, label = found
-        final = take_state(tidy_citations(outcome.final_answer, chunks))[1]
+        final = take_tag(take_state(tidy_citations(outcome.final_answer, chunks))[1])[1]
         final = re.sub(
             r"^\W*state\W+(?:KNOWN|INFERRED|PARTIAL|ABSENT|CONFLICTED)\b[^\n]*\n",
             "",
@@ -1590,11 +1592,33 @@ def _with_state(data: dict, options: Options | None) -> dict:
     ):
         data = {**data, "answer": f"{SECONDARY_ONLY}\n\n{answer}"}
     data = {**data, "source_basis": basis}
+    # The uncertainty budget: the model's count and what the server sees, the higher.
+    model_spent, answer = take_tag(data["answer"])
+    data = {**data, "answer": answer}
+    if state in ("known", "inferred", "partial", "conflicted") and data.get("chunks"):
+        cited = {c["file"] for c in data.get("citations", []) if c.get("verified")}
+        reasons = server_units(cited, basis, state)
+        spent = max(model_spent or 0, len(reasons))
+        refused = answer.lstrip().lower().startswith(TOO_LOW.lower()[:30])
+        exceeded = spent > BUDGET or refused
+        if exceeded and not refused:
+            data = {**data, "answer": f"{TOO_LOW}\n\n{answer}"}
+        data = {
+            **data,
+            "uncertainty": {
+                "spent": spent,
+                "budget": BUDGET,
+                "model": model_spent,
+                "reasons": reasons,
+                "exceeded": exceeded,
+            },
+        }
     # An answer from the sources is challenged next (the page asks for it).
     pending = (
         state in ("known", "inferred", "partial", "conflicted")
         and bool(data.get("chunks"))
         and route != "review"
+        and not (data.get("uncertainty") or {}).get("exceeded")
     )
     return {**data, "epistemic": state, "challenge_pending": pending}
 

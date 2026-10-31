@@ -42,6 +42,7 @@ def confidence(
     chunks: Sequence[CodeChunk],
     citations: Sequence[Citation],
     state: str | None = None,
+    spent: int | None = None,
 ) -> Confidence | None:
     """High, medium or low for an answer from the knowledge base, with why; None for one
     that used no excerpts (general knowledge, chat, pictures) or found nothing. An
@@ -58,17 +59,21 @@ def confidence(
     verified = sum(c.verified for c in citations)
     checked = verified / len(citations) if citations else 0.0
     covered = coverage(answer)
-    capped = state in ("inferred", "partial", "conflicted")
+    capped = state in ("inferred", "partial", "conflicted") or (spent or 0) >= 3
     if relevance >= 0.7 and covered >= 0.6 and citations and checked == 1.0 and not capped:
         level = "high"
-    elif relevance < 0.4 or not citations or checked < 0.5:
+    elif relevance < 0.4 or not citations or checked < 0.5 or (spent or 0) > 3:
         level = "low"
     else:
         level = "medium"
     reason = (
-        f"excerpt relevance {relevance:.0%}, {covered:.0%} of sentences cited, "
-        f"{verified} of {len(citations)} citations checked"
-    ) + (f"; the answer is {state}" if capped else "")
+        (
+            f"excerpt relevance {relevance:.0%}, {covered:.0%} of sentences cited, "
+            f"{verified} of {len(citations)} citations checked"
+        )
+        + (f"; the answer is {state}" if state in ("inferred", "partial", "conflicted") else "")
+        + (f"; uncertainty spent {spent}/3" if spent else "")
+    )
     return Confidence(
         level=level,
         relevance=round(relevance, 3),

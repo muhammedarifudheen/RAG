@@ -106,6 +106,18 @@ export interface AskRequest {
   rerank_cutoff?: number;
 }
 
+/** The uncertainty budget an answer from the sources spent (of 3). */
+export interface Uncertainty {
+  /** The higher of the model's own count and what the server saw. */
+  spent: number;
+  budget: number;
+  model?: number | null;
+  /** What the server saw spending units, such as "a single source". */
+  reasons: string[];
+  /** Over budget: the answer was withheld. */
+  exceeded: boolean;
+}
+
 /** What the user is trying to achieve, reconstructed before answering. */
 export interface Intent {
   /** The question as typed. */
@@ -300,6 +312,8 @@ export interface AskResponse {
   epistemic?: EpistemicState | null;
   /** What the user is trying to achieve, reconstructed before answering. */
   intent?: Intent | null;
+  /** For an answer from the sources: the uncertainty budget spent, of 3. */
+  uncertainty?: Uncertainty | null;
   /** The highest weight among the excerpts: secondary or derived means the answer rests
    * on secondary sources only. */
   source_basis?: "primary" | "secondary" | "derived" | null;
