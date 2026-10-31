@@ -31,6 +31,8 @@ from app.schemas import (
     Reranking,
     SearchResponse,
 )
+from app.security import REFUSED, allowed_hosts, digest, injection
+from app.services.audit import answer_event, record, text_hash
 from app.services.catalog import mentions_sources, source_catalog
 from app.services.knowledge import health_note, knowledge_health, log_answer, note_suggestion
 from app.services.search import extract_citations, hybrid_search, search_symbols
@@ -142,6 +144,14 @@ def ask(
     question = body.question.strip()
     if not question:
         raise HTTPException(422, "question must not be blank.")
+    # Clear prompt-injection attempts are refused, neutrally, and recorded.
+    last_user = next((t.content for t in reversed(body.history) if t.role == "user"), "")
+    attack = injection(question) or injection(last_user)
+    if attack:
+        record(db, "injection", None, {"pattern": attack, "query": text_hash(question)})
+        raise HTTPException(400, REFUSED)
+    # Grounded unless the request opens it to the web and general knowledge.
+    grounded = settings.assistant_grounded and request.headers.get("x-atlas-open") != "true"
 
     if body.task == "check":
         # A fact-check of an answer already given, against the excerpts it was given.
@@ -324,6 +334,10 @@ def ask(
             search_queries=tuple(queries) if len(queries) > 1 else (),
             reranking=reranking,
             about_sources=bool(body.use_sources and mentions_sources(db, question)),
+            grounded=grounded,
+            allowed_hosts=frozenset(allowed_hosts(db.scalars(select(Source.url))))
+            if grounded
+            else None,
             timings=timings,
             notice=notices[0] if notices else None,
             min_score=0.0 if notices and body.min_score is None else body.min_score,
@@ -339,7 +353,7 @@ def ask(
                 assistant.respond(question, chunks, body.history, mode, options),
                 answers,
                 cache_key,
-                lambda data: log_answer(db, embedder, data, chat),
+                lambda data: _after(db, embedder, question, data, chat),
             )
             return StreamingResponse(
                 _event_stream(events),
@@ -351,7 +365,7 @@ def ask(
         except AssistantError as error:
             raise HTTPException(error.status_code, error.detail) from error
         _remember(response.model_dump(), answers, cache_key)
-        log_answer(db, embedder, response.model_dump(), chat)
+        _after(db, embedder, question, response.model_dump(), chat)
         return response
 
     answerer: Answerer = _resolve(request, get_answerer)
@@ -372,6 +386,14 @@ def ask(
         model=result.model,
         complete=result.complete,
     )
+
+
+def _after(db: Session, embedder: Embedder, question: str, data: dict, chat: str | None) -> None:
+    """An answer's records: the knowledge log, and the audit trail (hashes and ids)."""
+    log_answer(db, embedder, data, chat)
+    record(db, "answer", digest(chat), answer_event(question, data))
+    if data.get("redacted"):
+        record(db, "redaction", digest(chat), {"kinds": data["redacted"]})
 
 
 def streaming_or_assistant(body: AskRequest, request: Request) -> bool:

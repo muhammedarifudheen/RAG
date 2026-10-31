@@ -7,7 +7,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import settings
 from app.middleware import log_requests
-from app.routers import chat, files, graph, health, ingest, search, sources
+from app.routers import chat, files, graph, health, ingest, keys, search, sources
 
 DESCRIPTION = """\
 Build a knowledge base from GitHub repositories, web pages, Wikipedia articles and
@@ -65,6 +65,7 @@ def create_app() -> FastAPI:
     app.include_router(graph.router)
     app.include_router(files.router)
     app.include_router(health.router)
+    app.include_router(keys.router)
     return app
 
 

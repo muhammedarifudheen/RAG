@@ -33,6 +33,9 @@ interface Props {
   /** Deep research for every question, a setting kept in this browser. */
   research?: boolean;
   onResearch?: (research: boolean) => void;
+  /** The web and general knowledge allowed; off, only the knowledge base. */
+  open?: boolean;
+  onOpen?: (open: boolean) => void;
 }
 
 const ACCEPT =
@@ -46,7 +49,18 @@ interface Pending {
 }
 
 export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatComposer(
-  { pending, onSend, onStop, onEditLast, strict = false, onStrict, research = false, onResearch },
+  {
+    pending,
+    onSend,
+    onStop,
+    onEditLast,
+    strict = false,
+    onStrict,
+    research = false,
+    onResearch,
+    open = false,
+    onOpen,
+  },
   ref,
 ) {
   const [text, setText] = useState("");
@@ -246,6 +260,15 @@ export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatCompo
               onClick={() => onResearch(!research)}
             >
               <span aria-hidden="true">⌖</span> Research
+            </ToolButton>
+          )}
+          {onOpen && (
+            <ToolButton
+              label="Allow web and general knowledge"
+              pressed={open}
+              onClick={() => onOpen(!open)}
+            >
+              <span aria-hidden="true">◍</span> {open ? "Web on" : "Grounded"}
             </ToolButton>
           )}
           {dictation.supported && (

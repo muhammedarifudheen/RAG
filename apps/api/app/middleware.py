@@ -5,6 +5,8 @@ import uuid
 
 from fastapi import Request, Response
 
+from app.security import private_client
+
 logger = logging.getLogger("atlas.api.request")
 
 _SAFE_REQUEST_ID = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
@@ -18,7 +20,8 @@ async def log_requests(request: Request, call_next) -> Response:
     supplied = request.headers.get("x-request-id", "")
     # Only echo a caller's ID if it cannot inject content into the log line.
     request_id = supplied if _SAFE_REQUEST_ID.match(supplied) else uuid.uuid4().hex
-    client = request.client.host if request.client else "-"
+    # An IP address is personal data: logged as a hash.
+    client = private_client(request.client.host) if request.client else "-"
     started = time.perf_counter()
 
     try:

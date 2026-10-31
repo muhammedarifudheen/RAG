@@ -154,6 +154,14 @@ class Settings(BaseSettings):
     # When set, adding and removing sources needs `Authorization: Bearer <token>`;
     # searching and asking stay open. Unset, everything is open (local use).
     admin_token: str | None = None
+    # With this (a base32 secret for an authenticator app), unlocking admin needs its
+    # 6-digit code too, and adding or removing sources needs a signed request.
+    admin_totp_secret: str | None = None
+    # Answers only from the knowledge base unless a request asks for more (X-Atlas-Open);
+    # the public server turns it on (deploy/server/Dockerfile).
+    assistant_grounded: bool = False
+    # Requests a minute for each API key (X-Atlas-Key).
+    api_key_rate_limit_per_minute: int = 60
 
     # Requests per client IP per minute; 0 disables. /ask has its own, lower limit
     # because every call is billed.

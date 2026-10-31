@@ -22,7 +22,7 @@ from worker.sources import (
     parse_wikipedia_url,
 )
 
-from app.admin import ADMIN_REQUIRED, require_admin
+from app.admin import ADMIN_REQUIRED, require_signed_admin
 from app.config import settings
 from app.ratelimit import rate_limit
 from app.schemas import IngestRequest
@@ -158,7 +158,7 @@ def _checked_kind(url: str, kind: str) -> str:
         422: {"description": "The link is not a usable source."},
     },
     dependencies=[
-        Depends(require_admin),
+        Depends(require_signed_admin),
         Depends(rate_limit("ingest", lambda: settings.ingest_rate_limit_per_minute)),
     ],
 )
@@ -194,7 +194,7 @@ def ingest(body: IngestRequest) -> StreamingResponse:
         422: {"description": "The file type is not supported."},
     },
     dependencies=[
-        Depends(require_admin),
+        Depends(require_signed_admin),
         Depends(rate_limit("ingest", lambda: settings.ingest_rate_limit_per_minute)),
     ],
 )
@@ -208,7 +208,8 @@ def ingest_file(file: UploadFile) -> StreamingResponse:
     suffix = PurePosixPath(filename).suffix.lower()
     if suffix not in UPLOAD_TYPES:
         raise HTTPException(
-            422, f"{suffix or 'That file type'} is not supported. Upload one of: {', '.join(UPLOAD_TYPES)}."
+            422,
+            f"{suffix or 'That file type'} is not supported. Upload one of: {', '.join(UPLOAD_TYPES)}.",
         )
 
     folder = Path(tempfile.mkdtemp(prefix="atlas-upload-"))
@@ -224,7 +225,9 @@ def ingest_file(file: UploadFile) -> StreamingResponse:
             if size > MAX_UPLOAD_BYTES:
                 target.close()
                 cleanup()
-                raise HTTPException(413, f"Files larger than {MAX_UPLOAD_BYTES // 1_000_000} MB are not accepted.")
+                raise HTTPException(
+                    413, f"Files larger than {MAX_UPLOAD_BYTES // 1_000_000} MB are not accepted."
+                )
             target.write(chunk)
 
     return _start(lambda progress: run_upload(path, filename, progress), filename, cleanup)

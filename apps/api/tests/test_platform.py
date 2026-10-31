@@ -119,6 +119,8 @@ def test_openapi_documents_every_endpoint(plain_client):
         "/file",
         "/health",
         "/healthz",
+        "/keys",
+        "/keys/{key_id}",
     }
     assert "text/event-stream" in spec["paths"]["/ingest"]["post"]["responses"]["200"]["content"]
 

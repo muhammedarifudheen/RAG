@@ -42,6 +42,7 @@ from app.schemas import (
     SelfChallenge,
     WebSource,
 )
+from app.security import Redactor, redact
 from app.services.search import extract_citations, tidy_citations
 
 from .agent import (
@@ -159,6 +160,8 @@ class Options:
     timings: dict | None = None  # seconds per stage before the answer: plan, search, judge
     notice: str | None = None  # something to tell the user, such as a search fallback
     about_sources: bool = False  # the question names the user's sources or their code
+    grounded: bool = False  # only from the knowledge base: no general knowledge, no web
+    allowed_hosts: frozenset[str] | None = None  # grounded: links only to these hosts
 
 
 # The query planner's time; after it the question alone is searched.
@@ -333,7 +336,25 @@ class Assistant:
         timings = dict((options.timings if options else None) or {})
         answering = time.monotonic()
         steps: list[dict] = []
+        # Secrets (and, grounded, links outside the knowledge base) never reach the reader.
+        hosts = (
+            set(options.allowed_hosts)
+            if options and options.grounded and options.allowed_hosts is not None
+            else None
+        )
+        redactor = Redactor(hosts)
         for name, data in self._respond(question, chunks, history, mode, options, review):
+            if name == "delta":
+                text = redactor.feed(data.get("text", ""))
+                if text:
+                    yield name, {**data, "text": text}
+                continue
+            if name == "reset":
+                redactor = Redactor(hosts)
+            if name == "done":
+                tail = redactor.flush()
+                if tail:
+                    yield "delta", {"text": tail}
             if name == "researching":
                 steps.append(data)
             if name == "done" and steps:
@@ -346,6 +367,18 @@ class Assistant:
                 data = {**data, "reranking": reranking.model_dump()}
             if name == "done":
                 data = _with_state(data, options)
+                answer, found = redact(data.get("answer", ""), hosts)
+                drafts = [
+                    {**d, "answer": redact(d.get("answer", ""), hosts)[0]}
+                    for d in data.get("drafts") or []
+                ]
+                data = {
+                    **data,
+                    "answer": answer,
+                    "drafts": drafts,
+                    "redacted": sorted(set(found + redactor.found)),
+                    "grounded": bool(options and options.grounded),
+                }
                 timings["answer"] = round(time.monotonic() - answering, 2)
                 data = {**data, "timings": timings, "notice": notice}
                 shown = [CodeChunk(**c) for c in data.get("chunks", [])]
@@ -798,7 +831,11 @@ class Assistant:
         # A question about the user's own sources (strict, routed to them, or naming them):
         # with nothing found, the answer is that it is not there, never one from memory.
         sources_question = not review and (
-            options.strict or route == "sources" or options.about_sources
+            options.strict
+            or route == "sources"
+            or options.about_sources
+            # Grounded: every question but small talk and attached pictures.
+            or (options.grounded and route not in ("chat", "vision"))
         )
         if (
             sources_question
@@ -821,7 +858,7 @@ class Assistant:
             yield "done", response.model_dump()
             return
 
-        uses_web = options.web_search and not options.strict
+        uses_web = options.web_search and not options.strict and not options.grounded
         if self.web is not None and uses_web and route not in ("chat", "review"):
             yield "searching", {}
             previous = next((t.content for t in reversed(history) if t.role == "user"), None)

@@ -6,8 +6,9 @@ import { useState, type FormEvent } from "react";
 import { checkAdmin, setAdminToken } from "@/lib/api";
 
 /** Shown to visitors of a public deployment, where managing sources needs a password. */
-export function AdminUnlock({ onUnlock }: { onUnlock: () => void }) {
+export function AdminUnlock({ onUnlock, mfa = false }: { onUnlock: () => void; mfa?: boolean }) {
   const [password, setPassword] = useState("");
+  const [code, setCode] = useState("");
   const [checking, setChecking] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -16,11 +17,15 @@ export function AdminUnlock({ onUnlock }: { onUnlock: () => void }) {
     setChecking(true);
     setError(null);
     try {
-      if (await checkAdmin(password)) {
+      if (await checkAdmin(password, mfa ? code : undefined)) {
         setAdminToken(password);
         onUnlock();
       } else {
-        setError("That is not the admin password.");
+        setError(
+          mfa
+            ? "That password or authenticator code is not right."
+            : "That is not the admin password.",
+        );
       }
     } catch (failure) {
       setError(failure instanceof Error ? failure.message : "Could not check the password.");
@@ -55,9 +60,26 @@ export function AdminUnlock({ onUnlock }: { onUnlock: () => void }) {
           autoComplete="current-password"
           className="min-w-0 flex-1 border border-line-strong bg-ink px-3 py-1.5 text-sm outline-none focus:border-signal focus:ring-2 focus:ring-signal/30"
         />
+        {mfa && (
+          <>
+            <label htmlFor="admin-code" className="sr-only">
+              Authenticator code
+            </label>
+            <input
+              id="admin-code"
+              inputMode="numeric"
+              autoComplete="one-time-code"
+              maxLength={6}
+              value={code}
+              onChange={(event) => setCode(event.target.value.replace(/\D/g, ""))}
+              placeholder="6-digit code"
+              className="w-32 border border-line-strong bg-ink px-3 py-1.5 font-mono text-sm outline-none focus:border-signal focus:ring-2 focus:ring-signal/30"
+            />
+          </>
+        )}
         <button
           type="submit"
-          disabled={checking || password === ""}
+          disabled={checking || password === "" || (mfa && code.length !== 6)}
           className="border border-line-strong bg-panel px-3 py-1.5 text-sm hover:bg-raised disabled:cursor-not-allowed disabled:text-faint"
         >
           {checking ? "Checking…" : "Unlock"}

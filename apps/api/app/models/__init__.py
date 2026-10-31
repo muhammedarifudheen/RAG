@@ -13,6 +13,7 @@ from app.models.code_graph import (
     Symbol,
 )
 from app.models.knowledge import AnswerLog, KnowledgeSignal
+from app.models.security import ApiKey, AuditEvent
 
 __all__ = [
     "EDGE_KINDS",
@@ -20,6 +21,8 @@ __all__ = [
     "SOURCE_KINDS",
     "SYMBOL_KINDS",
     "AnswerLog",
+    "ApiKey",
+    "AuditEvent",
     "Base",
     "Edge",
     "File",

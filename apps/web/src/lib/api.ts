@@ -67,6 +67,85 @@ export function setAdminToken(token: string | null): void {
   }
 }
 
+// The admin session an authenticator unlock gives: its key signs requests that add or
+// remove sources.
+const SESSION_KEY = "atlas-admin-session";
+
+export interface AdminSession {
+  session: string;
+  key: string;
+  expires_at: number;
+}
+
+export function getAdminSession(): AdminSession | null {
+  try {
+    const raw = window.localStorage.getItem(SESSION_KEY);
+    const session = raw ? (JSON.parse(raw) as AdminSession) : null;
+    return session && session.expires_at * 1000 > Date.now() ? session : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setAdminSession(session: AdminSession | null): void {
+  try {
+    if (session) window.localStorage.setItem(SESSION_KEY, JSON.stringify(session));
+    else window.localStorage.removeItem(SESSION_KEY);
+  } catch {
+    // Not remembered: unlock again next time.
+  }
+}
+
+function hex(bytes: ArrayBuffer): string {
+  return [...new Uint8Array(bytes)].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+/** X-Atlas-Session, -Timestamp and -Signature for an admin request, if a session is open:
+ * HMAC-SHA256 of "METHOD\nPATH\nTIMESTAMP\nSHA256(body)" with the session's key. */
+async function signedHeaders(
+  method: string,
+  path: string,
+  body: ArrayBuffer,
+): Promise<Record<string, string>> {
+  const session = getAdminSession();
+  if (!session || !globalThis.crypto?.subtle) return {};
+  const stamp = String(Math.floor(Date.now() / 1000));
+  const digest = hex(await crypto.subtle.digest("SHA-256", body));
+  const raw = new Uint8Array(session.key.match(/../g)!.map((h) => parseInt(h, 16)));
+  const key = await crypto.subtle.importKey("raw", raw, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const message = new TextEncoder().encode(`${method.toUpperCase()}\n${path}\n${stamp}\n${digest}`);
+  return {
+    "X-Atlas-Session": session.session,
+    "X-Atlas-Timestamp": stamp,
+    "X-Atlas-Signature": hex(await crypto.subtle.sign("HMAC", key, message)),
+  };
+}
+
+/** A request that changes the sources: with the admin password and, when an
+ * authenticator session is open, signed. A form is serialised first, so the bytes signed
+ * are the bytes sent. */
+async function adminFetch(
+  path: string,
+  init: { method: string; headers?: Record<string, string>; body?: string | FormData; signal?: AbortSignal },
+): Promise<Response> {
+  let body: ArrayBuffer = new ArrayBuffer(0);
+  const headers: Record<string, string> = { ...(init.headers ?? {}), ...adminHeaders() };
+  if (typeof init.body === "string") {
+    body = new TextEncoder().encode(init.body).buffer as ArrayBuffer;
+  } else if (init.body instanceof FormData) {
+    const encoded = new Response(init.body);
+    body = await encoded.arrayBuffer();
+    headers["Content-Type"] = encoded.headers.get("content-type") ?? "multipart/form-data";
+  }
+  Object.assign(headers, await signedHeaders(init.method, path, body));
+  return fetch(`${API_BASE}${path}`, {
+    method: init.method,
+    headers,
+    body: init.body === undefined ? undefined : body,
+    signal: init.signal,
+  });
+}
+
 function adminHeaders(): Record<string, string> {
   const token = getAdminToken();
   return token ? { Authorization: `Bearer ${token}` } : {};
@@ -114,13 +193,18 @@ export function getConfig(): Promise<SiteConfig> {
 }
 
 /** True if the API accepts this admin password. */
-export async function checkAdmin(token: string): Promise<boolean> {
+export async function checkAdmin(token: string, code?: string): Promise<boolean> {
   const response = await fetch(`${API_BASE}/admin/check`, {
     method: "POST",
-    headers: { Authorization: `Bearer ${token}` },
+    headers: code
+      ? { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }
+      : { Authorization: `Bearer ${token}` },
+    body: code ? JSON.stringify({ code }) : undefined,
   });
   if (response.status === 401) return false;
   if (!response.ok) throw await errorFrom(response);
+  // With an authenticator: a session whose key signs requests that change the sources.
+  if (response.status === 200) setAdminSession((await response.json()) as AdminSession);
   return true;
 }
 
@@ -189,6 +273,8 @@ export interface AssistantQuestion {
   fresh?: boolean;
   /** The chat this question belongs to, for the answer log and its knowledge health. */
   chatId?: string;
+  /** Allow the web and general knowledge, not only the knowledge base. */
+  open?: boolean;
   rerankCutoff?: number | null;
 }
 
@@ -249,6 +335,7 @@ export async function askAssistant(
       "X-Atlas-Mode": mode,
       ...(asked.fresh ? { "X-Atlas-Fresh": "true" } : {}),
       ...(asked.chatId ? { "X-Atlas-Chat": asked.chatId } : {}),
+      ...(asked.open ? { "X-Atlas-Open": "true" } : {}),
     },
     body: JSON.stringify(body),
     signal,
@@ -385,32 +472,27 @@ export function getSources(): Promise<SourceItem[]> {
 }
 
 /** Sets how much a source counts (3 primary, 2 secondary, 1 derived), or null for automatic. */
-export function setSourceWeight(id: number, weight: number | null): Promise<SourceItem> {
-  return request<SourceItem>(`/sources/${id}`, {
+export async function setSourceWeight(id: number, weight: number | null): Promise<SourceItem> {
+  const response = await adminFetch(`/sources/${id}`, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", ...adminHeaders() },
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ weight }),
   });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as SourceItem;
 }
 
 export async function deleteSource(id: number): Promise<void> {
-  const response = await fetch(`${API_BASE}/sources/${id}`, {
-    method: "DELETE",
-    headers: adminHeaders(),
-  });
+  const response = await adminFetch(`/sources/${id}`, { method: "DELETE" });
   if (!response.ok) throw await errorFrom(response);
 }
 
 /** Adds a source from a link and yields progress until a `done` or `error` event. */
 export function ingest(body: IngestRequest, signal?: AbortSignal): AsyncGenerator<IngestEvent> {
   return ingestEvents(
-    fetch(`${API_BASE}/ingest`, {
+    adminFetch("/ingest", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
-        ...adminHeaders(),
-      },
+      headers: { "Content-Type": "application/json", Accept: "text/event-stream" },
       body: JSON.stringify(body),
       signal,
     }),
@@ -421,11 +503,11 @@ export function ingest(body: IngestRequest, signal?: AbortSignal): AsyncGenerato
 export function ingestFile(file: File, signal?: AbortSignal): AsyncGenerator<IngestEvent> {
   const form = new FormData();
   form.append("file", file);
-  // No Content-Type header: the browser sets the multipart boundary itself.
+  // The multipart boundary comes from serialising the form (see adminFetch).
   return ingestEvents(
-    fetch(`${API_BASE}/ingest/upload`, {
+    adminFetch("/ingest/upload", {
       method: "POST",
-      headers: { Accept: "text/event-stream", ...adminHeaders() },
+      headers: { Accept: "text/event-stream" },
       body: form,
       signal,
     }),

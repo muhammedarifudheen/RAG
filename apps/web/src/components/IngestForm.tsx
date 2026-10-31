@@ -8,6 +8,8 @@ import {
   ApiError,
   checkAdmin,
   getAdminToken,
+  getAdminSession,
+  setAdminSession,
   getConfig,
   ingest,
   ingestFile,
@@ -56,6 +58,11 @@ export function IngestForm() {
   useEffect(() => {
     const token = getAdminToken();
     if (!token) return;
+    // An authenticator session still open: unlocked without asking again.
+    if (getAdminSession()) {
+      setUnlocked(true);
+      return;
+    }
     // A remembered password may have been changed on the server since.
     checkAdmin(token).then(
       (valid) => (valid ? setUnlocked(true) : setAdminToken(null)),
@@ -67,6 +74,7 @@ export function IngestForm() {
 
   function lock() {
     setAdminToken(null);
+    setAdminSession(null);
     setUnlocked(false);
   }
 
@@ -128,7 +136,10 @@ export function IngestForm() {
   if (!canManage) {
     return (
       <>
-        <AdminUnlock onUnlock={() => setUnlocked(true)} />
+        <AdminUnlock
+          onUnlock={() => setUnlocked(true)}
+          mfa={config.status === "ready" && Boolean(config.data.admin_mfa)}
+        />
         <SourceList revision={revision} canManage={false} />
       </>
     );

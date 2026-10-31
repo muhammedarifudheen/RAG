@@ -60,6 +60,8 @@ export interface ChatSettings {
   cacheAnswers: boolean;
   /** Stronger text and borders, solid panels. */
   highContrast: boolean;
+  /** Allow the web and general knowledge; off, answers come only from the sources. */
+  openKnowledge: boolean;
   /** Plan several searches per question (keywords, a hypothetical answer, a variant). */
   planQueries: boolean;
   /** Fast models judge each excerpt's relevance; the best are kept, the weak left out. */
@@ -92,6 +94,7 @@ export const DEFAULT_SETTINGS: ChatSettings = {
   researchAuto: true,
   cacheAnswers: true,
   highContrast: false,
+  openKnowledge: false,
   planQueries: true,
   rerank: true,
   rankPassages: true,

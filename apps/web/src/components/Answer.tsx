@@ -121,7 +121,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
         </ReactMarkdown>
       </div>
 
-      {(response.confidence || response.cached || response.notice) && (
+      {(response.confidence || response.cached || response.notice || response.redacted?.length) && (
         <p className="mt-3 flex flex-wrap items-center gap-2 text-xs">
           {response.confidence && <ConfidenceBadge confidence={response.confidence} />}
           {response.cached && (
@@ -130,6 +130,11 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
             </span>
           )}
           {response.notice && <span className="text-warn">{response.notice}</span>}
+          {response.redacted && response.redacted.length > 0 && (
+            <span role="note" className="text-muted">
+              🔒 Redacted: {[...new Set(response.redacted)].join(", ")}
+            </span>
+          )}
         </p>
       )}
 

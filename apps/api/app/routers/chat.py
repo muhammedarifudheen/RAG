@@ -14,7 +14,7 @@ from worker.sources import UPLOAD_TYPES, SourceError, load_upload
 from app.config import settings
 from app.db import get_db
 from app.models import SharedChat as SharedChatRow
-from app.ratelimit import rate_limit
+from app.ratelimit import rate_limit, require_write_key
 from app.schemas import (
     MAX_SHARE_BYTES,
     AttachmentText,
@@ -81,6 +81,7 @@ def read_attachment(file: UploadFile) -> AttachmentText:
     status_code=201,
     summary="Share a chat by link",
     responses={413: {"description": "The chat is larger than 2 MB."}},
+    dependencies=[Depends(require_write_key)],
 )
 def create_share(body: ShareRequest, db: Annotated[Session, Depends(get_db)]) -> SharedChat:
     """Stores a copy of a conversation and returns its id; anyone with the id can read

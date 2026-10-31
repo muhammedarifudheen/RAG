@@ -469,6 +469,12 @@ class AskResponse(BaseModel):
     knowledge_health: KnowledgeHealth | None = Field(
         default=None, description="For `task: health`: the knowledge-health note's parts."
     )
+    grounded: bool = Field(
+        default=False, description="True if answered only from the knowledge base."
+    )
+    redacted: list[str] = Field(
+        default=[], description="What was redacted from the answer: kinds, never values."
+    )
     uncertainty: Uncertainty | None = Field(
         default=None,
         description="For an answer from the sources: the uncertainty budget spent, of 3.",
@@ -603,6 +609,9 @@ class SiteConfig(BaseModel):
     admin_required: bool = Field(
         description="Adding and removing sources needs the admin password."
     )
+    admin_mfa: bool | None = Field(
+        default=None, description="Unlocking admin also needs an authenticator code (true)."
+    )
     chat_configured: bool = Field(description="A model provider key is set, so /ask can answer.")
 
 
@@ -620,6 +629,40 @@ class SourceItem(BaseModel):
     weight_override: int | None = Field(
         default=None, description="The admin's choice, if any; unset is automatic."
     )
+
+
+class AdminCheck(BaseModel):
+    code: str | None = Field(
+        default=None, max_length=12, description="The authenticator's 6-digit code, if needed."
+    )
+
+
+class AdminSession(BaseModel):
+    session: str = Field(description="Sent as X-Atlas-Session with each signed request.")
+    key: str = Field(
+        description="Hex key: X-Atlas-Signature is HMAC-SHA256 of 'METHOD\\nPATH\\nTIMESTAMP"
+        "\\nSHA256(body)' with it; X-Atlas-Timestamp is the Unix time in seconds."
+    )
+    expires_at: float
+
+
+class ApiKeyCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=80)
+    scope: Literal["read", "write"] = "read"
+
+
+class ApiKeyOut(BaseModel):
+    id: int
+    name: str
+    prefix: str = Field(description="The key's first characters, to recognise it.")
+    scope: Literal["read", "write"]
+    created_at: datetime
+    last_used: datetime | None = None
+    revoked: bool = False
+
+
+class ApiKeyCreated(ApiKeyOut):
+    key: str = Field(description="The key itself: shown only now. Send it as X-Atlas-Key.")
 
 
 class SourceWeight(BaseModel):

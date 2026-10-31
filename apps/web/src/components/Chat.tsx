@@ -268,6 +268,7 @@ export function Chat() {
       const response: AskResponse = await askAssistant(
         {
           chatId: id,
+          open: settings.openKnowledge,
           question: trimmed,
           history: turnsOf(base),
           mode,
@@ -777,6 +778,8 @@ export function Chat() {
           onStrict={(strict) => changeSettings({ ...settings, strict })}
           research={settings.research}
           onResearch={(research) => changeSettings({ ...settings, research })}
+          open={settings.openKnowledge}
+          onOpen={(openKnowledge) => changeSettings({ ...settings, openKnowledge })}
           onStop={() => abort.current?.abort()}
           onEditLast={editLast}
         />

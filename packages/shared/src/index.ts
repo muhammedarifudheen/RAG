@@ -312,6 +312,10 @@ export interface AskResponse {
   epistemic?: EpistemicState | null;
   /** What the user is trying to achieve, reconstructed before answering. */
   intent?: Intent | null;
+  /** True if answered only from the knowledge base. */
+  grounded?: boolean;
+  /** What was redacted from the answer (kinds, never values): "API key", "email", "link"… */
+  redacted?: string[];
   /** For an answer from the sources: the uncertainty budget spent, of 3. */
   uncertainty?: Uncertainty | null;
   /** The highest weight among the excerpts: secondary or derived means the answer rests
@@ -566,6 +570,8 @@ export interface SiteConfig {
   admin_required: boolean;
   /** A model provider key is set, so questions can be answered. */
   chat_configured: boolean;
+  /** Unlocking admin also needs an authenticator code. */
+  admin_mfa?: boolean;
 }
 
 /** One entry of GET /sources. */
