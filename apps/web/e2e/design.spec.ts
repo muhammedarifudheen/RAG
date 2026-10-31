@@ -240,3 +240,20 @@ test("the uncertainty spent is a meter, and over budget the answer asks what is 
   await expect(answers.nth(1).getByRole("note", { name: /Over the uncertainty budget: 4 of 3/ })).toBeVisible();
   await expect(page.getByRole("region", { name: "What's missing" })).toContainText("a primary source");
 });
+
+test("an answer shows its mode and ends with its footer", async ({ page }) => {
+  await mock(page, [
+    reply("### One line\nIt checks a MAC.", {
+      mode: "TEACH",
+      epistemic: "known",
+      footer: "[confidence: KNOWN] [sources: 2] [latency: 8423ms]",
+    }),
+  ]);
+  await page.goto("/chat");
+  await ask(page, "How does signing work?");
+  const answer = page.getByRole("article", { name: "Answer" });
+  await expect(answer.getByRole("note", { name: "Mode: TEACH" })).toBeVisible();
+  await expect(answer.getByLabel("Answer footer")).toHaveText(
+    "[confidence: KNOWN] [sources: 2] [latency: 8423ms]",
+  );
+});

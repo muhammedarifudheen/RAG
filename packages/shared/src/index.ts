@@ -118,6 +118,8 @@ export interface Uncertainty {
   exceeded: boolean;
 }
 
+export type AtlasMode = "ASK" | "EXPLORE" | "COMPARE" | "BUILD" | "AUDIT" | "AGENT" | "TEACH";
+
 /** What the user is trying to achieve, reconstructed before answering. */
 export interface Intent {
   /** The question as typed. */
@@ -314,6 +316,12 @@ export interface AskResponse {
   intent?: Intent | null;
   /** True if answered only from the knowledge base. */
   grounded?: boolean;
+  /** The Atlas mode that answered: ASK, EXPLORE, COMPARE, BUILD, AUDIT, AGENT or TEACH. */
+  mode?: AtlasMode | null;
+  /** From the request to the answer. */
+  latency_ms?: number | null;
+  /** [confidence: X] [sources: N] [latency: Xms], for every answer. */
+  footer?: string | null;
   /** What was redacted from the answer (kinds, never values): "API key", "email", "link"… */
   redacted?: string[];
   /** For an answer from the sources: the uncertainty budget spent, of 3. */

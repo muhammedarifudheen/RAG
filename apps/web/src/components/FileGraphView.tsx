@@ -81,6 +81,13 @@ export function FileGraphView() {
     setEdges(flow.edges);
   }, [flow, setNodes, setEdges]);
 
+  // Opened from an EXPLORE answer: /graph?file=<path> shows that file.
+  useEffect(() => {
+    if (!data) return;
+    const wanted = new URLSearchParams(window.location.search).get("file");
+    if (wanted) setSelected(data.nodes.find((node) => node.path === wanted) ?? null);
+  }, [data]);
+
   if (graph.status === "loading") return <Loading label="Loading the dependency graph…" />;
   if (graph.status === "error") return <ErrorMessage message={graph.message} />;
   if (graph.data.nodes.length === 0) return <NothingIngested />;

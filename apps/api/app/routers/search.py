@@ -14,9 +14,11 @@ from sqlalchemy.orm import Session
 from app.assistant import Assistant, AssistantError, Options, cache, get_assistant
 from app.assistant.agent import ResearchTools
 from app.assistant.gaps import suggested_source
+from app.assistant.modes import classify_mode
 from app.assistant.planner import fuse
 from app.assistant.rerank import rerank
 from app.assistant.router import wants_research
+from app.assistant.service import with_footer
 from app.config import settings
 from app.db import get_db
 from app.embedding import Embedder, get_embedder
@@ -34,6 +36,7 @@ from app.schemas import (
 from app.security import REFUSED, allowed_hosts, digest, injection
 from app.services.audit import answer_event, record, text_hash
 from app.services.catalog import mentions_sources, source_catalog
+from app.services.explore import audit_answer, explore
 from app.services.knowledge import health_note, knowledge_health, log_answer, note_suggestion
 from app.services.search import extract_citations, hybrid_search, search_symbols
 from app.services.spans import read_span
@@ -152,6 +155,7 @@ def ask(
         raise HTTPException(400, REFUSED)
     # Grounded unless the request opens it to the web and general knowledge.
     grounded = settings.assistant_grounded and request.headers.get("x-atlas-open") != "true"
+    arrived = time.monotonic()
 
     if body.task == "check":
         # A fact-check of an answer already given, against the excerpts it was given.
@@ -241,6 +245,14 @@ def ask(
         # previous question too.
         previous = next((t.content for t in reversed(body.history) if t.role == "user"), "")
         query = f"{previous[:500]}\n{question}" if previous else question
+        # The mode first: by intent, unless the request chose one.
+        atlas_mode = body.atlas_mode or (
+            classify_mode(question) if body.task == "answer" else "ASK"
+        )
+        if atlas_mode in ("AUDIT", "EXPLORE") and body.task == "answer":
+            return _prepared(
+                _mode_answer(atlas_mode, question, db, embedder), request, arrived, grounded
+            )
         timings: dict[str, float] = {}
         top_k = body.top_k or settings.assistant_top_k
         started = time.monotonic()
@@ -248,7 +260,8 @@ def ask(
         research = body.use_sources and (
             body.research
             if body.research is not None
-            else settings.assistant_research_auto and wants_research(question)
+            else atlas_mode == "AGENT"
+            or (settings.assistant_research_auto and wants_research(question))
         )
         # Researching, the agent plans its own searches and reads what it needs: no
         # planner or judge.
@@ -335,6 +348,8 @@ def ask(
             reranking=reranking,
             about_sources=bool(body.use_sources and mentions_sources(db, question)),
             grounded=grounded,
+            mode="AGENT" if research else atlas_mode,
+            started=arrived,
             allowed_hosts=frozenset(allowed_hosts(db.scalars(select(Source.url))))
             if grounded
             else None,
@@ -394,6 +409,50 @@ def _after(db: Session, embedder: Embedder, question: str, data: dict, chat: str
     record(db, "answer", digest(chat), answer_event(question, data))
     if data.get("redacted"):
         record(db, "redaction", digest(chat), {"kinds": data["redacted"]})
+
+
+def _mode_answer(mode: str, question: str, db: Session, embedder: Embedder) -> dict:
+    """An EXPLORE or AUDIT answer, from the database."""
+    if mode == "AUDIT":
+        answer, chunks = audit_answer(db), []
+    else:
+        chunks, _ = hybrid_search(db, embedder, question, 3, settings.snippet_max_lines)
+        answer = explore(db, chunks)
+    return {
+        "question": question,
+        "answer": answer,
+        "citations": [c.model_dump() for c in extract_citations(answer, chunks)],
+        "chunks": [c.model_dump() for c in chunks],
+        "model": "atlas",
+        "complete": True,
+        "provider": "Atlas",
+        "route": "sources",
+        "suggestions": [],
+        "mode": mode,
+    }
+
+
+def _prepared(data: dict, request: Request, arrived: float, grounded: bool):
+    """An answer made without a model, sent the way a model's is."""
+    data = with_footer(
+        {**data, "grounded": grounded},
+        Options(mode=data["mode"], started=arrived),
+    )
+    if "text/event-stream" not in request.headers.get("accept", ""):
+        return AskResponse(**data)
+    events = iter(
+        [
+            ("mode", {"mode": data["mode"]}),
+            ("route", {"route": data["route"], "mode": "auto", "providers": []}),
+            ("delta", {"text": data["answer"]}),
+            ("done", data),
+        ]
+    )
+    return StreamingResponse(
+        _event_stream(events),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 def streaming_or_assistant(body: AskRequest, request: Request) -> bool:

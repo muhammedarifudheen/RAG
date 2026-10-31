@@ -59,6 +59,8 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
       a({ href, children }) {
         const citation = parseCitationHref(href);
         if (!citation) {
+          // A link within Atlas (the graph page): the site's own path, base path included.
+          if (href?.startsWith("/")) return <Link href={href}>{children}</Link>;
           return (
             <a href={href} target="_blank" rel="noreferrer">
               {children}
@@ -93,8 +95,21 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
 
   return (
     <article aria-label="Answer" className="slab bg-panel/80 py-4 pl-5 pr-4">
-      {(response.epistemic || response.challenge?.valid || response.source_basis || response.uncertainty) && (
+      {(response.epistemic ||
+        response.challenge?.valid ||
+        response.source_basis ||
+        response.uncertainty ||
+        (response.mode && response.mode !== "ASK")) && (
         <p className="mb-2 flex flex-wrap items-center gap-2">
+          {response.mode && response.mode !== "ASK" && (
+            <span
+              role="note"
+              aria-label={`Mode: ${response.mode}`}
+              className="label rounded-full border border-cyan/40 bg-cyan/10 px-2.5 py-0.5 text-cyan"
+            >
+              {response.mode}
+            </span>
+          )}
           {response.epistemic && <EpistemicBadge state={response.epistemic} />}
           {response.uncertainty && <UncertaintyMeter uncertainty={response.uncertainty} />}
           {(response.source_basis === "secondary" || response.source_basis === "derived") && (
@@ -182,6 +197,12 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
             ))}
           </div>
         </details>
+      )}
+
+      {response.footer && (
+        <p aria-label="Answer footer" className="mt-3 font-mono text-[11px] text-faint">
+          {response.footer}
+        </p>
       )}
 
       {!response.complete && (

@@ -68,6 +68,7 @@ from .images import (
     TogetherImages,
     gallery,
 )
+from .modes import COMPARE, TEACH
 from .planner import parse_queries
 from .prompt import (
     FORMATS,
@@ -79,6 +80,7 @@ from .prompt import (
     REVIEW,
     SECONDARY_ONLY,
     FollowUpSplitter,
+    _before_instructions,
     audit_prompt,
     context_blocks,
     conversation,
@@ -162,6 +164,8 @@ class Options:
     about_sources: bool = False  # the question names the user's sources or their code
     grounded: bool = False  # only from the knowledge base: no general knowledge, no web
     allowed_hosts: frozenset[str] | None = None  # grounded: links only to these hosts
+    mode: str = "ASK"  # the Atlas mode: ASK, COMPARE, BUILD, TEACH, AGENT…
+    started: float | None = None  # when the request arrived (time.monotonic), for latency
 
 
 # The query planner's time; after it the question alone is searched.
@@ -391,6 +395,7 @@ class Assistant:
                 )
                 if rated is not None:
                     data = {**data, "confidence": rated.model_dump()}
+                data = with_footer(data, options)
                 _log_answer(question, options, data)
             if (
                 name == "done"
@@ -880,6 +885,10 @@ class Assistant:
         if sources_question:
             # The user's epistemic states: known, inferred, partial, absent, conflicted.
             system = epistemic_prompt(system)
+        if options.mode == "COMPARE":
+            system = _before_instructions(system, COMPARE)
+        elif options.mode == "TEACH":
+            system = _before_instructions(system, TEACH)
         if review:
             system = f"{system}\n\n{REVIEW}"
         if FORMATS.get(options.format):
@@ -893,7 +902,10 @@ class Assistant:
         code = (
             not options.strict
             and not review
-            and wants_code_answer(question, route, [c.language for c in shown])
+            and (
+                wants_code_answer(question, route, [c.language for c in shown])
+                or (options.mode == "BUILD" and bool(shown))
+            )
         )
         turns = conversation(
             question,
@@ -1658,6 +1670,25 @@ def _with_state(data: dict, options: Options | None) -> dict:
         and not (data.get("uncertainty") or {}).get("exceeded")
     )
     return {**data, "epistemic": state, "challenge_pending": pending}
+
+
+def with_footer(data: dict, options: Options | None) -> dict:
+    """The mode, the latency, and the footer every answer ends with:
+    [confidence: X] [sources: N] [latency: Xms]."""
+    started = options.started if options else None
+    latency = round((time.monotonic() - started) * 1000) if started else None
+    cited = {c["file"] for c in data.get("citations") or [] if c.get("verified")}
+    files = cited or {c["file"] for c in data.get("chunks") or []}
+    state = (data.get("epistemic") or "general").upper()
+    footer = f"[confidence: {state}] [sources: {len(files)}]" + (
+        f" [latency: {latency}ms]" if latency is not None else ""
+    )
+    return {
+        **data,
+        "mode": options.mode if options else "ASK",
+        "latency_ms": latency,
+        "footer": footer,
+    }
 
 
 def _log_answer(question: str, options: Options | None, data: dict) -> None:

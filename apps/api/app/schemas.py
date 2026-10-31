@@ -146,6 +146,14 @@ class AskRequest(BaseModel):
     rerank_cutoff: int | None = Field(
         default=None, ge=0, le=10, description="Excerpts the judge scores below this are left out."
     )
+    atlas_mode: Literal["ASK", "EXPLORE", "COMPARE", "BUILD", "AUDIT", "AGENT", "TEACH"] | None = (
+        Field(
+            default=None,
+            description="Atlas's mode; unset, chosen by intent: code → BUILD, compare/versus/vs "
+            "→ COMPARE, 'how does X work' → TEACH, the knowledge base's health → AUDIT, the graph "
+            "around something → EXPLORE, many steps → AGENT, otherwise ASK.",
+        )
+    )
     cache: bool = Field(
         default=True,
         description="Reuse the answer to the same question asked within a day (not for "
@@ -224,6 +232,7 @@ class AskRequest(BaseModel):
             or self.strict
             or self.research is not None
             or not self.cache
+            or self.atlas_mode is not None
             or self.max_tokens is not None
             or self.format != "markdown"
             or self.include_drafts
@@ -471,6 +480,11 @@ class AskResponse(BaseModel):
     )
     grounded: bool = Field(
         default=False, description="True if answered only from the knowledge base."
+    )
+    mode: str | None = Field(default=None, description="The Atlas mode that answered.")
+    latency_ms: int | None = Field(default=None, description="From the request to the answer.")
+    footer: str | None = Field(
+        default=None, description="[confidence: X] [sources: N] [latency: Xms], for every answer."
     )
     redacted: list[str] = Field(
         default=[], description="What was redacted from the answer: kinds, never values."
