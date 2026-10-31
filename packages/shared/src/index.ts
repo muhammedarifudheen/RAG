@@ -67,7 +67,7 @@ export interface AskRequest {
   /** Standing instructions to the assistant. */
   instructions?: string;
   /** "image" draws a picture of the question; "check" fact-checks `answer` against `chunks`. */
-  task?: "answer" | "image" | "review" | "check" | "gaps";
+  task?: "answer" | "image" | "review" | "check" | "gaps" | "challenge";
   /** For task "check": the answer to fact-check, and the excerpts it was given. */
   answer?: string;
   chunks?: CodeChunk[];
@@ -104,6 +104,15 @@ export interface AskRequest {
   rerank_cutoff?: number;
 }
 
+export type EpistemicState =
+  | "known"
+  | "inferred"
+  | "partial"
+  | "absent"
+  | "conflicted"
+  | "general"
+  | "web";
+
 /** How far an answer from the knowledge base can be trusted. */
 export interface Confidence {
   level: "high" | "medium" | "low";
@@ -124,6 +133,20 @@ export interface ResearchStep {
   input: string;
   /** What came of it, briefly ("5 results", "read"). */
   result: string;
+}
+
+/** The self-challenge of an answer: the strongest objection from its context, and the
+ * outcome (task "challenge"). */
+export interface SelfChallenge {
+  objection: string;
+  /** True if the objection held and the answer was revised. */
+  valid: boolean;
+  /** Why the objection does not hold, in one line. */
+  reason: string;
+  /** The answer before revision, when it was revised. */
+  original_answer?: string | null;
+  /** "Service · model". */
+  challenged_by: string;
 }
 
 /** What the knowledge base covers and lacks for a question (task "gaps"). */
@@ -258,6 +281,9 @@ export interface AskResponse {
   fact_check?: FactCheck | null;
   /** Deep research: each tool call the agent made, in order. */
   research_steps?: ResearchStep[];
+  /** Where the answer stands: for a question about the sources, as the model classified
+   * it (known, inferred, partial, absent, conflicted); otherwise general or web. */
+  epistemic?: EpistemicState | null;
   /** For an answer from the knowledge base: high, medium or low, and why. */
   confidence?: Confidence | null;
   /** Seconds per stage: plan, search, judge, research, answer. */
@@ -266,6 +292,10 @@ export interface AskResponse {
   cached?: boolean;
   /** Something to know about how it was answered, such as a search fallback. */
   notice?: string | null;
+  /** The self-challenge and its outcome, once done. */
+  challenge?: SelfChallenge | null;
+  /** True for an answer from the sources: the page asks for its self-challenge. */
+  challenge_pending?: boolean;
   /** What the knowledge base lacks for the question, when asked for (task "gaps"). */
   gaps?: GapReport | null;
   /** True for a strict answer: the page asks for its fact-check once it is shown. */

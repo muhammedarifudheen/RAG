@@ -236,3 +236,18 @@ def test_citations_in_code_spans_or_with_odd_dashes_become_citations():
         "It checks in [a/signer.py:10-20] and [a/signer.py:12-15], "
         "not `other.py:1-2` or `x = a[1:2]`."
     )
+
+
+def test_citations_in_html_code_tags_inside_brackets_become_citations():
+    from app.services.search import tidy_citations
+
+    answer = "| 1 | Calls unsign | [<code>a/signer.py:10-20</code>] |"
+    assert tidy_citations(answer, [chunk()]) == "| 1 | Calls unsign | [a/signer.py:10-20] |"
+
+
+def test_a_zero_width_space_inside_a_citation_is_dropped():
+    from app.services.search import tidy_citations
+
+    assert tidy_citations("It decodes [\u200ba/signer.py:10-20].", [chunk()]) == (
+        "It decodes [a/signer.py:10-20]."
+    )

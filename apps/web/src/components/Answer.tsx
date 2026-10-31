@@ -4,9 +4,11 @@ import type {
   AskResponse,
   CodeChunk,
   Confidence,
+  EpistemicState,
   FactCheck,
   GapReport,
   GeneratedImage,
+  SelfChallenge,
   ResearchStep,
 } from "@atlas/shared";
 import Link from "next/link";
@@ -22,7 +24,7 @@ import {
   parseCitationHref,
   type CodeRange,
 } from "@/lib/citations";
-import { factCheck, findGaps } from "@/lib/api";
+import { challengeAnswer, factCheck, findGaps } from "@/lib/api";
 import { copyText } from "@/lib/exporting";
 import { normalizeMath } from "@/lib/markdown";
 
@@ -35,12 +37,14 @@ interface Props {
   onFactChecked?: (report: FactCheck) => void;
   /** The gap finder reported, to keep with the answer. */
   onGapsFound?: (gaps: GapReport) => void;
+  /** The self-challenge finished: the final answer and its report, to keep. */
+  onChallenged?: (result: AskResponse) => void;
 }
 
 const REMARK = [remarkGfm, remarkMath];
 const REHYPE = [rehypeKatex];
 
-export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) {
+export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallenged }: Props) {
   const markdown = useMemo(
     () => normalizeMath(linkifyCitations(response.answer)),
     [response.answer],
@@ -87,6 +91,16 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
 
   return (
     <article aria-label="Answer" className="slab bg-panel/80 py-4 pl-5 pr-4">
+      {(response.epistemic || response.challenge?.valid) && (
+        <p className="mb-2 flex flex-wrap items-center gap-2">
+          {response.epistemic && <EpistemicBadge state={response.epistemic} />}
+          {response.challenge?.valid && (
+            <span className="label rounded-full border border-signal/40 bg-signal/10 px-2.5 py-0.5 text-signal">
+              ↻ Revised after self-challenge
+            </span>
+          )}
+        </p>
+      )}
       <div className="markdown text-[15px] leading-relaxed">
         <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components}>
           {markdown}
@@ -107,6 +121,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound }: Props) 
 
       {response.images && response.images.length > 0 && <Gallery images={response.images} />}
 
+      <ChallengePanel response={response} onDone={onChallenged} />
       <FactCheckPanel response={response} onChecked={onFactChecked} />
       <GapsPanel response={response} onFound={onGapsFound} />
 
@@ -299,7 +314,12 @@ function FactCheckPanel({
   }, [response, onChecked]);
 
   useEffect(() => {
-    if (response.fact_check_pending && !response.fact_check && !started.current) {
+    if (
+      response.fact_check_pending &&
+      !response.fact_check &&
+      !response.challenge_pending &&
+      !started.current
+    ) {
       started.current = true;
       check();
     }
@@ -386,6 +406,61 @@ export function ResearchSteps({ steps }: { steps: ResearchStep[] }) {
   );
 }
 
+const STATE: Record<EpistemicState, { label: string; hint: string; tone: string }> = {
+  known: {
+    label: "Known",
+    hint: "Your sources answer this directly.",
+    tone: "border-acid/40 bg-acid/10 text-acid",
+  },
+  inferred: {
+    label: "Inferred",
+    hint: "Your sources strongly imply this, but do not state it.",
+    tone: "border-cyan/40 bg-cyan/10 text-cyan",
+  },
+  partial: {
+    label: "Partial",
+    hint: "Your sources answer part of this; what is missing is named.",
+    tone: "border-warn/40 bg-warn/10 text-warn",
+  },
+  absent: {
+    label: "Not in your sources",
+    hint: "Your sources do not contain this, so it is not answered: see what is missing.",
+    tone: "border-danger/40 bg-danger/10 text-danger",
+  },
+  conflicted: {
+    label: "Conflicted",
+    hint: "Your sources disagree; both sides are shown, and which is newer.",
+    tone: "border-warn/50 bg-warn/15 text-warn",
+  },
+  general: {
+    label: "General knowledge",
+    hint: "Not from your sources: the model's own knowledge.",
+    tone: "border-line bg-raised/60 text-muted",
+  },
+  web: {
+    label: "From the web",
+    hint: "Not from your sources: today's web results, linked.",
+    tone: "border-cyan/30 bg-cyan/5 text-cyan",
+  },
+};
+
+/** Where the answer stands: known, inferred, partial, absent, conflicted, or not from the
+ * sources at all. Never blurred. */
+function EpistemicBadge({ state }: { state: EpistemicState }) {
+  const { label, hint, tone } = STATE[state];
+  return (
+    <span
+      role="note"
+      aria-label={`Epistemic state: ${label}. ${hint}`}
+      title={hint}
+      className={`label inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 ${tone}`}
+    >
+      <span aria-hidden="true">◆</span>
+      {label}
+    </span>
+  );
+}
+
 const LEVEL: Record<Confidence["level"], { label: string; tone: string }> = {
   high: { label: "High confidence", tone: "border-acid/40 bg-acid/10 text-acid" },
   medium: { label: "Medium confidence", tone: "border-warn/40 bg-warn/10 text-warn" },
@@ -442,6 +517,74 @@ function CopyCitation({ chunk }: { chunk: CodeChunk }) {
   );
 }
 
+/**
+ * The self-challenge: asked for by itself once an answer from the sources is shown; the
+ * final answer replaces this one, and the objection and decision fold into a note.
+ */
+function ChallengePanel({
+  response,
+  onDone,
+}: {
+  response: AskResponse;
+  onDone?: (result: AskResponse) => void;
+}) {
+  const [report, setReport] = useState<SelfChallenge | null>(response.challenge ?? null);
+  const [state, setState] = useState<"idle" | "challenging" | "failed">("idle");
+  const started = useRef(false);
+
+  useEffect(() => {
+    if (!response.challenge_pending || response.challenge || started.current) return;
+    started.current = true;
+    setState("challenging");
+    challengeAnswer(response.question, response.answer, response.chunks)
+      .then((result) => {
+        setReport(result.challenge ?? null);
+        setState("idle");
+        onDone?.(result);
+      })
+      .catch(() => setState("failed"));
+  }, [response, onDone]);
+
+  if (state === "challenging") {
+    return (
+      <p role="status" className="mt-3 animate-pulse text-xs text-muted">
+        Self-challenging the answer against its sources…
+      </p>
+    );
+  }
+  if (!report) return null;
+  return (
+    <details className="mt-4 border-t border-line pt-3 text-xs text-soft">
+      <summary className="cursor-pointer select-none text-muted hover:text-paper">
+        Self-challenge · {report.valid ? "the objection held: answer revised" : "the answer stands"}
+      </summary>
+      <div aria-label="Self-challenge" role="region" className="mt-2 space-y-2">
+        <p>
+          <span className="label text-muted">Objection </span>
+          {report.objection}
+        </p>
+        {!report.valid && report.reason && (
+          <p>
+            <span className="label text-muted">Why it does not hold </span>
+            {report.reason}
+          </p>
+        )}
+        {report.valid && report.original_answer && (
+          <details>
+            <summary className="cursor-pointer text-muted hover:text-paper">The answer before</summary>
+            <div className="markdown mt-2 text-[13px]">
+              <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE}>
+                {normalizeMath(report.original_answer)}
+              </ReactMarkdown>
+            </div>
+          </details>
+        )}
+        {report.challenged_by && <p className="text-faint">Challenged by {report.challenged_by}</p>}
+      </div>
+    </details>
+  );
+}
+
 /** The strict answer when the knowledge base has nothing on the question. */
 const NOT_IN_SOURCES = "I don't have that in the knowledge base.";
 
@@ -460,6 +603,7 @@ function GapsPanel({
   const [state, setState] = useState<"idle" | "finding" | "failed">("idle");
   const started = useRef(false);
   const short =
+    response.epistemic === "absent" ||
     response.answer.trim() === NOT_IN_SOURCES ||
     (response.fact_check?.unsupported.length ?? 0) > 0;
 

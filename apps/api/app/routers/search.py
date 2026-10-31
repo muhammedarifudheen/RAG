@@ -24,7 +24,7 @@ from app.llm import Answerer, AnswerError, get_answerer
 from app.models import Source
 from app.ratelimit import rate_limit
 from app.schemas import AskRequest, AskResponse, GapReport, Reranking, SearchResponse
-from app.services.catalog import source_catalog
+from app.services.catalog import mentions_sources, source_catalog
 from app.services.search import extract_citations, hybrid_search, search_symbols
 from app.services.spans import read_span
 
@@ -154,6 +154,25 @@ def ask(
             logger.info("answer cache hit")
             return _replay(hit, request)
 
+    if body.task == "challenge":
+        # The self-challenge of an answer already given, against the excerpts it was given.
+        if not (body.answer or "").strip():
+            raise HTTPException(422, "answer must be given to challenge it.")
+        challenger: Assistant = _resolve(request, get_assistant)
+        found = challenger.challenge(question, body.answer, body.chunks, body.attachments)
+        if found is None:
+            raise HTTPException(503, "The self-challenge is busy; try again in a minute.")
+        final, report = found
+        return AskResponse(
+            question=question,
+            answer=final,
+            citations=extract_citations(final, body.chunks),
+            chunks=body.chunks,
+            model=report.challenged_by,
+            complete=True,
+            challenge=report,
+        )
+
     if body.task == "gaps":
         # What the knowledge base would need to answer the question.
         finder: Assistant = _resolve(request, get_assistant)
@@ -272,6 +291,7 @@ def ask(
             strict=body.strict,
             search_queries=tuple(queries) if len(queries) > 1 else (),
             reranking=reranking,
+            about_sources=bool(body.use_sources and mentions_sources(db, question)),
             timings=timings,
             notice=notices[0] if notices else None,
             min_score=0.0 if notices and body.min_score is None else body.min_score,

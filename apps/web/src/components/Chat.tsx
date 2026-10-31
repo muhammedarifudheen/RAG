@@ -628,6 +628,14 @@ export function Chat() {
                       })
                     }
                     onGapsFound={(gaps) => updateAnswer(message.id, message.response, { gaps })}
+                    onChallenged={(result) =>
+                      updateAnswer(message.id, message.response, {
+                        answer: result.answer,
+                        citations: result.citations,
+                        challenge: result.challenge,
+                        challenge_pending: false,
+                      })
+                    }
                   />
                   <div
                     role="toolbar"

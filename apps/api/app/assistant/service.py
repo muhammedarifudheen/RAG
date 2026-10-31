@@ -39,6 +39,7 @@ from app.schemas import (
     FactCheck,
     GeneratedImage,
     Reranking,
+    SelfChallenge,
     WebSource,
 )
 from app.services.search import extract_citations, tidy_citations
@@ -52,6 +53,7 @@ from .agent import (
     read_text,
 )
 from .cache import TTLCache, key_of
+from .challenge import challenge_prompt, parse_challenge
 from .confidence import confidence
 from .factcheck import parse_fact_check
 from .horde import HordeTextProvider
@@ -78,6 +80,7 @@ from .prompt import (
     audit_prompt,
     context_blocks,
     conversation,
+    epistemic_prompt,
     fact_check_prompt,
     gap_prompt,
     judge_prompt,
@@ -85,6 +88,7 @@ from .prompt import (
     research_prompt,
     strict_prompt,
     system_prompt,
+    take_state,
     with_drafts,
 )
 from .providers import (
@@ -150,6 +154,7 @@ class Options:
     research: ResearchTools | None = None  # deep research: the agent's tools
     timings: dict | None = None  # seconds per stage before the answer: plan, search, judge
     notice: str | None = None  # something to tell the user, such as a search fallback
+    about_sources: bool = False  # the question names the user's sources or their code
 
 
 # The query planner's time; after it the question alone is searched.
@@ -163,6 +168,8 @@ RANK_SECONDS = 8.0
 FACT_CHECK_SECONDS = 30.0
 # The gap finder's and the knowledge-base audit's time.
 GAP_SECONDS = 40.0
+# The self-challenge's time: it may rewrite the whole answer.
+CHALLENGE_SECONDS = 90.0
 AUDIT_SECONDS = 120.0
 # Deep research: the agent's time for all its tool calls, and the excerpts kept from it.
 RESEARCH_SECONDS = 75.0
@@ -334,6 +341,7 @@ class Assistant:
             if name == "done" and reranking is not None:
                 data = {**data, "reranking": reranking.model_dump()}
             if name == "done":
+                data = _with_state(data, options)
                 timings["answer"] = round(time.monotonic() - answering, 2)
                 data = {**data, "timings": timings, "notice": notice}
                 shown = [CodeChunk(**c) for c in data.get("chunks", [])]
@@ -341,6 +349,7 @@ class Assistant:
                     data.get("answer", ""),
                     shown,
                     [Citation(**c) for c in data.get("citations", [])],
+                    data.get("epistemic"),
                 )
                 if rated is not None:
                     data = {**data, "confidence": rated.model_dump()}
@@ -381,6 +390,44 @@ class Assistant:
             return None
         check, label = found
         return check.model_copy(update={"checked_by": label})
+
+    def challenge(
+        self,
+        question: str,
+        answer: str,
+        chunks: Sequence[CodeChunk],
+        attachments: Sequence[Attachment] = (),
+    ) -> tuple[str, SelfChallenge] | None:
+        """The user's self-challenge of `answer`: the strongest objection from its
+        retrieved context, and the final answer (revised if the objection holds, else as it
+        was) with the challenge's report. None if no model challenged it in time."""
+        context = context_blocks(chunks, attachments) or "(no passages)"
+        found = self._race(
+            "You challenge answers against their retrieved context. Use only that context.",
+            challenge_prompt(question[:4000], answer[:20000], context),
+            lambda reply: parse_challenge(reply, answer),
+            CHALLENGE_SECONDS,
+            max_tokens=5000,
+            racers=3,
+        )
+        if found is None:
+            return None
+        outcome, label = found
+        final = take_state(tidy_citations(outcome.final_answer, chunks))[1]
+        final = re.sub(
+            r"^\W*state\W+(?:KNOWN|INFERRED|PARTIAL|ABSENT|CONFLICTED)\b[^\n]*\n",
+            "",
+            final,
+            flags=re.IGNORECASE,
+        )
+        report = SelfChallenge(
+            objection=outcome.objection,
+            valid=outcome.valid,
+            reason=outcome.reason,
+            original_answer=answer if outcome.valid else None,
+            challenged_by=label,
+        )
+        return (final if outcome.valid else answer), report
 
     def find_gaps(self, question: str, catalog: str) -> tuple[str, str] | None:
         """The gap finder's report (markdown) on what the knowledge base, described by
@@ -743,8 +790,13 @@ class Assistant:
             notes = notes_block(research["notes"])
 
         found: list[WebResult] = []
+        # A question about the user's own sources (strict, routed to them, or naming them):
+        # with nothing found, the answer is that it is not there, never one from memory.
+        sources_question = not review and (
+            options.strict or route == "sources" or options.about_sources
+        )
         if (
-            options.strict
+            sources_question
             and not shown
             and not any(a.kind == "text" and a.text for a in options.attachments)
         ):
@@ -779,6 +831,9 @@ class Assistant:
             if options.strict
             else system_prompt(style=options.style, instructions=options.instructions)
         )
+        if sources_question:
+            # The user's epistemic states: known, inferred, partial, absent, conflicted.
+            system = epistemic_prompt(system)
         if review:
             system = f"{system}\n\n{REVIEW}"
         if FORMATS.get(options.format):
@@ -1496,6 +1551,35 @@ def _build() -> Assistant:
     )
 
 
+def _with_state(data: dict, options: Options | None) -> dict:
+    """The answer's epistemic state, taken off the answer (and its drafts): what the model
+    declared for a question about the sources, or, for others, whether it came from
+    general knowledge or the web."""
+    state, answer = take_state(data.get("answer", ""))
+    drafts = [
+        {**draft, "answer": take_state(draft.get("answer", ""))[1]}
+        for draft in data.get("drafts") or []
+    ]
+    data = {**data, "answer": answer, "drafts": drafts}
+    route = data.get("route")
+    about = route == "sources" or bool(options and (options.strict or options.about_sources))
+    if answer.strip() == NOT_IN_SOURCES:
+        state = "absent"
+    elif state is None and about and route != "review":
+        # The model gave none: what its citations show.
+        verified = sum(1 for c in data.get("citations", []) if c.get("verified"))
+        state = "known" if verified else "partial"
+    elif state is None and route not in ("chat", "image", "review", "vision"):
+        state = "web" if data.get("web_sources") else "general"
+    # An answer from the sources is challenged next (the page asks for it).
+    pending = (
+        state in ("known", "inferred", "partial", "conflicted")
+        and bool(data.get("chunks"))
+        and route != "review"
+    )
+    return {**data, "epistemic": state, "challenge_pending": pending}
+
+
 def _log_answer(question: str, options: Options | None, data: dict) -> None:
     """One line per answer for observability: the query, its rewrites, what was retrieved
     and how relevant, the citation check, the confidence and the seconds per stage."""
@@ -1513,6 +1597,7 @@ def _log_answer(question: str, options: Options | None, data: dict) -> None:
         "citations": len(citations),
         "verified": sum(1 for c in citations if c.get("verified")),
         "confidence": (data.get("confidence") or {}).get("level"),
+        "epistemic": data.get("epistemic"),
         "timings": data.get("timings"),
     }
     logger.info("answer %s", json.dumps(record, default=str))

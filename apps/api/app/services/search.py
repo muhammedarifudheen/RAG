@@ -184,7 +184,13 @@ def tidy_citations(answer: str, chunks: Sequence[CodeChunk]) -> str:
             return match[0]
         return f"[{path}:{start}-{end}]" if end else f"[{path}:{start}]"
 
+    # Zero-width characters some models put inside brackets break the path.
+    answer = re.sub("\\[[\u200b\u200c\u200d\u2060\ufeff]+", "[", answer)
+    # HTML code tags (in tables) count as code spans.
+    answer = re.sub(r"<code>([^<>\n]+?)</code>", r"`\1`", answer)
     answer = _CODE_SPAN.sub(bracket, answer)
+    # A code span already in brackets, [`path:1-2`], is now doubled: one pair.
+    answer = re.sub(r"\[\[([^\[\]\n]+)\]\]", r"[\1]", answer)
     # Dashes inside the brackets that cite a shown path.
     return _BRACKET.sub(
         lambda m: f"[{m[1].translate(_DASHES)}]" if any(p in m[1] for p in paths) else m[0],

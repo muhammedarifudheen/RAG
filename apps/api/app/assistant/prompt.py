@@ -13,6 +13,54 @@ from .providers import Image, Turn
 
 FOLLOW_UPS = "<<follow-ups>>"
 
+# The user's epistemic-state rule, word for word, for questions about their sources; then
+# how to write the state so the page can show it.
+EPISTEMIC = """\
+Before answering, classify your epistemic state:
+- KNOWN: the context directly answers the question.
+- INFERRED: the context strongly implies the answer but doesn't state it.
+- PARTIAL: the context answers part of the question.
+- ABSENT: the context does not contain the answer.
+- CONFLICTED: sources disagree.
+
+Then answer according to state:
+- KNOWN → answer directly with citations.
+- INFERRED → answer, but open with "Based on [source], this implies..."
+- PARTIAL → answer the part you can, then name exactly what's missing.
+- ABSENT → do not answer; trigger the gap-finder.
+- CONFLICTED → show both sides with citations and say which is newer.
+
+Never blur these states. The user must always know which one they're in."""
+
+EPISTEMIC_FORMAT = """\
+The context is the excerpts and files in the user's message. Write your state alone on \
+the first line, exactly as STATE: KNOWN (or INFERRED, PARTIAL, ABSENT, CONFLICTED), then \
+the answer. For ABSENT, write only one sentence saying the knowledge base does not \
+contain it: the gap-finder runs after you. This question is about the user's own \
+sources, so these rules come before any rule above about answering from your own \
+knowledge."""
+
+STATES = ("known", "inferred", "partial", "absent", "conflicted")
+_STATE_LINE = re.compile(
+    r"^\W*(?:epistemic\s+)?state\W*\s*(KNOWN|INFERRED|PARTIAL|ABSENT|CONFLICTED)\b[^\n]*\n?",
+    re.IGNORECASE,
+)
+# How a finished answer carries its state to the response: removed before it is sent.
+_STATE_MARK = re.compile(r"^\u2063state:(\w+)\u2063")
+
+
+def epistemic_prompt(system: str) -> str:
+    return f"{system}\n\n{EPISTEMIC}\n\n{EPISTEMIC_FORMAT}"
+
+
+def take_state(answer: str) -> tuple[str | None, str]:
+    """(the state a finished answer carries, the answer without it)."""
+    found = _STATE_MARK.match(answer or "")
+    if not found:
+        return None, answer
+    return found[1], answer[found.end() :]
+
+
 SYSTEM = """\
 You are Atlas, a knowledgeable, friendly assistant. Answer every question as fully and \
 accurately as you can: facts, explanations, advice, writing, maths, code, or conversation. \
@@ -378,10 +426,35 @@ class FollowUpSplitter:
         self.text = ""
         self.sent = 0
         self.cut: int | None = None
+        # The epistemic state, when the answer opens with "STATE: …" (removed from it).
+        self.state: str | None = None
+        self._head = False
+
+    def _read_head(self, final: bool = False) -> bool:
+        """Takes a leading "STATE: …" line off the answer; False while it may still be one."""
+        if self._head:
+            return True
+        stripped = self.text.lstrip()
+        # Held back only while it may still become "STATE: …" (or "**State:**", "Epistemic
+        # state"); any other opening streams at once.
+        core = re.sub(r"^[\W_]+", "", stripped).lower()
+        maybe = not core or any(
+            core.startswith(word) or word.startswith(core) for word in ("state", "epistemic")
+        )
+        if not final and maybe and "\n" not in stripped and len(stripped) < 80:
+            return False
+        found = _STATE_LINE.match(stripped)
+        if found:
+            self.state = found[1].lower()
+            self.text = stripped[found.end() :].lstrip("\n")
+        self._head = True
+        return True
 
     def feed(self, piece: str) -> str:
         # Some models cite in full-width brackets, 【path:1-2】; citations are [path:1-2].
         self.text += piece.replace("【", "[").replace("】", "]")
+        if not self._read_head():
+            return ""
         if self.cut is None:
             found = _MARKER.search(self.text)
             if found:
@@ -393,10 +466,17 @@ class FollowUpSplitter:
         return out
 
     def finish(self) -> tuple[str, str, list[str]]:
-        """(the rest of the answer still to send, the whole answer, the follow-up questions)."""
+        """(the rest of the answer still to send, the whole answer, the follow-up questions).
+        The whole answer starts with a mark of its state, if it gave one (see take_state)."""
+        if not self._head:
+            self._read_head(final=True)
+            if self.cut is None:
+                found = _MARKER.search(self.text)
+                self.cut = found.start() if found else None
+        mark = f"\u2063state:{self.state}\u2063" if self.state else ""
         if self.cut is None:
             rest, self.sent = self.text[self.sent :], len(self.text)
-            return rest, self.text.strip(), []
+            return rest, mark + self.text.strip(), []
         answer = self.text[: self.cut]
         rest = answer[self.sent :] if self.sent < len(answer) else ""
         tail = self.text[self.cut + len(FOLLOW_UPS) :]
@@ -407,7 +487,7 @@ class FollowUpSplitter:
                 questions.append(line[:200])
         # A model sometimes bolds or heads the marker line; drop what is left of that.
         answer = re.sub(r"[\s*#_]+$", "", answer).strip()
-        return rest, answer, questions[:3]
+        return rest, mark + answer, questions[:3]
 
 
 REVIEW = """\

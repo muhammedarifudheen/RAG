@@ -155,3 +155,33 @@ test("the chat list folds away for one centred column, and stays so", async ({ p
   await page.getByRole("button", { name: "Show the chat list" }).click();
   await expect(chats).toBeVisible();
 });
+
+test("every answer says where it stands, and an absent one asks what is missing", async ({ page }) => {
+  const sent = await mock(page, [
+    reply("It splits the value. Missing: the timestamp check.", { epistemic: "partial" }),
+    reply("I don't have that in the knowledge base.", { epistemic: "absent" }),
+    reply("Canberra.", { epistemic: "general" }),
+  ]);
+  await page.route("**/api/ask", async (route) => {
+    const body = route.request().postDataJSON() as AskRequest;
+    if (body.task !== "gaps") return route.fallback();
+    sent.bodies.push(body);
+    return route.fulfill({
+      json: reply("2. Missing: verify_token_v2.", {
+        gaps: { report: "2. Missing: verify_token_v2.", suggestion_url: null, found_by: "x" },
+      }),
+    });
+  });
+  await page.goto("/chat");
+  await ask(page, "How is it unsigned?");
+  const answers = page.getByRole("article", { name: "Answer" });
+  await expect(answers.nth(0).getByRole("note", { name: /Epistemic state: Partial/ })).toBeVisible();
+
+  await ask(page, "What does verify_token_v2 do?");
+  await expect(answers.nth(1).getByRole("note", { name: /Epistemic state: Not in your sources/ })).toBeVisible();
+  await expect(page.getByRole("region", { name: "What's missing" })).toContainText("verify_token_v2");
+
+  await ask(page, "What is the capital of Australia?");
+  await expect(answers.nth(2).getByRole("note", { name: /Epistemic state: General knowledge/ })).toBeVisible();
+  expect(sent.bodies.filter((b) => b.task === "gaps")).toHaveLength(1);
+});

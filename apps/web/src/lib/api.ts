@@ -302,6 +302,22 @@ export async function factCheck(
   return response.fact_check;
 }
 
+/** Has the self-challenge object to an answer from its excerpts, and revise it if the
+ * objection holds: the response carries the final answer, its citations and the report. */
+export async function challengeAnswer(
+  question: string,
+  answer: string,
+  chunks: CodeChunk[],
+): Promise<AskResponse> {
+  const response = await request<AskResponse>("/ask", {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
+    body: JSON.stringify({ question, task: "challenge", answer, chunks }),
+  });
+  if (!response.challenge) throw new ApiError(503, "The self-challenge gave no report.");
+  return response;
+}
+
 /** Has the gap finder say what the knowledge base lacks to answer a question. */
 export async function findGaps(question: string): Promise<GapReport> {
   const response = await request<AskResponse>("/ask", {

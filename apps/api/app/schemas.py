@@ -169,12 +169,13 @@ class AskRequest(BaseModel):
     include_drafts: bool = Field(
         default=False, description="Return each council agent's own draft with the answer."
     )
-    task: Literal["answer", "image", "review", "check", "gaps"] = Field(
+    task: Literal["answer", "image", "review", "check", "gaps", "challenge"] = Field(
         default="answer",
         description="`image` draws a picture of the question; `review` runs the code analyser "
         "on the attached code, code in the question, or a GitHub link, and the agents review "
         "what it finds; `check` fact-checks `answer` against `chunks` (no new answer); "
-        "`gaps` reports what the knowledge base covers and lacks for the question.",
+        "`gaps` reports what the knowledge base covers and lacks for the question; "
+        "`challenge` objects to `answer` from `chunks` and revises it if the objection holds.",
     )
     # task: check
     answer: str | None = Field(
@@ -342,6 +343,16 @@ class FactCheck(BaseModel):
     checked_by: str = Field(default="", description='"Service · model".')
 
 
+class SelfChallenge(BaseModel):
+    objection: str = Field(description="The strongest objection to the answer, from its context.")
+    valid: bool = Field(description="True if the objection held and the answer was revised.")
+    reason: str = Field(default="", description="Why the objection does not hold, in one line.")
+    original_answer: str | None = Field(
+        default=None, description="The answer before revision, when it was revised."
+    )
+    challenged_by: str = Field(default="", description='"Service · model".')
+
+
 class GapReport(BaseModel):
     report: str = Field(
         description="Markdown: what the knowledge base covers, what it lacks, what to add."
@@ -394,6 +405,14 @@ class AskResponse(BaseModel):
     fact_check: FactCheck | None = Field(
         default=None, description="The fact-checker's report, for `task: check`."
     )
+    epistemic: (
+        Literal["known", "inferred", "partial", "absent", "conflicted", "general", "web"] | None
+    ) = Field(
+        default=None,
+        description="For a question about the sources: known, inferred, partial, absent or "
+        "conflicted, as the model classified it; otherwise general (its own knowledge) or "
+        "web.",
+    )
     confidence: Confidence | None = Field(
         default=None,
         description="For an answer from the knowledge base: high, medium or low, from the "
@@ -410,6 +429,14 @@ class AskResponse(BaseModel):
     )
     research_steps: list[ResearchStep] = Field(
         default=[], description="Deep research: each tool call the agent made, in order."
+    )
+    challenge: SelfChallenge | None = Field(
+        default=None, description="For `task: challenge`: the self-challenge and its outcome."
+    )
+    challenge_pending: bool = Field(
+        default=False,
+        description="True for an answer from the sources: challenge it with `task: challenge` "
+        "(the page does, then shows the final answer).",
     )
     gaps: GapReport | None = Field(
         default=None, description="For `task: gaps`: what the knowledge base lacks."
