@@ -23,8 +23,16 @@ from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
 from app.models import Source
 from app.ratelimit import rate_limit
-from app.schemas import AskRequest, AskResponse, GapReport, Reranking, SearchResponse
+from app.schemas import (
+    AskRequest,
+    AskResponse,
+    GapReport,
+    KnowledgeHealth,
+    Reranking,
+    SearchResponse,
+)
 from app.services.catalog import mentions_sources, source_catalog
+from app.services.knowledge import health_note, knowledge_health, log_answer, note_suggestion
 from app.services.search import extract_citations, hybrid_search, search_symbols
 from app.services.spans import read_span
 
@@ -106,6 +114,15 @@ def ask(
             "to the same question (Regenerate sends it); the new answer is still kept.",
         ),
     ] = False,
+    chat: Annotated[
+        str | None,
+        Header(
+            alias="X-Atlas-Chat",
+            max_length=64,
+            description="Assistant only: the chat this question belongs to, for the answer log "
+            "and the chat's knowledge-health note.",
+        ),
+    ] = None,
 ):
     """Two ways to ask.
 
@@ -152,7 +169,21 @@ def ask(
         hit = answers.get(cache_key) if answers is not None and cache_key and not fresh else None
         if hit is not None:
             logger.info("answer cache hit")
+            # Asked again: it counts for the knowledge health all the same.
+            log_answer(db, embedder, {**hit, "question": question}, chat)
             return _replay(hit, request)
+
+    if body.task == "health":
+        health = knowledge_health(db, chat)
+        return AskResponse(
+            question=question,
+            answer=health_note(health),
+            citations=[],
+            chunks=[],
+            model="atlas",
+            complete=True,
+            knowledge_health=KnowledgeHealth(**health),
+        )
 
     if body.task == "challenge":
         # The self-challenge of an answer already given, against the excerpts it was given.
@@ -180,6 +211,7 @@ def ask(
         if found is None:
             raise HTTPException(503, "The gap finder is busy; try again in a minute.")
         report, found_by = found
+        note_suggestion(db, question, chat, suggested_source(report))
         return AskResponse(
             question=question,
             answer=report,
@@ -304,7 +336,10 @@ def ask(
         )
         if streaming:
             events = _remembering(
-                assistant.respond(question, chunks, body.history, mode, options), answers, cache_key
+                assistant.respond(question, chunks, body.history, mode, options),
+                answers,
+                cache_key,
+                lambda data: log_answer(db, embedder, data, chat),
             )
             return StreamingResponse(
                 _event_stream(events),
@@ -316,6 +351,7 @@ def ask(
         except AssistantError as error:
             raise HTTPException(error.status_code, error.detail) from error
         _remember(response.model_dump(), answers, cache_key)
+        log_answer(db, embedder, response.model_dump(), chat)
         return response
 
     answerer: Answerer = _resolve(request, get_answerer)
@@ -362,12 +398,16 @@ def _remember(response: dict, answers: cache.TTLCache | None, key: str | None) -
 
 
 def _remembering(
-    events: Iterator[tuple[str, dict]], answers: cache.TTLCache | None, key: str | None
+    events: Iterator[tuple[str, dict]],
+    answers: cache.TTLCache | None,
+    key: str | None,
+    log: Callable[[dict], object],
 ) -> Iterator[tuple[str, dict]]:
-    """The assistant's events, keeping the finished answer for the cache."""
+    """The assistant's events, keeping the finished answer for the cache and the log."""
     for name, data in events:
         if name == "done":
             _remember(data, answers, key)
+            log(data)
         yield name, data
 
 

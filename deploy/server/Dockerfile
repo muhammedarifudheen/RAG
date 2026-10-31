@@ -44,6 +44,7 @@ ENV HF_HUB_OFFLINE=1 \
     MALLOC_ARENA_MAX=2 \
     EMBEDDING_BATCH_SIZE=4 \
     PORT=7860 \
+    KNOWLEDGE_LOG_URL=https://raw.githubusercontent.com/muhammedarifudheen/RAG/knowledge-log/knowledge-log.json \
     DATABASE_URL=postgresql+psycopg://user@127.0.0.1:5432/atlas
 
 # The starter sources, added now so the image ships with them (see bake.sh).

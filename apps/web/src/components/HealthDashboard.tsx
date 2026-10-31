@@ -18,6 +18,7 @@ import { getHealth } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
 
 import { KnowledgeAudit } from "./KnowledgeAudit";
+import { KnowledgeHealthNote } from "./KnowledgeHealthNote";
 import { ErrorMessage, Loading, NothingIngested } from "./States";
 
 const BAR = "#8b7cff";
@@ -192,6 +193,10 @@ function Dashboard({ report, ranking }: { report: HealthReport; ranking: HealthR
           </div>
         )}
       </section>
+
+      {report.knowledge_health && report.knowledge_health.answers > 0 && (
+        <KnowledgeHealthNote health={report.knowledge_health} title="Knowledge health" />
+      )}
 
       <KnowledgeAudit audit={report.knowledge_audit ?? null} />
     </main>

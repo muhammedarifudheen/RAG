@@ -41,6 +41,23 @@ try:
 except OSError:
     pass  # an empty knowledge base: the first ingest loads the model instead
 
+# The answer log, kept on the repository's knowledge-log branch by the knowledge-log
+# workflow: restored into this fresh database, so the knowledge health carries on.
+log_url = os.environ.get("KNOWLEDGE_LOG_URL")
+if log_url and "Authorization" in headers:
+    try:
+        with urllib.request.urlopen(log_url, timeout=60) as kept:
+            log = json.load(kept)
+        request = urllib.request.Request(
+            f"{api}/health",
+            data=json.dumps({"action": "import", "data": log}).encode(),
+            headers=headers,
+        )
+        with urllib.request.urlopen(request, timeout=600) as restored:
+            print(f"knowledge log: {restored.read().decode()}", flush=True)
+    except (OSError, ValueError) as error:
+        print(f"knowledge log not restored ({error})", flush=True)
+
 for url in missing:
     print(f"seeding: {url}", flush=True)
     request = urllib.request.Request(

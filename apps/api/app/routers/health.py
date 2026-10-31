@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -8,11 +8,13 @@ from app.admin import ADMIN_REQUIRED, require_admin
 from app.assistant import Assistant, get_assistant
 from app.config import settings
 from app.db import get_db
+from app.embedding import Embedder, get_embedder
 from app.models import KnowledgeAudit, Source
 from app.ratelimit import rate_limit
-from app.schemas import HealthReport, KnowledgeAuditOut, Liveness
+from app.schemas import HealthAction, HealthReport, KnowledgeAuditOut, KnowledgeHealth, Liveness
 from app.services.catalog import source_catalog
 from app.services.health import code_health
+from app.services.knowledge import export_log, import_log, knowledge_health
 
 router = APIRouter()
 
@@ -34,6 +36,10 @@ def health(
         int, Query(ge=1, description="Files depending on at least this many files are reported.")
     ] = 10,
     limit: Annotated[int, Query(ge=1, le=1000, description="Maximum entries per list.")] = 100,
+    chat: Annotated[
+        str | None,
+        Query(max_length=64, description="Knowledge health for this chat only (its id)."),
+    ] = None,
 ) -> HealthReport:
     """Computes four measures over the ingested repository:
 
@@ -51,12 +57,17 @@ def health(
     report = code_health(
         db, max_function_loc=max_function_loc, min_fan_out=min_fan_out, limit=limit
     )
-    return report.model_copy(update={"knowledge_audit": _latest_audit(db)})
+    return report.model_copy(
+        update={
+            "knowledge_audit": _latest_audit(db),
+            "knowledge_health": KnowledgeHealth(**knowledge_health(db, chat)),
+        }
+    )
 
 
 @router.post(
     "/health",
-    response_model=KnowledgeAuditOut,
+    response_model=None,
     tags=["health"],
     summary="Audit the knowledge base",
     responses={
@@ -72,12 +83,24 @@ def health(
 )
 def audit(
     db: Annotated[Session, Depends(get_db)],
-    assistant: Annotated[Assistant, Depends(get_assistant)],
-) -> KnowledgeAuditOut:
-    """Has a model audit every source (coverage, staleness, overlap with other sources,
-    three questions it cannot answer) as a Markdown table, and keeps it: `GET /health`
-    returns the newest. Run weekly, and after each deploy, by the knowledge-audit
-    workflow. Admin only."""
+    request: Request,
+    body: HealthAction | None = None,
+) -> KnowledgeAuditOut | dict:
+    """`audit` (the default): has a model audit every source (coverage, staleness,
+    overlap with other sources, three questions it cannot answer) as a Markdown table,
+    and keeps it: `GET /health` returns the newest. Run weekly, and after each deploy, by
+    the knowledge-audit workflow.
+
+    `export` returns the answer log and its signals; `import` restores an exported log
+    into an empty one (the free server's database starts afresh on each deploy; the
+    knowledge-log workflow keeps a copy). Admin only."""
+    action = body.action if body else "audit"
+    if action == "export":
+        return export_log(db)
+    if action == "import":
+        embedder: Embedder = request.app.dependency_overrides.get(get_embedder, get_embedder)()
+        return {"restored": import_log(db, embedder, (body.data if body else None) or {})}
+    assistant: Assistant = request.app.dependency_overrides.get(get_assistant, get_assistant)()
     catalog = source_catalog(db)
     if not catalog:
         raise HTTPException(409, "The knowledge base is empty; add a source first.")

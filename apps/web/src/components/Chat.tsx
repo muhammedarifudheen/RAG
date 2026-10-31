@@ -8,13 +8,14 @@ import type {
   CodeAnalysis,
   CouncilAgent,
   GeneratedImage,
+  KnowledgeHealth,
   ResearchStep,
   WebSource,
 } from "@atlas/shared";
 import dynamic from "next/dynamic";
 import { useCallback, useEffect, useRef, useState } from "react";
 
-import { askAssistant, wakeServer } from "@/lib/api";
+import { askAssistant, getKnowledgeHealth, wakeServer } from "@/lib/api";
 import { attachmentsToSend, imageSource } from "@/lib/attachments";
 import {
   loadChats,
@@ -40,6 +41,7 @@ import { chatToMarkdown, copyText, download, exportAllChats, fileNameOf } from "
 import { useSpeaker } from "@/lib/speech";
 
 import { Answer, Gallery, ResearchSteps, StreamingAnswer } from "./Answer";
+import { KnowledgeHealthNote } from "./KnowledgeHealthNote";
 import { ChatComposer, type ComposerHandle } from "./ChatComposer";
 import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
 import { ChatSidebar } from "./ChatSidebar";
@@ -133,6 +135,17 @@ export function Chat() {
   const [mode, setMode] = useState<AssistantMode>("auto");
   const [settings, setSettings] = useState<ChatSettings>(DEFAULT_SETTINGS);
   const [showChats, setShowChats] = useState(false);
+  // The knowledge-health note: for the chat just finished, or asked for in the header.
+  const [healthNote, setHealthNote] = useState<{ title: string; health: KnowledgeHealth } | null>(
+    null,
+  );
+  function showHealth(id: string, title: string) {
+    getKnowledgeHealth(id)
+      .then((health) => {
+        if (health && health.answers > 0) setHealthNote({ title, health });
+      })
+      .catch(() => {});
+  }
   // On wide screens the chat list can fold away for a single centred column.
   const [chatsHidden, setChatsHidden] = useState(false);
   useEffect(() => {
@@ -254,6 +267,7 @@ export function Chat() {
     try {
       const response: AskResponse = await askAssistant(
         {
+          chatId: id,
           question: trimmed,
           history: turnsOf(base),
           mode,
@@ -395,6 +409,12 @@ export function Chat() {
 
   function startNewChat() {
     if (pending) return;
+    // At the end of a chat, its knowledge health.
+    if (chatId && messages.some((m) => m.role === "assistant")) {
+      showHealth(chatId, "Knowledge health of your last chat");
+    } else {
+      setHealthNote(null);
+    }
     speaker.stop();
     setChatId(null);
     setMessages([]);
@@ -554,6 +574,12 @@ export function Chat() {
             ))}
           </div>
           <HeaderButton
+            label="Knowledge health"
+            title="Gaps, sources to add and what answered well, for this chat"
+            disabled={!chatId || pending !== null}
+            onClick={() => chatId && showHealth(chatId, "Knowledge health of this chat")}
+          />
+          <HeaderButton
             label="Share"
             disabled={!current || pending !== null}
             onClick={() => setDialog("share")}
@@ -577,6 +603,13 @@ export function Chat() {
           className="relative flex-1 overflow-y-auto"
         >
           <div className="mx-auto w-full max-w-3xl space-y-6 px-4 py-6">
+            {healthNote && (
+              <KnowledgeHealthNote
+                health={healthNote.health}
+                title={healthNote.title}
+                onClose={() => setHealthNote(null)}
+              />
+            )}
             {messages.length === 0 && <EmptyState onPick={(text) => void send(text, [], text.startsWith("Draw"))} />}
 
             {messages.map((message) => {

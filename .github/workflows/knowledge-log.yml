@@ -1,0 +1,74 @@
+# Keeps the answer log (questions, sources, how well they were answered) and the wanted
+# and refresh signals across the free server's restarts: every 6 hours it exports them
+# and merges them into knowledge-log.json on the knowledge-log branch, which the server
+# reloads when it starts (deploy/server/start.sh). Needs the ATLAS_ADMIN_TOKEN secret and
+# the PUBLIC_API_URL variable; without them nothing runs.
+name: Keep the knowledge log
+
+on:
+  schedule:
+    - cron: "41 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: knowledge-log
+  cancel-in-progress: false
+
+jobs:
+  keep:
+    if: ${{ vars.PUBLIC_API_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API: ${{ vars.PUBLIC_API_URL }}
+      TOKEN: ${{ secrets.ATLAS_ADMIN_TOKEN }}
+    steps:
+      - name: Export the log
+        id: export
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::Set the ATLAS_ADMIN_TOKEN secret to keep the knowledge log."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          curl -fsS --max-time 120 --retry 3 --retry-delay 15 -o /dev/null "$API/healthz"
+          curl -fsS --max-time 120 -X POST "$API/health" \
+            -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+            -d '{"action": "export"}' -o exported.json
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+      - name: Merge it into the knowledge-log branch
+        if: steps.export.outputs.skip == 'false'
+        run: |
+          git init -q kept && cd kept
+          git remote add origin "https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git"
+          if git fetch -q --depth 1 origin knowledge-log; then
+            git checkout -q -b knowledge-log FETCH_HEAD
+          else
+            git checkout -q --orphan knowledge-log
+          fi
+          python3 - <<'PY'
+          import json, os
+          kept = json.load(open("knowledge-log.json")) if os.path.exists("knowledge-log.json") else {}
+          new = json.load(open("../exported.json"))
+          # Answers by when and what was asked: the server may have started afresh since.
+          answers = {(a["created_at"], a["question"]): a for a in kept.get("answers", [])}
+          answers.update({(a["created_at"], a["question"]): a for a in new.get("answers", [])})
+          signals = {(s["kind"], s["subject"]): s for s in kept.get("signals", [])}
+          for s in new.get("signals", []):
+              old = signals.get((s["kind"], s["subject"]))
+              signals[(s["kind"], s["subject"])] = s if not old or s["count"] >= old["count"] else old
+          merged = {
+              "answers": sorted(answers.values(), key=lambda a: a["created_at"]),
+              "signals": list(signals.values()),
+          }
+          json.dump(merged, open("knowledge-log.json", "w"), indent=1, ensure_ascii=False)
+          print(f"{len(merged['answers'])} answers, {len(merged['signals'])} signals kept")
+          PY
+          git add knowledge-log.json
+          if git diff --cached --quiet; then echo "Nothing new."; exit 0; fi
+          git -c user.name="atlas-bot" -c user.email="atlas-bot@users.noreply.github.com" \
+            commit -q -m "Keep the knowledge log"
+          git push -q origin knowledge-log

@@ -199,11 +199,35 @@ def tidy_citations(answer: str, chunks: Sequence[CodeChunk]) -> str:
     answer = _CODE_SPAN.sub(bracket, answer)
     # A code span already in brackets, [`path:1-2`], is now doubled: one pair.
     answer = re.sub(r"\[\[([^\[\]\n]+)\]\]", r"[\1]", answer)
+    answer = _cite_prose(answer, paths)
     # Dashes inside the brackets that cite a shown path.
     return _BRACKET.sub(
         lambda m: f"[{m[1].translate(_DASHES)}]" if any(p in m[1] for p in paths) else m[0],
         answer,
     )
+
+
+_DASH = "[-" + "".join(chr(code) for code in _DASHES) + "]"
+# "signer.py (lines 227-242)", "`timed.py`, lines 72–90", "signer.py line 40".
+_PROSE = re.compile(
+    r"(`?)([\w./-]+\.\w+)\1(\s*,?\s*\(?\s*lines?\s+(\d+)(?:\s*" + _DASH + r"\s*(\d+))?\s*\)?)",
+    re.IGNORECASE,
+)
+
+
+def _cite_prose(answer: str, paths: set[str]) -> str:
+    """A file and lines named in prose become a citation after the file's name, when the
+    name is one shown file's path or the end of exactly one."""
+
+    def cite(match: re.Match) -> str:
+        name, start, end = match[2], match[4], match[5]
+        found = [p for p in paths if p == name or p.endswith("/" + name.lstrip("./"))]
+        if len(found) != 1:
+            return match[0]
+        span = f"{start}-{end}" if end else start
+        return f"{match[1]}{name}{match[1]} [{found[0]}:{span}]"
+
+    return _PROSE.sub(cite, answer)
 
 
 def extract_citations(answer: str, chunks: list[CodeChunk]) -> list[Citation]:

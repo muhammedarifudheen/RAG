@@ -174,13 +174,14 @@ class AskRequest(BaseModel):
     include_drafts: bool = Field(
         default=False, description="Return each council agent's own draft with the answer."
     )
-    task: Literal["answer", "image", "review", "check", "gaps", "challenge"] = Field(
+    task: Literal["answer", "image", "review", "check", "gaps", "challenge", "health"] = Field(
         default="answer",
         description="`image` draws a picture of the question; `review` runs the code analyser "
         "on the attached code, code in the question, or a GitHub link, and the agents review "
         "what it finds; `check` fact-checks `answer` against `chunks` (no new answer); "
         "`gaps` reports what the knowledge base covers and lacks for the question; "
-        "`challenge` objects to `answer` from `chunks` and revises it if the objection holds.",
+        "`challenge` objects to `answer` from `chunks` and revises it if the objection holds; "
+        "`health` returns the knowledge-health note for the chat in X-Atlas-Chat (or for all).",
     )
     # task: check
     answer: str | None = Field(
@@ -368,6 +369,32 @@ class GapReport(BaseModel):
     found_by: str = Field(default="", description='"Service · model".')
 
 
+class KnowledgeGap(BaseModel):
+    question: str
+    times: int = Field(description="Times the topic was answered partly or not at all.")
+
+
+class SourceToAdd(BaseModel):
+    action: Literal["add", "refresh"]
+    source: str = Field(description="The suggested link, or the title of the source to refresh.")
+    why: str | None = None
+
+
+class WellAnswered(BaseModel):
+    question: str
+    score: float = Field(description="The best excerpt's similarity: lower is more surprising.")
+
+
+class KnowledgeHealth(BaseModel):
+    scope: Literal["chat", "all"]
+    answers: int = Field(description="Answers logged in this scope.")
+    gaps: list[KnowledgeGap] = Field(description="The top 3 recurring gaps.")
+    sources: list[SourceToAdd] = Field(description="The top 3 sources to add or refresh.")
+    well_answered: WellAnswered | None = Field(
+        default=None, description="One question the knowledge base answered surprisingly well."
+    )
+
+
 class Intent(BaseModel):
     literal: str | None = Field(default=None, description="The question as typed.")
     goal: str | None = Field(default=None, description="What the user is trying to do.")
@@ -438,6 +465,9 @@ class AskResponse(BaseModel):
         description="For a question about the sources: known, inferred, partial, absent or "
         "conflicted, as the model classified it; otherwise general (its own knowledge) or "
         "web.",
+    )
+    knowledge_health: KnowledgeHealth | None = Field(
+        default=None, description="For `task: health`: the knowledge-health note's parts."
     )
     uncertainty: Uncertainty | None = Field(
         default=None,
@@ -629,6 +659,11 @@ class HealthThresholds(BaseModel):
     min_fan_out: int
 
 
+class HealthAction(BaseModel):
+    action: Literal["audit", "export", "import"] = "audit"
+    data: dict | None = Field(default=None, description="For import: an exported log.")
+
+
 class KnowledgeAuditOut(BaseModel):
     report: str = Field(
         description="Markdown table: each source's coverage, staleness, redundancy and gaps."
@@ -647,6 +682,9 @@ class HealthReport(BaseModel):
     high_fan_out_files: list[FanOut]
     knowledge_audit: KnowledgeAuditOut | None = Field(
         default=None, description="The newest health check of the knowledge base, if any."
+    )
+    knowledge_health: KnowledgeHealth | None = Field(
+        default=None, description="Recurring gaps, sources to add or refresh, from the answer log."
     )
 
 

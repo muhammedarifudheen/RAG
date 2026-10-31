@@ -251,3 +251,16 @@ def test_a_zero_width_space_inside_a_citation_is_dropped():
     assert tidy_citations("It decodes [\u200ba/signer.py:10-20].", [chunk()]) == (
         "It decodes [a/signer.py:10-20]."
     )
+
+
+def test_files_and_lines_named_in_prose_become_citations():
+    from app.services.search import tidy_citations
+
+    shown = [chunk()]  # a/signer.py, lines 10-20
+    assert tidy_citations("In `signer.py` (lines 10-20) it splits.", shown) == (
+        "In `signer.py` [a/signer.py:10-20] it splits."
+    )
+    assert tidy_citations("See a/signer.py, line 12.", shown) == "See a/signer.py [a/signer.py:12]."
+    # A file the model was not shown, or prose without lines, stays as written.
+    assert tidy_citations("In other.py (lines 1-2).", shown) == "In other.py (lines 1-2)."
+    assert tidy_citations("The signer.py module signs.", shown) == "The signer.py module signs."

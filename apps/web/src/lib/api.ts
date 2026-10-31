@@ -25,6 +25,7 @@ import type {
   IngestRequest,
   IngestResult,
   KnowledgeAudit,
+  KnowledgeHealth,
   ResearchStep,
   SharedChat,
   SiteConfig,
@@ -186,6 +187,8 @@ export interface AssistantQuestion {
   cache?: boolean;
   /** Answer afresh this once, but keep the answer (Regenerate). */
   fresh?: boolean;
+  /** The chat this question belongs to, for the answer log and its knowledge health. */
+  chatId?: string;
   rerankCutoff?: number | null;
 }
 
@@ -245,6 +248,7 @@ export async function askAssistant(
       Accept: "text/event-stream, application/json",
       "X-Atlas-Mode": mode,
       ...(asked.fresh ? { "X-Atlas-Fresh": "true" } : {}),
+      ...(asked.chatId ? { "X-Atlas-Chat": asked.chatId } : {}),
     },
     body: JSON.stringify(body),
     signal,
@@ -366,6 +370,14 @@ export function getHealth(params: HealthParams = {}): Promise<HealthReport> {
 /** Has a model audit every source now (admin only); the table is kept for the Health page. */
 export function runKnowledgeAudit(): Promise<KnowledgeAudit> {
   return request<KnowledgeAudit>("/health", { method: "POST", headers: adminHeaders() });
+}
+
+/** The knowledge-health note from the answer log: for one chat, or for everything. */
+export async function getKnowledgeHealth(chatId?: string): Promise<KnowledgeHealth | null> {
+  const report = await request<HealthReport>(
+    `/health?limit=1${chatId ? `&chat=${encodeURIComponent(chatId)}` : ""}`,
+  );
+  return report.knowledge_health ?? null;
 }
 
 export function getSources(): Promise<SourceItem[]> {

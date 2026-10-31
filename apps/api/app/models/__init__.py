@@ -12,16 +12,19 @@ from app.models.code_graph import (
     Source,
     Symbol,
 )
+from app.models.knowledge import AnswerLog, KnowledgeSignal
 
 __all__ = [
     "EDGE_KINDS",
     "EMBEDDING_DIM",
     "SOURCE_KINDS",
     "SYMBOL_KINDS",
+    "AnswerLog",
     "Base",
     "Edge",
     "File",
     "KnowledgeAudit",
+    "KnowledgeSignal",
     "SharedChat",
     "Source",
     "Symbol",

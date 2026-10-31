@@ -506,6 +506,18 @@ export interface HealthThresholds {
   min_fan_out: number;
 }
 
+/** What the answer log says about the knowledge base: for one chat or for everything. */
+export interface KnowledgeHealth {
+  scope: "chat" | "all";
+  answers: number;
+  /** The top 3 recurring gaps: topics answered partly or not at all. */
+  gaps: { question: string; times: number }[];
+  /** The top 3 sources to add (a suggested link) or refresh (a source's title). */
+  sources: { action: "add" | "refresh"; source: string; why?: string | null }[];
+  /** One question the knowledge base answered surprisingly well. */
+  well_answered?: { question: string; score: number } | null;
+}
+
 /** A model's health check of the whole knowledge base. */
 export interface KnowledgeAudit {
   /** Markdown table: each source's coverage, staleness, redundancy and gaps. */
@@ -525,6 +537,8 @@ export interface HealthReport {
   high_fan_out_files: FanOut[];
   /** The newest health check of the knowledge base, if any. */
   knowledge_audit?: KnowledgeAudit | null;
+  /** Recurring gaps and sources to add or refresh, from the answer log. */
+  knowledge_health?: KnowledgeHealth | null;
 }
 
 export interface HealthParams {
