@@ -9,6 +9,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    SmallInteger,
     String,
     Text,
     UniqueConstraint,
@@ -47,6 +48,9 @@ class Source(Base):
     title: Mapped[str] = mapped_column(Text)
     url: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    # How much it counts, set by the admin: 3 primary, 2 secondary, 1 derived; NULL is
+    # automatic (app/services/weights.py).
+    weight: Mapped[int | None] = mapped_column(SmallInteger)
 
 
 class File(Base):

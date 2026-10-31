@@ -6,8 +6,9 @@ from sqlalchemy import func, literal_column, select, text
 from sqlalchemy.orm import Session
 
 from app.embedding import Embedder
-from app.models import File, Symbol
+from app.models import File, Source, Symbol
 from app.schemas import Citation, CodeChunk
+from app.services.weights import source_weight
 
 # A citation is `[path:42-58]` or `[path:42]`. Models also put several in one
 # bracket, as `[path:5-7, 10-12]` or `[path:5-7, other/path:10-12]`; a range with
@@ -61,8 +62,9 @@ def search_symbols(
     # The HNSW index returns at most ef_search rows.
     db.execute(text(f"SET LOCAL hnsw.ef_search = {max(int(limit) * 2, 64)}"))
     rows = db.execute(
-        select(Symbol, File.path, File.language, File.content, distance)
+        select(Symbol, File.path, File.language, File.content, distance, *_SOURCE)
         .join(File, File.id == Symbol.file_id)
+        .join(Source, Source.id == File.source_id)
         .where(Symbol.embedding.is_not(None))
         .order_by(distance)
         .limit(limit)
@@ -98,8 +100,9 @@ def keyword_symbols(
         else (1.0 - func.least(rank, 1.0)).label("distance")
     )
     rows = db.execute(
-        select(Symbol, File.path, File.language, File.content, score)
+        select(Symbol, File.path, File.language, File.content, score, *_SOURCE)
         .join(File, File.id == Symbol.file_id)
+        .join(Source, Source.id == File.source_id)
         .where(search.op("@@")(terms))
         .order_by(named.desc(), rank.desc(), Symbol.id)
         .limit(limit)
@@ -141,9 +144,13 @@ def hybrid_search(
     return fuse([semantic, keyword], limit), None
 
 
+# What each excerpt's source counts for (see app/services/weights.py).
+_SOURCE = (Source.kind, Source.url, Source.title, Source.weight)
+
+
 def _chunks(rows: Sequence, max_lines: int) -> list[CodeChunk]:
     chunks = []
-    for symbol, path, language, content, dist in rows:
+    for symbol, path, language, content, dist, kind, url, title, override in rows:
         code, last_line = snippet(content, symbol.start_line, symbol.end_line, max_lines)
         chunks.append(
             CodeChunk(
@@ -160,6 +167,7 @@ def _chunks(rows: Sequence, max_lines: int) -> list[CodeChunk]:
                 snippet_end_line=last_line,
                 truncated=last_line < symbol.end_line,
                 citation=f"[{path}:{symbol.start_line}-{last_line}]",
+                weight=source_weight(kind, url, title, override),
             )
         )
     return chunks

@@ -40,6 +40,32 @@ contain it: the gap-finder runs after you. This question is about the user's own
 sources, so these rules come before any rule above about answering from your own \
 knowledge."""
 
+# The user's source-weighting rule, word for word; the excerpts' weights go with them.
+SOURCE_WEIGHTS = """\
+For every claim in your answer, weight the source by:
+- PRIMARY (code, spec, official docs, the actual file) = weight 3
+- SECONDARY (Wikipedia, tutorials, blog posts) = weight 2
+- DERIVED (another summary, a chat log) = weight 1
+
+If a low-weight source contradicts a high-weight one, cite the high-weight one and flag the conflict.
+If only low-weight sources exist, say: "This is based on secondary sources only.\""""
+
+SECONDARY_ONLY = "This is based on secondary sources only."
+_WEIGHT_NAMES = {3: "PRIMARY", 2: "SECONDARY", 1: "DERIVED"}
+
+
+def weights_block(chunks: Sequence[CodeChunk]) -> str:
+    """Each excerpt's file with its source's weight, for the source-weighting rule."""
+    weights: dict[str, int] = {}
+    for chunk in chunks:
+        if chunk.weight is not None:
+            weights[chunk.file] = max(weights.get(chunk.file, 0), chunk.weight)
+    if not weights:
+        return ""
+    listed = "\n".join(f"- {path}: {_WEIGHT_NAMES[w]} (weight {w})" for path, w in weights.items())
+    return f"<source_weights>\n{listed}\n</source_weights>"
+
+
 STATES = ("known", "inferred", "partial", "absent", "conflicted")
 _STATE_LINE = re.compile(
     r"^\W*(?:epistemic\s+)?state\W*\s*(KNOWN|INFERRED|PARTIAL|ABSENT|CONFLICTED)\b[^\n]*\n?",
@@ -50,7 +76,10 @@ _STATE_MARK = re.compile(r"^\u2063state:(\w+)\u2063")
 
 
 def epistemic_prompt(system: str) -> str:
-    return f"{system}\n\n{EPISTEMIC}\n\n{EPISTEMIC_FORMAT}"
+    return (
+        f"{system}\n\n{EPISTEMIC}\n\n{EPISTEMIC_FORMAT}\n\n{SOURCE_WEIGHTS}\n\n"
+        "Each excerpt's weight is in <source_weights> in the user's message."
+    )
 
 
 def take_state(answer: str) -> tuple[str | None, str]:
@@ -392,8 +421,10 @@ def conversation(
     while turns and turns[0].role != "user":
         turns.pop(0)
     images = [Image(a.mime, a.data) for a in attachments if a.kind == "image" and a.mime and a.data]
+    weighed = weights_block(chunks)
     if strict:
-        return [*turns, Turn("user", strict_message(question, chunks, attachments), images)]
+        message = strict_message(question, chunks, attachments)
+        return [*turns, Turn("user", f"{weighed}\n\n{message}" if weighed else message, images)]
     if code and chunks:
         last = code_message(question, chunks)
     else:
@@ -408,6 +439,8 @@ def conversation(
         last = f"{web}\n\n{last}"
     if analysis:
         last = f"{last}\n\n{analysis}"
+    if weighed:
+        last = f"{weighed}\n\n{last}"
     return [*turns, Turn("user", last, images)]
 
 

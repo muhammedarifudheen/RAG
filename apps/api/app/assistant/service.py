@@ -76,6 +76,7 @@ from .prompt import (
     QUERY_PLANNER,
     RESEARCH_PROTOCOL,
     REVIEW,
+    SECONDARY_ONLY,
     FollowUpSplitter,
     audit_prompt,
     context_blocks,
@@ -1571,6 +1572,16 @@ def _with_state(data: dict, options: Options | None) -> dict:
         state = "known" if verified else "partial"
     elif state is None and route not in ("chat", "image", "review", "vision"):
         state = "web" if data.get("web_sources") else "general"
+    # The highest weight among the excerpts: below primary, the answer says so.
+    weights = [c.get("weight") for c in data.get("chunks", []) if c.get("weight")]
+    basis = {3: "primary", 2: "secondary", 1: "derived"}.get(max(weights)) if weights else None
+    if (
+        basis in ("secondary", "derived")
+        and state in ("known", "inferred", "partial", "conflicted")
+        and SECONDARY_ONLY.lower() not in answer.lower()
+    ):
+        data = {**data, "answer": f"{SECONDARY_ONLY}\n\n{answer}"}
+    data = {**data, "source_basis": basis}
     # An answer from the sources is challenged next (the page asks for it).
     pending = (
         state in ("known", "inferred", "partial", "conflicted")

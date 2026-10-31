@@ -29,6 +29,8 @@ export interface CodeChunk {
   relevance?: number | null;
   /** The judge's one-line reason. */
   relevance_reason?: string | null;
+  /** How much its source counts: 3 primary, 2 secondary, 1 derived. */
+  weight?: number | null;
 }
 
 export interface SearchResponse {
@@ -284,6 +286,9 @@ export interface AskResponse {
   /** Where the answer stands: for a question about the sources, as the model classified
    * it (known, inferred, partial, absent, conflicted); otherwise general or web. */
   epistemic?: EpistemicState | null;
+  /** The highest weight among the excerpts: secondary or derived means the answer rests
+   * on secondary sources only. */
+  source_basis?: "primary" | "secondary" | "derived" | null;
   /** For an answer from the knowledge base: high, medium or low, and why. */
   confidence?: Confidence | null;
   /** Seconds per stage: plan, search, judge, research, answer. */
@@ -531,6 +536,10 @@ export interface SourceItem {
   files: number;
   /** Symbols and passages that can be searched. */
   symbols: number;
+  /** How much it counts: 3 primary, 2 secondary, 1 derived. */
+  weight?: number;
+  /** The admin's choice; unset is automatic. */
+  weight_override?: number | null;
 }
 
 /** `step` is set when a pipeline step starts and null for detail within the current step. */

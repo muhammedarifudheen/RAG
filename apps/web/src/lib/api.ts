@@ -372,6 +372,15 @@ export function getSources(): Promise<SourceItem[]> {
   return request<SourceItem[]>("/sources");
 }
 
+/** Sets how much a source counts (3 primary, 2 secondary, 1 derived), or null for automatic. */
+export function setSourceWeight(id: number, weight: number | null): Promise<SourceItem> {
+  return request<SourceItem>(`/sources/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...adminHeaders() },
+    body: JSON.stringify({ weight }),
+  });
+}
+
 export async function deleteSource(id: number): Promise<void> {
   const response = await fetch(`${API_BASE}/sources/${id}`, {
     method: "DELETE",

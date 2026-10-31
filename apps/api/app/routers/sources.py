@@ -9,7 +9,8 @@ from app.config import settings
 from app.db import get_db
 from app.models import File, Source, Symbol
 from app.ratelimit import rate_limit
-from app.schemas import SiteConfig, SourceItem
+from app.schemas import SiteConfig, SourceItem, SourceWeight
+from app.services.weights import source_weight
 
 router = APIRouter(
     tags=["ingest"],
@@ -43,6 +44,8 @@ def list_sources(db: Annotated[Session, Depends(get_db)]) -> list[SourceItem]:
             created_at=source.created_at,
             files=file_count,
             symbols=symbol_count,
+            weight=source_weight(source.kind, source.url, source.title, source.weight),
+            weight_override=source.weight,
         )
         for source, file_count, symbol_count in rows
     ]
@@ -73,6 +76,27 @@ def config() -> SiteConfig:
 def check_admin() -> Response:
     """Answers 204 if the request carries the admin password (or none is configured)."""
     return Response(status_code=204)
+
+
+@router.patch(
+    "/sources/{source_id}",
+    response_model=SourceItem,
+    summary="Set how much a source counts",
+    responses={**ADMIN_REQUIRED, 404: {"description": "No such source."}},
+    dependencies=[Depends(require_admin)],
+)
+def set_source_weight(
+    source_id: int, body: SourceWeight, db: Annotated[Session, Depends(get_db)]
+) -> SourceItem:
+    """Sets a source's weight for answers: 3 primary (code, specs, official docs), 2
+    secondary (Wikipedia, tutorials, blog posts), 1 derived (summaries, chat logs), or
+    null to go back to the automatic weight. Admin only."""
+    source = db.get(Source, source_id)
+    if source is None:
+        raise HTTPException(404, "No such source.")
+    source.weight = body.weight
+    db.commit()
+    return next(item for item in list_sources(db) if item.id == source_id)
 
 
 @router.delete(

@@ -25,6 +25,11 @@ class CodeChunk(BaseModel):
     relevance: int | None = Field(
         default=None, description="The relevance judge's score, 0-10, when it judged this."
     )
+    weight: int | None = Field(
+        default=None,
+        description="How much its source counts: 3 primary (code, specs, official docs), "
+        "2 secondary (Wikipedia, tutorials), 1 derived (summaries).",
+    )
     relevance_reason: str | None = Field(default=None, description="The judge's one-line reason.")
 
 
@@ -413,6 +418,11 @@ class AskResponse(BaseModel):
         "conflicted, as the model classified it; otherwise general (its own knowledge) or "
         "web.",
     )
+    source_basis: Literal["primary", "secondary", "derived"] | None = Field(
+        default=None,
+        description="The highest weight among the excerpts the answer was given: "
+        "secondary or derived means it rests on secondary sources only.",
+    )
     confidence: Confidence | None = Field(
         default=None,
         description="For an answer from the knowledge base: high, medium or low, from the "
@@ -545,6 +555,18 @@ class SourceItem(BaseModel):
     created_at: datetime
     files: int
     symbols: int = Field(description="Symbols and passages that can be searched.")
+    weight: int = Field(
+        default=2, description="How much it counts: 3 primary, 2 secondary, 1 derived."
+    )
+    weight_override: int | None = Field(
+        default=None, description="The admin's choice, if any; unset is automatic."
+    )
+
+
+class SourceWeight(BaseModel):
+    weight: int | None = Field(
+        ge=1, le=3, description="3 primary, 2 secondary, 1 derived; null for automatic."
+    )
 
 
 class LongFunction(SymbolRef):

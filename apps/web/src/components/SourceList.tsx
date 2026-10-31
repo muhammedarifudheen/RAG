@@ -3,8 +3,10 @@
 import type { SourceItem, SourceKind } from "@atlas/shared";
 import { useState } from "react";
 
-import { deleteSource, getSources } from "@/lib/api";
+import { deleteSource, getSources, setSourceWeight } from "@/lib/api";
 import { useApi } from "@/lib/useApi";
+
+const WEIGHTS: Record<number, string> = { 3: "Primary", 2: "Secondary", 1: "Derived" };
 
 const KIND_LABELS: Record<SourceKind, string> = {
   repo: "Repository",
@@ -20,6 +22,16 @@ export function SourceList({ revision, canManage }: { revision: number; canManag
   const [removing, setRemoving] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const sources = useApi(getSources, `${revision}:${removals}`);
+
+  async function weigh(source: SourceItem, weight: number | null) {
+    setError(null);
+    try {
+      await setSourceWeight(source.id, weight);
+      setRemovals((value) => value + 1);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "Could not change the weight.");
+    }
+  }
 
   async function remove(source: SourceItem) {
     setRemoving(source.id);
@@ -74,8 +86,31 @@ export function SourceList({ revision, canManage }: { revision: number; canManag
                 <span className="text-xs text-muted">
                   {source.files} {source.files === 1 ? "file" : "files"} · {source.symbols}{" "}
                   searchable items
+                  {source.weight && !canManage && (
+                    <> · {WEIGHTS[source.weight]} (weight {source.weight})</>
+                  )}
                 </span>
               </div>
+              {canManage && source.weight && (
+                <label className="flex items-center gap-1 text-xs text-muted">
+                  <span className="sr-only">Weight of {source.title}</span>
+                  <select
+                    value={source.weight_override ?? 0}
+                    onChange={(event) => {
+                      const value = Number(event.target.value);
+                      void weigh(source, value === 0 ? null : value);
+                    }}
+                    className="rounded-full border border-line bg-raised px-2 py-1 text-xs text-soft"
+                  >
+                    <option value={0}>
+                      {source.weight_override ? "Automatic" : `Auto: ${WEIGHTS[source.weight]}`}
+                    </option>
+                    <option value={3}>Primary (3)</option>
+                    <option value={2}>Secondary (2)</option>
+                    <option value={1}>Derived (1)</option>
+                  </select>
+                </label>
+              )}
               {canManage && (
                 <button
                   type="button"

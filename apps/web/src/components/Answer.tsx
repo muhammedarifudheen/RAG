@@ -91,9 +91,19 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
 
   return (
     <article aria-label="Answer" className="slab bg-panel/80 py-4 pl-5 pr-4">
-      {(response.epistemic || response.challenge?.valid) && (
+      {(response.epistemic || response.challenge?.valid || response.source_basis) && (
         <p className="mb-2 flex flex-wrap items-center gap-2">
           {response.epistemic && <EpistemicBadge state={response.epistemic} />}
+          {(response.source_basis === "secondary" || response.source_basis === "derived") && (
+            <span
+              role="note"
+              aria-label="Based on secondary sources only: no primary source (code, spec or official docs) was found."
+              title="No primary source (code, spec or official docs) was found."
+              className="label rounded-full border border-warn/40 bg-warn/10 px-2.5 py-0.5 text-warn"
+            >
+              Secondary sources only
+            </span>
+          )}
           {response.challenge?.valid && (
             <span className="label rounded-full border border-signal/40 bg-signal/10 px-2.5 py-0.5 text-signal">
               ↻ Revised after self-challenge
@@ -259,6 +269,11 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
                   <span className="text-muted">
                     {chunk.kind} {chunk.name} · {chunk.score.toFixed(2)}
                   </span>
+                  {chunk.weight ? (
+                    <span className="ml-1 rounded-full bg-signal/10 px-1.5 text-signal">
+                      {WEIGHT_NAMES[chunk.weight]} · {chunk.weight}
+                    </span>
+                  ) : null}
                   {chunk.relevance !== undefined && chunk.relevance !== null && (
                     <span
                       className="ml-1 rounded-full bg-acid/10 px-1.5 text-acid"
@@ -460,6 +475,8 @@ function EpistemicBadge({ state }: { state: EpistemicState }) {
     </span>
   );
 }
+
+const WEIGHT_NAMES: Record<number, string> = { 3: "primary", 2: "secondary", 1: "derived" };
 
 const LEVEL: Record<Confidence["level"], { label: string; tone: string }> = {
   high: { label: "High confidence", tone: "border-acid/40 bg-acid/10 text-acid" },
