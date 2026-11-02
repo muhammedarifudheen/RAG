@@ -35,6 +35,13 @@ async def require_admin(
         return
     if _signed(request, await request.body()):
         return
+    # An API key with the admin scope (adding and removing sources still needs a signed
+    # session when an authenticator is configured: see require_signed_admin).
+    from app.ratelimit import identify_key
+
+    caller = identify_key(request)
+    if caller is not None and caller[1] == "admin":
+        return
     raise HTTPException(
         401,
         "Adding or removing sources needs the admin password.",

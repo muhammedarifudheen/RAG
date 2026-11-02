@@ -134,6 +134,19 @@ def test_openapi_documents_every_endpoint(plain_client):
         "/sources/{source_id}/preview",
         "/health/sources",
         "/health/sources/{source_id}/candidates",
+        "/kg",
+        "/kg/related",
+        "/kg/path",
+        "/kg/node",
+        "/kg/overview",
+        "/kg/ask",
+        "/feedback",
+        "/analytics",
+        "/export/analytics.csv",
+        "/v1/embeddings",
+        "/v1/graph",
+        "/v1/health",
+        "/v1/analytics",
     }
     assert "text/event-stream" in spec["paths"]["/ingest"]["post"]["responses"]["200"]["content"]
 

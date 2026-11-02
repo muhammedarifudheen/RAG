@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from worker.dedupe import link_duplicates
 from worker.extract.types import FileExtraction
+from worker.knowledge import link_knowledge
 from worker.minhash import signature
 from worker.resolve import Edge
 from worker.versions import next_version, snapshot
@@ -100,5 +101,6 @@ def store_source(
         )
 
     duplicates = link_duplicates(session, source_row)
+    link_knowledge(session, source_row)
     snapshot(session, source_row)
     return duplicates

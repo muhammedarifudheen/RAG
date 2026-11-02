@@ -8,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 from app.config import settings
 from app.middleware import log_requests
 from app.routers import (
+    analytics,
     chat,
     files,
     graph,
@@ -15,6 +16,7 @@ from app.routers import (
     ingest,
     integrations,
     keys,
+    kg,
     mcp,
     openai,
     search,
@@ -41,6 +43,7 @@ TAGS = [
     {"name": "health", "description": "Static measures of the ingested code."},
     {"name": "integrations", "description": "Webhooks, GitHub re-indexing and exports."},
     {"name": "openai", "description": "An OpenAI-compatible API: Atlas as a drop-in model."},
+    {"name": "analytics", "description": "Feedback on answers, and the answer log queried."},
     {"name": "mcp", "description": "Atlas as an MCP server, for MCP-compatible agents."},
     {"name": "ops", "description": "Operational endpoints."},
 ]
@@ -80,9 +83,11 @@ def create_app() -> FastAPI:
     app.include_router(search.router)
     app.include_router(chat.router)
     app.include_router(graph.router)
+    app.include_router(kg.router)
     app.include_router(files.router)
     app.include_router(health.router)
     app.include_router(keys.router)
+    app.include_router(analytics.router)
     app.include_router(integrations.router)
     app.include_router(openai.router)
     app.include_router(mcp.router)

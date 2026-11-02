@@ -1,7 +1,7 @@
 from datetime import datetime
 
 from pgvector.sqlalchemy import Vector
-from sqlalchemy import REAL, BigInteger, DateTime, Identity, Integer, Text, func
+from sqlalchemy import REAL, BigInteger, DateTime, Identity, Integer, SmallInteger, Text, func
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -37,6 +37,10 @@ class AnswerLog(Base):
     mode: Mapped[str | None] = mapped_column(Text)
     # What it retrieved: [{"file", "score", "relevance"}], for retrieval health.
     retrieved: Mapped[list] = mapped_column(JSONB, default=list)
+    # How long it took, and the user's verdict: 1 thumbs up, -1 down, with the reason.
+    latency_ms: Mapped[int | None] = mapped_column(Integer)
+    feedback: Mapped[int | None] = mapped_column(SmallInteger)
+    feedback_reason: Mapped[str | None] = mapped_column(Text)
 
 
 class KnowledgeSignal(Base):

@@ -763,14 +763,18 @@ class WebhookCreated(WebhookOut):
 
 class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
-    scope: Literal["read", "write"] = "read"
+    scope: Literal["read", "write", "admin"] = Field(
+        default="read",
+        description="read: ask, search, read; write: also share and rate answers; admin: also "
+        "the admin endpoints (analytics, exports, webhooks, keys).",
+    )
 
 
 class ApiKeyOut(BaseModel):
     id: int
     name: str
     prefix: str = Field(description="The key's first characters, to recognise it.")
-    scope: Literal["read", "write"]
+    scope: Literal["read", "write", "admin"]
     created_at: datetime
     last_used: datetime | None = None
     revoked: bool = False

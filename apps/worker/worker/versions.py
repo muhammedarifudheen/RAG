@@ -169,7 +169,9 @@ def restore(session: Session, key: str, version: int) -> models.Source:
             ],
         )
     from worker.dedupe import link_duplicates
+    from worker.knowledge import link_knowledge
 
     link_duplicates(session, source)
+    link_knowledge(session, source)
     snapshot(session, source)
     return source

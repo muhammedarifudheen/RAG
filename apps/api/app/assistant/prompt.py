@@ -365,13 +365,35 @@ def research_prompt(question: str) -> str:
     return RESEARCH_AGENT.replace("{question}", question)
 
 
-def research_protocol(external: Sequence[str] = ()) -> str:
-    """The tool protocol, with the external MCP tools the agent may also call."""
+GRAPH_TOOL = """\
+{"tool": "graph", "node": "a name or symbol:12", "depth": 1, "edge": "calls"} walks the \
+knowledge graph from a node: who calls it, what it calls and imports, the concepts, \
+entities and passages linked to it, what contradicts or supersedes it ("edge" is \
+optional: calls, imports, inherits, references, mentioned_in, example_of, contradicts, \
+supersedes, derived_from)."""
+
+
+SYSTEM_TOOLS = """\
+{"tool": "analytics", "metric": "top_questions", "window": 7} queries Atlas's own answer \
+log (metrics: top_questions, failing, gaps, slowest, sources, drift, feedback; "filter" \
+optional: "mode:ASK", "state:absent" or words).
+{"tool": "health"} checks the knowledge base: each source's score, freshness, redundancy \
+and what to do about it.
+{"tool": "fetch", "url": "https://..."} reads a page, only on a site already in the \
+knowledge base; cite it like any excerpt."""
+
+
+def research_protocol(external: Sequence[str] = (), graph: bool = False, system: bool = False) -> str:
+    """The tool protocol, with the knowledge graph, Atlas's own analytics, health and
+    fetch, and the external MCP tools the agent may also call."""
+    protocol = f"{RESEARCH_PROTOCOL}\n{GRAPH_TOOL}" if graph else RESEARCH_PROTOCOL
+    if system:
+        protocol = f"{protocol}\n{SYSTEM_TOOLS}"
     if not external:
-        return RESEARCH_PROTOCOL
+        return protocol
     listed = "\n".join(external)
     return (
-        f"{RESEARCH_PROTOCOL}\n\n"
+        f"{protocol}\n\n"
         'External tools (read-only), called as {"tool": "mcp", "name": "server.tool", '
         '"arguments": {...}}:\n'
         f"{listed}\n"
@@ -706,8 +728,9 @@ Then, only when the sources support them, one line each:
 Gotcha: <the most common mistake on this>
 Edge case: <what breaks this>
 
-Use every relevant excerpt; never answer from one when two or more are relevant. Match \
-the depth to the question: a line for a fact, a deep dive for how or why. Never pad, \
+Answer in the language of the question; quote and cite the sources in their own \
+language. Use every relevant excerpt; never answer from one when two or more are \
+relevant. Match the depth to the question: a line for a fact, a deep dive for how or why. Never pad, \
 never hedge without reason, never repeat the question."""
 
 FRESHNESS = """\

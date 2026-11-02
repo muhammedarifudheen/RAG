@@ -57,6 +57,7 @@ def log_answer(
                 for c in citations
             ],
             mode=data.get("mode"),
+            latency_ms=data.get("latency_ms"),
             retrieved=[
                 {"file": c["file"], "score": c.get("score"), "relevance": c.get("relevance")}
                 for c in chunks
@@ -145,7 +146,7 @@ def _propose_refresh(db: Session, files: Sequence[str], state: str | None) -> No
     if not files:
         return
     sources = db.execute(
-        select(Source.title, Source.created_at, Source.url)
+        select(Source.title, Source.created_at, Source.url, Source.id)
         .join(File, File.source_id == Source.id)
         .where(File.path.in_(files))
         .distinct()
@@ -160,6 +161,9 @@ def _propose_refresh(db: Session, files: Sequence[str], state: str | None) -> No
         why = f"Added {(newest.created_at - oldest.created_at).days} days before {newest.title}"
     else:
         return
+    from app.services.kg import note_supersedes
+
+    note_supersedes(db, newest.id, oldest.id)
     signal = db.scalars(
         select(KnowledgeSignal).where(
             KnowledgeSignal.kind == "refresh", KnowledgeSignal.subject == oldest.title

@@ -728,3 +728,57 @@ export type IngestEvent =
 export interface ApiErrorBody {
   detail: string | { msg: string }[];
 }
+
+/** A node of the knowledge graph: code, a file, a source, a concept, an entity or a person. */
+export interface KgNode {
+  /** Its reference: "symbol:12", "file:7", "source:2", "concept:3", "entity:5", "person:9". */
+  id: string;
+  label: string;
+  /** function, method, class, module, section, file, source, concept, entity or person. */
+  type: string;
+  source_id: number | null;
+  source: string | null;
+  citation?: string;
+}
+
+export type KgEdgeKind =
+  | "calls"
+  | "imports"
+  | "inherits"
+  | "defines"
+  | "references"
+  | "mentioned_in"
+  | "example_of"
+  | "contradicts"
+  | "supersedes"
+  | "derived_from";
+
+export interface KgEdge {
+  source: string;
+  target: string;
+  kind: KgEdgeKind;
+  confidence: number;
+  /** Where it was found: "[path:start-end]". */
+  evidence: string | null;
+}
+
+export interface KgGraph {
+  nodes: KgNode[];
+  edges: KgEdge[];
+  truncated: boolean;
+  /** For a path query: the nodes in order. */
+  path?: string[];
+  /** For a question in words: the answer in Markdown. */
+  answer?: string;
+}
+
+export interface KgNodeDetail extends KgNode {
+  snippet?: string;
+  edges: {
+    kind: KgEdgeKind;
+    direction: "in" | "out";
+    other: KgNode | null;
+    confidence: number;
+    evidence: string | null;
+  }[];
+}

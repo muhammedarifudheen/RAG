@@ -188,12 +188,16 @@ export function Chat() {
     const loaded = loadSettings();
     setSettings(loaded);
     applyContrast(loaded.highContrast);
-    const wanted = new URLSearchParams(window.location.search).get("c");
+    const params = new URLSearchParams(window.location.search);
+    const wanted = params.get("c");
     const chat = wanted ? saved.find((c) => c.id === wanted) : undefined;
     if (chat) {
       setChatId(chat.id);
       setMessages(withIds(chat.messages));
     }
+    // "Ask about this" from the graph: the question is written in, not yet sent.
+    const asked = params.get("ask");
+    if (asked) requestAnimationFrame(() => composer.current?.setText(asked.slice(0, 2000)));
   }, [withIds]);
 
   useEffect(() => {

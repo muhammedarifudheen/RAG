@@ -76,9 +76,9 @@ def identify_key(request: Request) -> tuple[int, str] | None:
 
 
 def require_write_key(request: Request) -> None:
-    """A read-only API key may not write (share chats)."""
+    """A read-only API key may not write (share chats, rate answers)."""
     caller = identify_key(request)
-    if caller is not None and caller[1] != "write":
+    if caller is not None and caller[1] not in ("write", "admin"):
         raise HTTPException(403, "This API key can only read.")
 
 

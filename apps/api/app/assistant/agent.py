@@ -17,7 +17,7 @@ READ_LINES = 120
 HIT_LINES = 8
 HITS_SHOWN = 5
 
-TOOLS = ("search", "read", "note", "mcp", "done")
+TOOLS = ("search", "read", "note", "mcp", "graph", "analytics", "health", "fetch", "done")
 
 _RANGE = re.compile(r"(\d+)\s*(?:-|–|to|,)\s*(\d+)|(\d+)")
 _CITED = re.compile(r"^\[?([^\[\]]+?):(\d+)(?:-(\d+))?\]?$")
@@ -33,6 +33,14 @@ class ResearchTools:
     # and call(qualified name, arguments) -> its text, or None for no such tool.
     external: Sequence[str] = field(default_factory=tuple)
     call: Callable[[str, dict], str | None] | None = None
+    # The knowledge graph: graph(node, depth, edge kind or None) -> (its text, the excerpts
+    # of the code and passages it reached, to cite).
+    graph: Callable[[str, int, str | None], tuple[str, list[CodeChunk]]] | None = None
+    # analytics.query(metric, window days, filter) -> text; health.check() -> text;
+    # web.fetch(url) -> an excerpt (allowlisted hosts only) or why not.
+    analytics: Callable[[str, int, str | None], str] | None = None
+    health: Callable[[], str] | None = None
+    fetch: Callable[[str], CodeChunk | str] | None = None
 
 
 @dataclass
@@ -49,6 +57,15 @@ class Action:
     def described(self) -> str:
         if self.tool == "mcp":
             return f"{self.name} {json.dumps(self.arguments)[:200]}"
+        if self.tool in ("analytics", "fetch"):
+            return f"{self.name} {json.dumps(self.arguments)[:200]}" if self.arguments else self.name
+        if self.tool == "health":
+            return "the knowledge base"
+        if self.tool == "graph":
+            edge = self.arguments.get("edge")
+            return (
+                f"{self.name} (depth {self.arguments.get('depth', 1)}{f', {edge}' if edge else ''})"
+            )
         if self.tool == "search":
             return self.query
         if self.tool == "read":
@@ -76,6 +93,29 @@ def parse_action(reply: str) -> Action | None:
             action = _read_action(data)
             if action:
                 return action
+        elif tool == "analytics":
+            metric = str(data.get("metric") or "top_questions").strip()
+            try:
+                window = max(1, min(int(data.get("window") or 7), 365))
+            except (TypeError, ValueError):
+                window = 7
+            found = str(data.get("filter") or "").strip() or None
+            return Action("analytics", name=metric[:40], arguments={"window": window, "filter": found})
+        elif tool == "health":
+            return Action("health")
+        elif tool == "fetch":
+            url = str(data.get("url") or "").strip()
+            if url.startswith(("http://", "https://")):
+                return Action("fetch", name=url[:500])
+        elif tool == "graph":
+            node = str(data.get("node") or data.get("name") or data.get("id") or "").strip()
+            if node:
+                try:
+                    depth = max(1, min(int(data.get("depth") or 1), 3))
+                except (TypeError, ValueError):
+                    depth = 1
+                edge = str(data.get("edge") or data.get("edge_type") or "").strip() or None
+                return Action("graph", name=node[:200], arguments={"depth": depth, "edge": edge})
         elif tool == "mcp":
             name = str(data.get("name") or data.get("tool_name") or "").strip()
             arguments = data.get("arguments") or data.get("args") or {}

@@ -35,6 +35,8 @@ from app.schemas import (
     SearchResponse,
 )
 from app.security import REFUSED, allowed_hosts, digest, injection
+from app.services import kg
+from app.services.agent_tools import analytics_text, fetch_page, health_text
 from app.services.audit import answer_event, record, text_hash
 from app.services.catalog import mentions_sources, source_catalog
 from app.services.explore import audit_answer, explore
@@ -376,6 +378,10 @@ def ask(
                 # External MCP servers' read-only tools, when ATLAS_MCP_SERVERS names some.
                 external=[t.described() for t in external_tools()],
                 call=call_tool if settings.atlas_mcp_servers else None,
+                graph=lambda node, depth, edge: kg.walk(db, node, depth, edge),
+                analytics=lambda metric, window, found: analytics_text(db, metric, window, found),
+                health=lambda: health_text(db),
+                fetch=lambda url: fetch_page(db, url),
             )
             if research
             else None,
@@ -425,6 +431,7 @@ def _after(db: Session, embedder: Embedder, question: str, data: dict, chat: str
     log_answer(db, embedder, data, chat)
     record(db, "answer", digest(chat), answer_event(question, data))
     emit("query", query_event(question, data), db)
+    kg.note_answer(db, data)
     if data.get("epistemic") in ("absent", "partial"):
         emit("gap", {"question": question, "found_by": "answer", "state": data["epistemic"]}, db)
     if data.get("redacted"):
@@ -433,8 +440,15 @@ def _after(db: Session, embedder: Embedder, question: str, data: dict, chat: str
 
 def _mode_answer(mode: str, question: str, db: Session, embedder: Embedder) -> dict:
     """An EXPLORE or AUDIT answer, from the database."""
+    asked = kg.parse_question(question) if mode == "EXPLORE" else None
     if mode == "AUDIT":
         answer, chunks = audit_answer(db), []
+    elif asked is not None and asked[0] != "callers":
+        # A question about the knowledge graph: paths, dependencies, contradictions,
+        # what supersedes what; answered from the graph, each node cited.
+        answer, graph = kg.answer(db, question) or ("", {})
+        refs = [n["id"] for n in graph.get("nodes", []) if n.get("citation")][:8]
+        chunks = [c for c in (kg.as_excerpt(db, ref) for ref in refs) if c is not None]
     else:
         chunks, _ = hybrid_search(db, embedder, question, 3, settings.snippet_max_lines)
         answer = explore(db, chunks)
@@ -567,4 +581,9 @@ def _event_stream(events: Iterator[tuple[str, dict]]) -> Iterator[str]:
         if item is end:
             return
         name, data = item
-        yield f"event: {name}\ndata: {json.dumps(data)}\n\n"
+        yield f"event: {name}\ndata: {json.dumps(data, default=_plain)}\n\n"
+
+
+def _plain(value: object) -> str:
+    """Dates (an excerpt's ingest, an answer's freshness) as ISO 8601, for JSON."""
+    return value.isoformat() if hasattr(value, "isoformat") else str(value)

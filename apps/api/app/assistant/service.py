@@ -622,7 +622,11 @@ class Assistant:
         excerpts it found and read, and its notes."""
         models = [p for p in self._judges() if not self._resting(p)]
         turns = [Turn("user", research_prompt(question[:4000]))]
-        protocol = research_protocol(tools.external if tools.call else ())
+        protocol = research_protocol(
+            tools.external if tools.call else (),
+            graph=tools.graph is not None,
+            system=tools.analytics is not None,
+        )
         gathered: dict[int, CodeChunk] = {}
         notes: list[str] = []
         calls, unreadable, current = 0, 0, 0
@@ -677,6 +681,34 @@ class Assistant:
                     gathered[found.symbol_id] = found
                     result = f"<external_tool_result>\n{read_text(found)}\n</external_tool_result>"
                     summary = f"{found.end_line} lines"
+            elif action.tool == "analytics" and tools.analytics is not None:
+                window = action.arguments.get("window", 7)
+                result = tools.analytics(action.name, window, action.arguments.get("filter"))
+                summary = f"{action.name} over {window} days"
+            elif action.tool == "health" and tools.health is not None:
+                result, summary = tools.health(), "checked"
+            elif action.tool == "fetch" and tools.fetch is not None:
+                fetched = tools.fetch(action.name)
+                if isinstance(fetched, str):
+                    result, summary = fetched, "not fetched"
+                elif injection(fetched.snippet):
+                    result, summary = "Refused: the page contained instructions.", "refused"
+                else:
+                    gathered[fetched.symbol_id] = fetched
+                    result = f"<fetched_page>\n{read_text(fetched)}\n</fetched_page>"
+                    summary = f"{fetched.end_line} lines"
+            elif action.tool in ("analytics", "health", "fetch"):
+                result, summary = f"The {action.tool} tool is not available.", "unavailable"
+            elif action.tool == "graph":
+                if tools.graph is None:
+                    result, summary = "The knowledge graph is not available.", "unavailable"
+                else:
+                    result, reached = tools.graph(
+                        action.name, action.arguments.get("depth", 1), action.arguments.get("edge")
+                    )
+                    for excerpt in reached[:4]:
+                        gathered.setdefault(excerpt.symbol_id, excerpt)
+                    summary = f"{len(reached)} nodes with code or text"
             else:
                 notes.append(action.text)
                 result, summary = "Saved.", "saved"

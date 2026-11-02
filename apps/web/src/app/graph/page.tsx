@@ -1,9 +1,9 @@
 import type { Metadata } from "next";
 
-import { FileGraphView } from "@/components/FileGraphView";
+import { GraphTabs } from "@/components/GraphTabs";
 
 export const metadata: Metadata = { title: "Graph · Atlas" };
 
 export default function GraphPage() {
-  return <FileGraphView />;
+  return <GraphTabs />;
 }

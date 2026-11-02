@@ -169,7 +169,7 @@ async def _call(name: str, arguments: dict, request: Request, db: Session, embed
             + f"\n{c.snippet}"
             for c in chunks
         )
-        return text or "No results.", {"results": [c.model_dump() for c in chunks]}
+        return text or "No results.", {"results": [c.model_dump(mode="json") for c in chunks]}
     question = str(arguments.get("question") or "").strip()
     if not question:
         raise ValueError("Give a question.")

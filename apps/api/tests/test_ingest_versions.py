@@ -40,7 +40,7 @@ def store(session: Session, key, kind, title, url, path, body):
 
 
 @pytest.fixture
-def empty(engine, empty):
+def empty(engine):
     """An empty knowledge base for the test, and the shared seed restored afterwards."""
     with Session(engine) as session:
         session.execute(text(TRUNCATE))

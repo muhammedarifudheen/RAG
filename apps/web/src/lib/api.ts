@@ -26,6 +26,8 @@ import type {
   IngestRequest,
   IngestResult,
   KnowledgeAudit,
+  KgGraph,
+  KgNodeDetail,
   KnowledgeHealth,
   ResearchStep,
   SharedChat,
@@ -516,6 +518,21 @@ export async function exportAnswers(): Promise<Blob> {
   const response = await adminFetch("/export/qa.jsonl", { method: "GET" });
   if (!response.ok) throw await errorFrom(response);
   return response.blob();
+}
+
+/** The knowledge graph's most connected nodes and their edges, for drawing. */
+export function getKnowledgeGraph(limit = 250): Promise<KgGraph> {
+  return request<KgGraph>(`/kg/overview${query({ limit })}`);
+}
+
+/** A node of the knowledge graph, with its snippet and edges, for the side panel. */
+export function getKgNode(node: string): Promise<KgNodeDetail> {
+  return request<KgNodeDetail>(`/kg/node${query({ node })}`);
+}
+
+/** A question about the graph in words: shortest path, callers, dependencies… */
+export function askGraph(q: string): Promise<KgGraph> {
+  return request<KgGraph>(`/kg/ask${query({ q })}`);
 }
 
 /** Each source's live health, with actions, and the overall score with its history. */

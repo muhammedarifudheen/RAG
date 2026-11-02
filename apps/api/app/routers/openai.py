@@ -7,18 +7,21 @@ import uuid
 from collections.abc import AsyncIterator
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import JSONResponse, StreamingResponse
-from pydantic import ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError
 from sqlalchemy.orm import Session
 
+from app.admin import ADMIN_REQUIRED, require_admin
 from app.config import settings
 from app.db import get_db
 from app.embedding import Embedder, get_embedder
 from app.ratelimit import rate_limit
 from app.routers.search import ask
 from app.schemas import AskRequest, ChatCompletionRequest, ChatTurn
+from app.services import analytics, kg
+from app.services.source_health import report as source_health
 
 router = APIRouter(tags=["openai"])
 
@@ -234,3 +237,93 @@ def _error(status: int, message: str) -> JSONResponse:
     return JSONResponse(
         {"error": {"message": message, "type": kind, "code": status}}, status_code=status
     )
+
+
+# --- More of the API under /v1: embeddings, graph, health, analytics -----------------
+
+
+class EmbeddingRequest(BaseModel):
+    """OpenAI's embeddings request; other fields are accepted and ignored."""
+
+    model_config = ConfigDict(extra="allow")
+
+    input: str | list[str] = Field(description="A text, or up to 64 texts.")
+    model: str = "atlas-embed"
+
+
+@router.post(
+    "/v1/embeddings",
+    summary="OpenAI-compatible: embeddings",
+    dependencies=[
+        Depends(bearer_key),
+        Depends(rate_limit("default", lambda: settings.rate_limit_per_minute)),
+    ],
+)
+async def embeddings(body: EmbeddingRequest, embedder: Annotated[Embedder, Depends(get_embedder)]):
+    """The knowledge base's own embedding model (all-MiniLM-L6-v2, 384 dimensions), so
+    text can be compared with what Atlas has stored."""
+    texts = [body.input] if isinstance(body.input, str) else body.input
+    if not texts or len(texts) > 64 or any(len(t) > 20_000 for t in texts):
+        return _error(422, "Give one to 64 texts of up to 20,000 characters.")
+    vectors = await run_in_threadpool(lambda: [embedder.embed(t) for t in texts])
+    return {
+        "object": "list",
+        "model": "atlas-embed",
+        "data": [
+            {"object": "embedding", "index": i, "embedding": [float(x) for x in vector]}
+            for i, vector in enumerate(vectors)
+        ],
+        "usage": {"prompt_tokens": 0, "total_tokens": 0},
+    }
+
+
+@router.get(
+    "/v1/graph",
+    summary="The knowledge graph around a node",
+    dependencies=[Depends(rate_limit("default", lambda: settings.rate_limit_per_minute))],
+)
+def v1_graph(
+    db: Annotated[Session, Depends(get_db)],
+    node: Annotated[str, Query(min_length=1)],
+    depth: Annotated[int, Query(ge=1, le=4)] = 1,
+    edge: Annotated[str | None, Query()] = None,
+) -> dict:
+    """graph.neighbors(id, depth, edge_type): see /kg."""
+    ref = kg.resolve(db, node)
+    if ref is None:
+        raise HTTPException(404, f"Nothing in the knowledge base is called {node!r}.")
+    kinds = (edge,) if edge in kg.ALL_EDGES else kg.ALL_EDGES
+    return {"node": ref, **kg.neighbors(db, ref, depth, kinds)}
+
+
+@router.get(
+    "/v1/health",
+    summary="The knowledge base's live health",
+    dependencies=[Depends(rate_limit("default", lambda: settings.rate_limit_per_minute))],
+)
+def v1_health(db: Annotated[Session, Depends(get_db)]) -> dict:
+    """Each source's health with its actions, and the overall score: see /health/sources."""
+    return source_health(db)
+
+
+@router.get(
+    "/v1/analytics",
+    summary="analytics.query(metric, window, filter)",
+    responses=ADMIN_REQUIRED,
+    dependencies=[
+        Depends(bearer_key),
+        Depends(require_admin),
+        Depends(rate_limit("default", lambda: settings.rate_limit_per_minute)),
+    ],
+)
+def v1_analytics(
+    db: Annotated[Session, Depends(get_db)],
+    metric: Annotated[str, Query()],
+    window: Annotated[int, Query(ge=1, le=365)] = 7,
+    filter: Annotated[str | None, Query(max_length=200)] = None,
+) -> dict:
+    """See /analytics; needs the admin password or an admin API key."""
+    try:
+        return analytics.query(db, metric, window, filter)
+    except ValueError as error:
+        raise HTTPException(422, str(error)) from error

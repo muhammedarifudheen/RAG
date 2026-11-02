@@ -13,6 +13,7 @@ from app.models.code_graph import (
     Symbol,
 )
 from app.models.integrations import Webhook
+from app.models.kg import KG_EDGE_KINDS, KG_NODE_KINDS, KgEdge, KgNode
 from app.models.knowledge import AnswerLog, KnowledgeSignal
 from app.models.security import ApiKey, AuditEvent
 from app.models.versions import HealthSnapshot, SourceVersion
@@ -20,6 +21,8 @@ from app.models.versions import HealthSnapshot, SourceVersion
 __all__ = [
     "EDGE_KINDS",
     "EMBEDDING_DIM",
+    "KG_EDGE_KINDS",
+    "KG_NODE_KINDS",
     "SOURCE_KINDS",
     "SYMBOL_KINDS",
     "AnswerLog",
@@ -29,6 +32,8 @@ __all__ = [
     "Edge",
     "File",
     "HealthSnapshot",
+    "KgEdge",
+    "KgNode",
     "KnowledgeAudit",
     "KnowledgeSignal",
     "SharedChat",

@@ -23,7 +23,9 @@ _AUDIT = re.compile(
 )
 _EXPLORE = re.compile(
     r"\b(explore|graph\s+of|call\s+graph|who\s+calls|what\s+calls|callers?\s+of|callees?|"
-    r"depends\s+on|dependencies\s+of|map\s+(out\s+)?the|show\s+me\s+the\s+graph)\b",
+    r"depends?\s+on|dependencies\s+of|map\s+(out\s+)?the|show\s+me\s+the\s+graph|"
+    r"(shortest\s+)?path\s+(between|from)|connected\s+to|what\s+contradicts|"
+    r"what\s+supersedes|newer\s+version\s+of|neighbou?rs\s+of)\b",
     re.IGNORECASE,
 )
 
@@ -51,8 +53,9 @@ COMPARE = """\
 This is a COMPARE question. Compare what the sources say, side by side: a Markdown table \
 with one column per source (or per thing compared), one row per aspect, each cell cited \
 [path:start-end]. Under it, a "Conflicts" list: each point where sources disagree, flagged \
-⚠, citing both and saying which is newer or carries more weight. Then a short verdict. If \
-only one source covers the topic, say so instead of inventing a second side."""
+⚠, citing both and saying which is newer or carries more weight. Then "Which wins and \
+why": the source to trust on each conflict, by recency and weight. Compare up to five \
+sources. If only one source covers the topic, say so instead of inventing a second side."""
 
 TEACH = """\
 This is a TEACH question: explain it at three depths, under these headings, each with its \
