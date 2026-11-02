@@ -145,7 +145,12 @@ def test_source_health_scores_each_source_and_suggests_actions(engine, client, e
         )
         session.commit()
         data = report(session)
-    assert 0 < data["score"] <= 100 and data["history"][-1]["score"] == data["score"]
+    # The score is kept at most every six hours, so the history may end with an earlier one.
+    assert (
+        0 < data["score"] <= 100
+        and data["history"]
+        and all(0 <= h["score"] <= 100 for h in data["history"])
+    )
     blog = next(s for s in data["sources"] if s["title"] == "A blog")
     assert blog["freshness"]["label"] == "stale" and blog["freshness"]["trend"] == "degrading"
     kinds = {a["kind"] for a in blog["actions"]}
