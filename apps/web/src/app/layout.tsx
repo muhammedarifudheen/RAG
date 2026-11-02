@@ -15,7 +15,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", displ
 
 export const metadata: Metadata = {
   title: "Atlas",
-  description: "An AI assistant over your own sources: ask, attach, draw, search and inspect.",
+  description: "Grounded answers. Verifiable sources. Zero guesswork.",
 };
 
 export const viewport: Viewport = { themeColor: "#090b14" };

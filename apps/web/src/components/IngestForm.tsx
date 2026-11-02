@@ -202,7 +202,7 @@ export function IngestForm() {
           <button
             type="submit"
             disabled={busy || url.trim() === ""}
-            className="bg-signal px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-signal-hover disabled:cursor-not-allowed disabled:bg-raised"
+            className="bg-signal px-4 py-2 text-sm font-medium text-on-signal shadow-sm hover:bg-signal-hover disabled:cursor-not-allowed disabled:bg-raised"
           >
             {busy ? "Adding…" : "Add"}
           </button>

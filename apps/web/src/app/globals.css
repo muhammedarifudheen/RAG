@@ -2,63 +2,65 @@
 @tailwind components;
 @tailwind utilities;
 
-/* "Midnight glass": a deep navy-black page with slow violet and cyan auroras, frosted
-   dark glass panels and light text. The light theme (Settings → Appearance) keeps the
+/* Atlas: dark slate with an electric cyan accent, frosted glass panels, light text and
+   monospace for citations. The light theme (Settings → Appearance) keeps the
    airy "liquid light" look. Colours are RGB triplets, so Tailwind's /opacity works:
    rgb(var(--signal) / 0.4). */
 :root {
   color-scheme: dark;
-  --ink: 9 11 20; /* page */
-  --panel: 20 23 38; /* cards, bars */
-  --raised: 30 34 54; /* hover, inputs */
-  --line: 46 51 78;
-  --line-strong: 70 76 110;
-  --paper: 236 238 250; /* text */
-  --soft: 196 200 222;
-  --muted: 146 151 180;
-  --faint: 104 109 138;
-  --signal: 139 124 255;
-  --signal-hover: 160 148 255;
+  --ink: 11 17 28; /* page: dark slate */
+  --panel: 17 25 39; /* cards, bars */
+  --raised: 28 38 56; /* hover, inputs */
+  --line: 42 54 75;
+  --line-strong: 66 81 107;
+  --paper: 230 237 245; /* text */
+  --soft: 190 201 216;
+  --muted: 140 154 175;
+  --faint: 106 120 141;
+  --signal: 0 229 255; /* electric cyan, the accent */
+  --signal-hover: 103 240 255;
+  --on-signal: 3 12 22; /* text on the accent */
   --acid: 52 211 153;
-  --cyan: 56 189 248;
+  --cyan: 125 211 252;
   --danger: 248 113 113;
   --warn: 251 191 36;
   --ok: 74 222 128;
   --radius: 14px;
-  --glass: rgba(22, 25, 42, 0.62);
+  --glass: rgba(15, 23, 36, 0.66);
   --glass-edge: rgba(255, 255, 255, 0.08);
   --shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --glow: 0 0 28px -6px rgba(139, 124, 255, 0.45);
-  --code-inline: 196 181 253;
+  --glow: 0 0 28px -6px rgba(0, 229, 255, 0.45);
+  --code-inline: 103 232 249;
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --ink: 246 246 251;
+  --ink: 244 247 250;
   --panel: 255 255 255;
-  --raised: 240 241 248;
-  --line: 227 228 238;
-  --line-strong: 201 203 219;
-  --paper: 22 24 39;
-  --soft: 61 64 87;
-  --muted: 107 111 134;
-  --faint: 154 157 178;
-  --signal: 107 92 255;
-  --signal-hover: 90 75 240;
+  --raised: 236 241 246;
+  --line: 222 229 237;
+  --line-strong: 196 206 218;
+  --paper: 15 23 42;
+  --soft: 51 65 85;
+  --muted: 100 116 139;
+  --faint: 140 154 175;
+  --signal: 14 116 144;
+  --signal-hover: 21 94 117;
+  --on-signal: 255 255 255;
   --acid: 15 169 133;
-  --cyan: 10 127 184;
+  --cyan: 3 105 161;
   --danger: 217 61 66;
   --warn: 184 116 0;
   --ok: 15 157 88;
   --glass: rgba(255, 255, 255, 0.72);
   --glass-edge: rgba(255, 255, 255, 0.9);
-  --shadow: 0 24px 60px -30px rgba(76, 64, 190, 0.35), 0 6px 18px -10px rgba(22, 24, 39, 0.1);
-  --glow: 0 0 18px -4px rgba(107, 92, 255, 0.45);
-  --code-inline: 75 63 217;
+  --shadow: 0 24px 60px -30px rgba(14, 116, 144, 0.3), 0 6px 18px -10px rgba(15, 23, 42, 0.1);
+  --glow: 0 0 18px -4px rgba(14, 116, 144, 0.4);
+  --code-inline: 14 116 144;
 }
 
 html {
-  background-color: rgb(rgb(var(--ink)));
+  background-color: rgb(var(--ink));
 }
 
 body {
@@ -67,16 +69,16 @@ body {
   background-color: transparent;
 }
 
-/* Auroras drifting slowly behind everything: violet, cyan and a little teal. */
+/* Auroras drifting slowly behind everything: cyan, sky and a little teal over slate. */
 body::before {
   position: fixed;
   z-index: -2;
   inset: -20%;
   background:
-    radial-gradient(34% 30% at 16% 18%, rgba(124, 92, 255, 0.28), transparent 70%),
-    radial-gradient(30% 28% at 84% 14%, rgba(56, 189, 248, 0.2), transparent 70%),
-    radial-gradient(32% 30% at 74% 82%, rgba(52, 211, 153, 0.14), transparent 70%),
-    radial-gradient(26% 24% at 22% 86%, rgba(236, 72, 153, 0.1), transparent 70%);
+    radial-gradient(34% 30% at 16% 18%, rgba(0, 229, 255, 0.16), transparent 70%),
+    radial-gradient(30% 28% at 84% 14%, rgba(56, 189, 248, 0.14), transparent 70%),
+    radial-gradient(32% 30% at 74% 82%, rgba(45, 212, 191, 0.1), transparent 70%),
+    radial-gradient(26% 24% at 22% 86%, rgba(71, 85, 105, 0.3), transparent 70%);
   filter: blur(40px);
   content: "";
   animation: drift 36s ease-in-out infinite;
@@ -98,10 +100,10 @@ body::after {
 
 :root[data-theme="light"] body::before {
   background:
-    radial-gradient(38% 34% at 18% 22%, rgba(186, 172, 255, 0.55), transparent 70%),
-    radial-gradient(32% 30% at 82% 18%, rgba(158, 222, 255, 0.5), transparent 70%),
-    radial-gradient(36% 34% at 72% 78%, rgba(160, 238, 210, 0.45), transparent 70%),
-    radial-gradient(30% 28% at 24% 82%, rgba(255, 205, 214, 0.4), transparent 70%);
+    radial-gradient(38% 34% at 18% 22%, rgba(165, 243, 252, 0.5), transparent 70%),
+    radial-gradient(32% 30% at 82% 18%, rgba(186, 230, 253, 0.5), transparent 70%),
+    radial-gradient(36% 34% at 72% 78%, rgba(153, 246, 228, 0.4), transparent 70%),
+    radial-gradient(30% 28% at 24% 82%, rgba(203, 213, 225, 0.45), transparent 70%);
   filter: blur(30px);
 }
 
@@ -347,8 +349,8 @@ body::after {
   user-select: none;
 }
 .code-view .line.cited {
-  background: rgba(107, 92, 255, 0.22);
-  box-shadow: inset 3px 0 0 #8f84ff;
+  background: rgba(0, 229, 255, 0.14);
+  box-shadow: inset 3px 0 0 #22d3ee;
 }
 
 /* File nodes and dependency edges on the graph page. */
@@ -427,8 +429,8 @@ html[data-contrast="high"] {
   --soft: 240 240 248;
   --muted: 225 225 236;
   --faint: 205 205 220;
-  --signal: 180 170 255;
-  --cyan: 125 211 252;
+  --signal: 103 240 255;
+  --cyan: 165 243 252;
   --acid: 110 231 183;
   --glass: rgb(8, 8, 12);
   --glass-edge: rgb(150, 150, 170);
@@ -443,7 +445,7 @@ html[data-theme="light"][data-contrast="high"] {
   --soft: 20 22 42;
   --muted: 29 31 51;
   --faint: 43 46 69;
-  --signal: 59 43 214;
+  --signal: 21 94 117;
   --cyan: 0 80 122;
   --acid: 0 107 82;
   --glass: #ffffff;
@@ -455,12 +457,12 @@ html[data-contrast="high"] body::after {
 }
 html[data-contrast="high"] .slab,
 html[data-contrast="high"] .glass {
-  background: rgb(rgb(var(--panel))) !important;
+  background: rgb(var(--panel)) !important;
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
-  border: 1px solid rgb(rgb(var(--line))) !important;
+  border: 1px solid rgb(var(--line)) !important;
 }
 html[data-contrast="high"] :focus-visible {
-  outline: 3px solid rgb(rgb(var(--paper))) !important;
+  outline: 3px solid rgb(var(--paper)) !important;
   outline-offset: 2px;
 }

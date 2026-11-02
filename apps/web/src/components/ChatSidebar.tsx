@@ -70,7 +70,7 @@ export const ChatSidebar = forwardRef<HTMLInputElement, Props>(function ChatSide
           type="button"
           onClick={onNew}
           disabled={busy}
-          className="w-full rounded-full bg-signal px-4 py-2 text-left font-display text-[13px] font-medium text-white shadow-glow transition-colors hover:bg-signal-hover disabled:opacity-50"
+          className="w-full rounded-full bg-signal px-4 py-2 text-left font-display text-[13px] font-medium text-on-signal shadow-glow transition-colors hover:bg-signal-hover disabled:opacity-50"
         >
           + New chat
         </button>

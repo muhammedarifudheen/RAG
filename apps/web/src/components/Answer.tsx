@@ -522,7 +522,8 @@ function EpistemicBadge({ state }: { state: EpistemicState }) {
       className={`label inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 ${tone}`}
     >
       <span aria-hidden="true">◆</span>
-      {label}
+      {/* The confidence chip: KNOWN, INFERRED, PARTIAL, ABSENT or CONFLICTED. */}
+      <span aria-hidden="true">{state}</span>
     </span>
   );
 }
@@ -774,7 +775,7 @@ function GapsPanel({
         {gaps.suggestion_url && (
           <Link
             href={`/?add=${encodeURIComponent(gaps.suggestion_url)}`}
-            className="rounded-full bg-signal px-3 py-1 font-medium text-white hover:opacity-90"
+            className="rounded-full bg-signal px-3 py-1 font-medium text-on-signal hover:opacity-90"
           >
             + Add this source
           </Link>

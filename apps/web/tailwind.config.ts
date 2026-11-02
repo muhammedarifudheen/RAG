@@ -20,6 +20,7 @@ const config: Config = {
         muted: v("muted"),
         faint: v("faint"),
         signal: { DEFAULT: v("signal"), hover: v("signal-hover") },
+        "on-signal": v("on-signal"), // text on the accent
         acid: v("acid"),
         cyan: v("cyan"),
         danger: v("danger"),

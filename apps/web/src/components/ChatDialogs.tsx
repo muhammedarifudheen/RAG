@@ -748,7 +748,7 @@ export function ShareDialog({ chat, onClose }: { chat: SavedChat; onClose: () =>
             onClick={() => {
               void copyText(state.url).then(() => setCopied(true));
             }}
-            className="bg-signal px-4 py-2 text-sm font-semibold text-ink hover:bg-signal-hover"
+            className="bg-signal px-4 py-2 text-sm font-semibold text-on-signal hover:bg-signal-hover"
           >
             {copied ? "Copied" : "Copy link"}
           </button>

@@ -58,7 +58,7 @@ export function SharedChatView() {
     <div className="flex min-h-0 flex-1">
       <main className="mx-auto w-full max-w-3xl px-4 py-10">
         <p className="label flex items-center gap-3 text-muted">
-          <span className="bg-signal px-1.5 py-0.5 text-ink">Shared</span>
+          <span className="bg-signal px-1.5 py-0.5 text-on-signal">Shared</span>
           {new Date(chat.created_at).toLocaleDateString(undefined, { dateStyle: "medium" })}
           <span aria-hidden="true" className="h-px flex-1 bg-line" />
         </p>
@@ -69,7 +69,7 @@ export function SharedChatView() {
           <button
             type="button"
             onClick={() => continueChat(chat)}
-            className="bg-signal px-4 py-2 font-display text-xs font-bold uppercase tracking-[0.14em] text-ink hover:bg-signal-hover"
+            className="bg-signal px-4 py-2 font-display text-xs font-bold uppercase tracking-[0.14em] text-on-signal hover:bg-signal-hover"
           >
             Continue this chat
           </button>

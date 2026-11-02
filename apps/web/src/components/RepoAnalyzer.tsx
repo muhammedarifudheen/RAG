@@ -77,7 +77,7 @@ export function RepoAnalyzer() {
   return (
     <div className="mx-auto max-w-5xl px-4 py-8 sm:px-6">
       <p className="label flex items-center gap-3 text-muted">
-        <span className="bg-signal px-1.5 py-0.5 text-ink">05</span>
+        <span className="bg-signal px-1.5 py-0.5 text-on-signal">05</span>
         Code analyser
         <span aria-hidden="true" className="h-px flex-1 bg-line" />
       </p>
@@ -111,7 +111,7 @@ export function RepoAnalyzer() {
         <button
           type="submit"
           disabled={phase === "running"}
-          className="bg-signal px-5 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.16em] text-ink disabled:opacity-50"
+          className="bg-signal px-5 py-2 font-mono text-[12px] font-bold uppercase tracking-[0.16em] text-on-signal disabled:opacity-50"
         >
           {phase === "running" ? "Working…" : "Analyse"}
         </button>

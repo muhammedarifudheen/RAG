@@ -298,7 +298,7 @@ export const ChatComposer = forwardRef<ComposerHandle, Props>(function ChatCompo
             <button
               type="submit"
               disabled={text.trim() === "" || reading}
-              className="rounded-full bg-signal px-5 py-1.5 font-display text-[13px] font-medium text-white shadow-glow transition-colors hover:bg-signal-hover disabled:cursor-not-allowed disabled:bg-raised disabled:text-faint disabled:shadow-none"
+              className="rounded-full bg-signal px-5 py-1.5 font-display text-[13px] font-medium text-on-signal shadow-glow transition-colors hover:bg-signal-hover disabled:cursor-not-allowed disabled:bg-raised disabled:text-faint disabled:shadow-none"
             >
               Ask
             </button>

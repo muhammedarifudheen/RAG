@@ -567,7 +567,7 @@ export function Chat() {
                 title={option.hint}
                 onClick={() => chooseMode(option.value)}
                 className={`whitespace-nowrap rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                  mode === option.value ? "bg-signal text-white shadow-glow" : "text-muted hover:text-paper"
+                  mode === option.value ? "bg-signal text-on-signal shadow-glow" : "text-muted hover:text-paper"
                 }`}
               >
                 {option.label}
@@ -884,18 +884,19 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
   return (
     <div className="pt-6 sm:pt-12">
       <p className="label flex items-center gap-3 text-muted">
-        <span className="bg-signal px-1.5 py-0.5 text-ink">02</span>
+        <span className="bg-signal px-1.5 py-0.5 text-on-signal">02</span>
         Assistant
         <span aria-hidden="true" className="h-px flex-1 bg-line" />
       </p>
       <h1 className="mt-6 font-display text-3xl font-semibold leading-[1.08] tracking-tight sm:text-4xl">
         Ask about the codebase <span className="text-signal">—</span>{" "}
-        <span className="chrome-text">or anything else</span>
+        <span className="chrome-text">grounded in your sources</span>
       </h1>
+      <p className="label mt-4 text-cyan">Grounded answers. Verifiable sources. Zero guesswork.</p>
       <p className="mt-4 max-w-xl text-sm text-soft">
-        Atlas answers from your sources first, citing the exact lines, then from the web and
-        general knowledge. Attach PDFs, code or images, have it draw a picture, and follow up:
-        it remembers the conversation.
+        Atlas answers from your sources, citing the exact lines, and says plainly when they do
+        not hold the answer. Turn on the web to let it reach further. Attach PDFs, code or
+        images, and follow up: it remembers the conversation.
       </p>
       <ul className="mt-8 grid gap-3 sm:grid-cols-2">
         {STARTERS.map((starter, index) => (
@@ -994,7 +995,7 @@ function UserMessage({
             <button
               type="submit"
               disabled={busy || !draft.trim()}
-              className="label bg-signal px-3 py-1 text-ink hover:bg-signal-hover disabled:opacity-50"
+              className="label bg-signal px-3 py-1 text-on-signal hover:bg-signal-hover disabled:opacity-50"
             >
               Send edit
             </button>
@@ -1002,7 +1003,7 @@ function UserMessage({
         </form>
       ) : (
         <>
-          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-gradient-to-br from-signal to-[#5b8cff] px-4 py-2.5 text-[15px] text-white shadow-glow">
+          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-gradient-to-br from-signal to-[#38bdf8] px-4 py-2.5 text-[15px] text-on-signal shadow-glow">
             {message.text}
           </p>
           <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">

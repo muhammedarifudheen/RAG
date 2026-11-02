@@ -40,7 +40,7 @@ export function Nav() {
           {/* The mark: a soft orb of the accent colours. */}
           <span
             aria-hidden="true"
-            className="h-7 w-7 rounded-full bg-[conic-gradient(from_200deg,#8b7cff,#38bdf8,#34d399,#f0abfc,#8b7cff)] shadow-[0_0_22px_-2px_rgba(139,124,255,0.75)]"
+            className="h-7 w-7 rounded-full bg-[conic-gradient(from_200deg,#00e5ff,#38bdf8,#2dd4bf,#64748b,#00e5ff)] shadow-[0_0_22px_-2px_rgba(0,229,255,0.7)]"
           />
           <span className="chrome-text font-display text-[17px] font-semibold tracking-tight">
             atlas
