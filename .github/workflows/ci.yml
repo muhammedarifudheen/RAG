@@ -77,7 +77,14 @@ jobs:
         # fails the job.
         run: |
           set -o pipefail
-          pytest -rs | tee pytest.log
+          status=0
+          pytest -rs --tb=short | tee pytest.log || status=$?
+          if [ "$status" -ne 0 ]; then
+            # The failures as one annotation, readable without signing in for the log.
+            summary=$(grep -E "^(FAILED|ERROR) |^E   |^[a-z_/]+\.py:[0-9]+: " pytest.log | head -60 | sed ':a;N;$!ba;s/%/%25/g;s/\n/%0A/g')
+            echo "::error title=API tests failed::${summary}"
+            exit "$status"
+          fi
           if grep -q "SKIPPED" pytest.log; then
             echo "::error::Tests were skipped; the test database was not reachable."
             exit 1
