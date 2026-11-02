@@ -37,6 +37,8 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="flex min-h-screen flex-col font-sans text-paper antialiased">
+        {/* A frieze of pietra dura along the top, as on a Mughal facade. */}
+        <div aria-hidden="true" className="inlay-band h-3 shrink-0" />
         <Nav />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </body>

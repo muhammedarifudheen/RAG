@@ -42,7 +42,7 @@ import { useSpeaker } from "@/lib/speech";
 
 import { Answer, Gallery, ResearchSteps, StreamingAnswer } from "./Answer";
 import { KnowledgeHealthNote } from "./KnowledgeHealthNote";
-import { MughalArch, StarRule } from "./Ornament";
+import { Pishtaq, StarRule } from "./Ornament";
 import { ChatComposer, type ComposerHandle } from "./ChatComposer";
 import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
 import { ChatSidebar } from "./ChatSidebar";
@@ -876,22 +876,23 @@ function CouncilPanel({ agents }: { agents: CouncilAgent[] }) {
 
 function EmptyState() {
   return (
-    // The heading stands in a cusped arch, like a portal's pishtaq.
-    <div className="relative mx-auto mt-4 max-w-xl px-8 pb-10 pt-24 text-center sm:mt-8 sm:px-14 sm:pt-28">
-      <MughalArch className="absolute inset-0 h-full w-full" />
-      <p className="label relative flex items-center justify-center gap-3 text-muted">
-        <span className="bg-signal px-1.5 py-0.5 text-on-signal">02</span>
-        Assistant
-      </p>
-      <h1 className="relative mt-5 font-display text-4xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
-        Ask about the codebase <span className="text-signal">—</span>{" "}
-        <span className="chrome-text italic">grounded in your sources</span>
-      </h1>
-      <StarRule className="relative mx-auto mt-6 max-w-xs" />
-      <p className="label relative mt-5 text-signal">
-        Grounded answers. Verifiable sources. Zero guesswork.
-      </p>
-    </div>
+    // The heading in a pishtaq: an inlaid frame around a pointed-arch recess.
+    <Pishtaq className="mx-auto mt-4 max-w-xl sm:mt-8">
+      <div className="px-8 pb-10 pt-24 text-center sm:px-16 sm:pt-28">
+        <p className="label flex items-center justify-center gap-3 text-muted">
+          <span className="bg-signal px-1.5 py-0.5 text-on-signal">02</span>
+          Assistant
+        </p>
+        <h1 className="mt-5 font-display text-3xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+          Ask about the codebase <span className="text-signal">—</span>{" "}
+          <span className="chrome-text italic">grounded in your sources</span>
+        </h1>
+        <StarRule className="mx-auto mt-6 max-w-xs" />
+        <p className="label mt-5 text-signal">
+          Grounded answers. Verifiable sources. Zero guesswork.
+        </p>
+      </div>
+    </Pishtaq>
   );
 }
 
@@ -979,7 +980,7 @@ function UserMessage({
         </form>
       ) : (
         <>
-          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-gradient-to-br from-signal to-[#a37a36] px-4 py-2.5 text-[15px] text-on-signal shadow-glow">
+          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-gradient-to-br from-signal to-[#ec8a4c] px-4 py-2.5 text-[15px] text-on-signal shadow-glow">
             {message.text}
           </p>
           <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
