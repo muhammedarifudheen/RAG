@@ -8,6 +8,7 @@ import stat
 import sys
 import tempfile
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 
 _GITHUB_URL = re.compile(
@@ -19,6 +20,8 @@ _GITHUB_URL = re.compile(
 class ClonedRepo:
     path: Path
     commit: str
+    # When the cloned commit was made: how current the repository's code is.
+    committed_at: datetime | None = None
 
 
 def parse_github_url(url: str) -> tuple[str, str]:
@@ -47,11 +50,13 @@ def clone_repo(url: str, dest_root: Path | None = None, token: str | None = None
             errstream=io.BytesIO(),
             **credentials,
         ) as cloned:
-            commit = cloned.head().decode("ascii")
+            head = cloned.head()
+            commit = head.decode("ascii")
+            committed_at = datetime.fromtimestamp(cloned[head].commit_time, tz=UTC)
     except BaseException:
         remove_clone(target)
         raise
-    return ClonedRepo(path=target, commit=commit)
+    return ClonedRepo(path=target, commit=commit, committed_at=committed_at)
 
 
 def remove_clone(path: Path) -> None:

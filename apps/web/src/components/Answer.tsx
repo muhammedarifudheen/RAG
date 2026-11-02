@@ -1,6 +1,7 @@
 "use client";
 
 import type {
+  AnswerFreshness,
   AskResponse,
   CodeChunk,
   Confidence,
@@ -47,15 +48,29 @@ const REMARK = [remarkGfm, remarkMath];
 const REHYPE = [rehypeKatex];
 
 export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallenged }: Props) {
-  const markdown = useMemo(
-    () => normalizeMath(linkifyCitations(response.answer)),
-    [response.answer],
-  );
+  // What an older, conflicting source said comes after "Previous version:": shown folded.
+  const [markdown, previous] = useMemo(() => {
+    const [main, older] = splitPrevious(response.answer);
+    return [
+      normalizeMath(linkifyCitations(main)),
+      older ? normalizeMath(linkifyCitations(older)) : null,
+    ];
+  }, [response.answer]);
 
   const components = useMemo<Components>(() => {
     const unverified = new Set(response.citations.filter((c) => !c.verified).map((c) => c.ref));
     return {
       pre: CodePre,
+      // TL;DR, Action, Gotcha, Edge case and the staleness warning stand out.
+      p({ node, children }) {
+        const callout = CALLOUTS.find(({ starts }) => starts.test(hastText(node)));
+        if (!callout) return <p>{children}</p>;
+        return (
+          <p data-callout={callout.name} className={`callout ${callout.tone}`}>
+            {children}
+          </p>
+        );
+      },
       a({ href, children }) {
         const citation = parseCitationHref(href);
         if (!citation) {
@@ -96,6 +111,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
   return (
     <article aria-label="Answer" className="slab bg-panel/80 py-4 pl-5 pr-4">
       {(response.epistemic ||
+        response.freshness ||
         response.challenge?.valid ||
         response.source_basis ||
         response.uncertainty ||
@@ -111,7 +127,8 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
             </span>
           )}
           {response.epistemic && <EpistemicBadge state={response.epistemic} />}
-          {response.uncertainty && <UncertaintyMeter uncertainty={response.uncertainty} />}
+          {response.freshness && <FreshnessChip freshness={response.freshness} />}
+          {response.uncertainty &&<UncertaintyMeter uncertainty={response.uncertainty} />}
           {(response.source_basis === "secondary" || response.source_basis === "derived") && (
             <span
               role="note"
@@ -134,6 +151,16 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
         <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components}>
           {markdown}
         </ReactMarkdown>
+        {previous && (
+          <details className="mt-3 rounded-lg border border-line bg-raised/40 px-3 py-2 text-sm">
+            <summary className="cursor-pointer text-muted">Previous version (an older source)</summary>
+            <div className="mt-2">
+              <ReactMarkdown remarkPlugins={REMARK} rehypePlugins={REHYPE} components={components}>
+                {previous}
+              </ReactMarkdown>
+            </div>
+          </details>
+        )}
       </div>
 
       {(response.confidence || response.cached || response.notice || response.redacted?.length) && (
@@ -320,6 +347,9 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
                   {cited && <span className="rounded-full bg-cyan/10 px-1.5 text-cyan">cited</span>}
                   <CopyCitation chunk={chunk} />
                 </span>
+                {chunk.also_seen_in && chunk.also_seen_in.length > 0 && (
+                  <span className="block pl-4 text-faint">Also seen in: {chunk.also_seen_in.join(", ")}</span>
+                )}
                 {chunk.license && (
                   <span aria-label="Attribution" className="block pl-4 text-faint">
                     From{" "}
@@ -529,6 +559,60 @@ function EpistemicBadge({ state }: { state: EpistemicState }) {
 }
 
 const WEIGHT_NAMES: Record<number, string> = { 3: "primary", 2: "secondary", 1: "derived" };
+
+/** Paragraphs that stand out: the TL;DR, the action, gotchas, edge cases, a staleness
+ * warning. Matched on their opening words, bold or not. */
+const CALLOUTS = [
+  { name: "tldr", starts: /^\s*TL;?DR\b/i, tone: "callout-tldr" },
+  { name: "action", starts: /^\s*(Action|Next step)\s*:/i, tone: "callout-action" },
+  { name: "gotcha", starts: /^\s*Gotcha\s*:/i, tone: "callout-gotcha" },
+  { name: "edge", starts: /^\s*Edge case\s*:/i, tone: "callout-gotcha" },
+  { name: "stale", starts: /^\s*⚠\s*This may be outdated/, tone: "callout-stale" },
+];
+
+/** The plain text of a markdown node, for matching its opening words. */
+function hastText(node: HastNode | undefined): string {
+  if (!node) return "";
+  if (node.type === "text") return node.value ?? "";
+  return (node.children ?? []).map(hastText).join("");
+}
+
+/** The answer, and what an older conflicting source said (after "Previous version:"). */
+export function splitPrevious(answer: string): [string, string | null] {
+  const match = /^\s*(?:#{1,4}\s*)?\**\s*Previous version\s*:?\s*\**\s*:?\s*/im.exec(answer);
+  if (!match || match.index === 0) return [answer, null];
+  const older = answer.slice(match.index + match[0].length).trim();
+  return older ? [answer.slice(0, match.index).trimEnd(), older] : [answer, null];
+}
+
+const FRESHNESS: Record<AnswerFreshness["label"], { hint: string; tone: string }> = {
+  fresh: { hint: "Its sources were ingested recently.", tone: "border-ok/40 bg-ok/10 text-ok" },
+  recent: {
+    hint: "Its sources are within the freshness window, but not new.",
+    tone: "border-cyan/40 bg-cyan/10 text-cyan",
+  },
+  stale: {
+    hint: "Its sources were ingested beyond the freshness window: they may be outdated.",
+    tone: "border-warn/50 bg-warn/10 text-warn",
+  },
+};
+
+/** FRESH, RECENT or STALE: how current the answer's sources are. */
+function FreshnessChip({ freshness }: { freshness: AnswerFreshness }) {
+  const { hint, tone } = FRESHNESS[freshness.label];
+  const when = freshness.ingested_at.slice(0, 10);
+  return (
+    <span
+      role="note"
+      aria-label={`Freshness: ${freshness.label}, last ingested ${when}. ${hint}`}
+      title={`${hint} Last ingested ${when}.`}
+      className={`label inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 ${tone}`}
+    >
+      <span aria-hidden="true">◷</span>
+      {freshness.label}
+    </span>
+  );
+}
 
 /** How much of the uncertainty budget (3) an answer spent: a meter, and why. */
 function UncertaintyMeter({ uncertainty }: { uncertainty: Uncertainty }) {

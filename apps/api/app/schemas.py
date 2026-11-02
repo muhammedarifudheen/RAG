@@ -38,6 +38,19 @@ class CodeChunk(BaseModel):
     )
     source_url: str | None = Field(default=None, description="Its source, for attribution.")
     source_title: str | None = Field(default=None, description="Its source's title.")
+    source_id: int | None = Field(default=None, description="Its source's id.")
+    ingested_at: datetime | None = Field(default=None, description="When its source was ingested.")
+    source_updated_at: datetime | None = Field(
+        default=None, description="When its source last changed (a commit, an edit), if known."
+    )
+    also_seen_in: list[str] = Field(
+        default=[], description="Other sources holding a near-duplicate of this passage."
+    )
+    freshness: Literal["fresh", "recent", "stale"] | None = Field(
+        default=None,
+        description="How current its source is: fresh within a third of the threshold since "
+        "ingest, recent within it, stale beyond (code 30 days, docs 90, news 7).",
+    )
 
 
 class SearchResponse(BaseModel):
@@ -153,6 +166,11 @@ class AskRequest(BaseModel):
     rerank_cutoff: int | None = Field(
         default=None, ge=0, le=10, description="Excerpts the judge scores below this are left out."
     )
+    as_of: datetime | None = Field(
+        default=None,
+        description="Answer from the knowledge base as it stood then: only sources ingested "
+        "by this time (each source's current version).",
+    )
     atlas_mode: Literal["ASK", "EXPLORE", "COMPARE", "BUILD", "AUDIT", "AGENT", "TEACH"] | None = (
         Field(
             default=None,
@@ -240,6 +258,7 @@ class AskRequest(BaseModel):
             or self.research is not None
             or not self.cache
             or self.atlas_mode is not None
+            or self.as_of is not None
             or self.max_tokens is not None
             or self.format != "markdown"
             or self.include_drafts
@@ -441,6 +460,13 @@ class Confidence(BaseModel):
     reason: str
 
 
+class AnswerFreshness(BaseModel):
+    """How current an answer is: the freshness of the freshest source it used."""
+
+    label: Literal["fresh", "recent", "stale"]
+    ingested_at: datetime = Field(description="When that source was last ingested.")
+
+
 class AskResponse(BaseModel):
     question: str
     answer: str = Field(description="Claude's answer with inline [path:start-end] citations.")
@@ -491,7 +517,13 @@ class AskResponse(BaseModel):
     mode: str | None = Field(default=None, description="The Atlas mode that answered.")
     latency_ms: int | None = Field(default=None, description="From the request to the answer.")
     footer: str | None = Field(
-        default=None, description="[confidence: X] [sources: N] [latency: Xms], for every answer."
+        default=None,
+        description="[confidence: X] [freshness: F] [sources: N] [latency: Xms], for every answer.",
+    )
+    freshness: AnswerFreshness | None = Field(
+        default=None,
+        description="How current the answer's sources are: the freshest it used. A stale "
+        "answer opens with a warning.",
     )
     redacted: list[str] = Field(
         default=[], description="What was redacted from the answer: kinds, never values."
@@ -650,6 +682,33 @@ class SourceItem(BaseModel):
     weight_override: int | None = Field(
         default=None, description="The admin's choice, if any; unset is automatic."
     )
+    version: int = Field(default=1, description="Which ingest of it this is.")
+    source_updated_at: datetime | None = Field(
+        default=None, description="When the source itself last changed, if known."
+    )
+
+
+class SourceVersionOut(BaseModel):
+    """One of the last three ingests of a source."""
+
+    version: int
+    created_at: datetime
+    files: int
+    symbols: int
+    current: bool = Field(description="True for the version the knowledge base holds now.")
+
+
+class Rollback(BaseModel):
+    version: int = Field(ge=1, description="The kept version to make current again.")
+
+
+class IngestPreview(BaseModel):
+    """What re-ingesting the source would change: files by path."""
+
+    added: list[str]
+    changed: list[str]
+    removed: list[str]
+    unchanged: int
 
 
 class AdminCheck(BaseModel):
@@ -667,16 +726,17 @@ class AdminSession(BaseModel):
     expires_at: float
 
 
-WebhookEvent = Literal["ingest", "query", "gap"]
+WebhookEvent = Literal["ingest", "query", "gap", "health"]
 
 
 class WebhookCreate(BaseModel):
     url: str = Field(min_length=8, max_length=2000, examples=["https://example.com/atlas"])
     events: list[WebhookEvent] = Field(
-        default=["ingest", "query", "gap"],
+        default=["ingest", "query", "gap", "health"],
         min_length=1,
-        description="`ingest`: a source was added or re-indexed; `query`: an answer was "
-        "given; `gap`: the knowledge base fell short of a question.",
+        description="`ingest`: a source was added, re-indexed or rolled back; `query`: an "
+        "answer was given; `gap`: the knowledge base fell short of a question; `health`: "
+        "the overall health score fell by 10 or more.",
     )
 
 

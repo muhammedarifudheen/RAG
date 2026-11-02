@@ -35,6 +35,8 @@ class AnswerLog(Base):
     answer: Mapped[str | None] = mapped_column(Text)
     cited: Mapped[list] = mapped_column(JSONB, default=list)
     mode: Mapped[str | None] = mapped_column(Text)
+    # What it retrieved: [{"file", "score", "relevance"}], for retrieval health.
+    retrieved: Mapped[list] = mapped_column(JSONB, default=list)
 
 
 class KnowledgeSignal(Base):

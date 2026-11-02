@@ -48,6 +48,8 @@ def list_sources(db: Annotated[Session, Depends(get_db)]) -> list[SourceItem]:
             symbols=symbol_count,
             weight=source_weight(source.kind, source.url, source.title, source.weight),
             weight_override=source.weight,
+            version=source.version or 1,
+            source_updated_at=source.source_updated_at,
         )
         for source, file_count, symbol_count in rows
     ]

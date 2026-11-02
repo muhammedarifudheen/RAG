@@ -73,7 +73,7 @@ def test_every_answer_ends_with_its_footer():
         -1
     ][1]
     assert done["mode"] == "ASK" and done["latency_ms"] >= 250
-    assert done["footer"].startswith("[confidence: KNOWN] [sources: 1] [latency: ")
+    assert done["footer"].startswith("[confidence: KNOWN] [freshness: N/A] [sources: 1] [latency: ")
     assert done["footer"].endswith("ms]")
 
 

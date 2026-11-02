@@ -15,6 +15,7 @@ from app.schemas import HealthAction, HealthReport, KnowledgeAuditOut, Knowledge
 from app.services.catalog import source_catalog
 from app.services.health import code_health
 from app.services.knowledge import export_log, import_log, knowledge_health
+from app.services.source_health import report as sources_report
 
 router = APIRouter()
 
@@ -133,3 +134,48 @@ def _latest_audit(db: Session) -> KnowledgeAuditOut | None:
 def healthz() -> Liveness:
     """Returns immediately without touching the database. Not rate limited."""
     return Liveness(status="ok")
+
+
+@router.get(
+    "/health/sources",
+    tags=["health"],
+    summary="Live health of each source, with actions",
+    dependencies=[Depends(rate_limit("default", lambda: settings.rate_limit_per_minute))],
+)
+def source_health(db: Annotated[Session, Depends(get_db)]) -> dict:
+    """Per source: coverage, freshness (and its trend), staleness risk, redundancy, trust
+    (and why), retrieval health (retrieved, cited, precision, mean relevance) and gaps,
+    each problem with an action (re-ingest, demote or merge, add a primary source, add a
+    source for the gaps, tune chunking). Also the overall score, a weighted average, and
+    its history for a sparkline; a fall of 10 or more tells the `health` webhooks."""
+    return sources_report(db)
+
+
+@router.post(
+    "/health/sources/{source_id}/candidates",
+    tags=["health"],
+    summary="Suggest primary sources behind a source",
+    responses={
+        **ADMIN_REQUIRED,
+        404: {"description": "No such source."},
+        503: {"description": "No model answered in time."},
+    },
+    dependencies=[
+        Depends(require_admin),
+        Depends(rate_limit("default", lambda: settings.rate_limit_per_minute)),
+    ],
+)
+def primary_candidates(
+    source_id: int, request: Request, db: Annotated[Session, Depends(get_db)]
+) -> dict:
+    """Up to three links to the code, specification or official documentation behind a
+    secondary or derived source, suggested by a model: candidates to add."""
+    source = db.get(Source, source_id)
+    if source is None:
+        raise HTTPException(404, "No such source.")
+    assistant: Assistant = request.app.dependency_overrides.get(get_assistant, get_assistant)()
+    found = assistant.primary_candidates(source.title, source.url)
+    if found is None:
+        raise HTTPException(503, "No model answered in time; try again in a minute.")
+    links, by = found
+    return {"candidates": links, "found_by": by}

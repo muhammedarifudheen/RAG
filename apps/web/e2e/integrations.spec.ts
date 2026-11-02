@@ -37,7 +37,9 @@ test("the admin adds a webhook and sees its secret once, beside the other integr
   await expect(section.getByRole("list", { name: "Webhooks" })).toContainText(
     "https://hooks.example.com/atlas",
   );
-  expect(added).toEqual([{ url: "https://hooks.example.com/atlas", events: ["ingest", "gap"] }]);
+  expect(added).toEqual([
+    { url: "https://hooks.example.com/atlas", events: ["ingest", "gap", "health"] },
+  ]);
 });
 
 test("a Wikipedia excerpt is credited with its licence", async ({ page }) => {

@@ -19,6 +19,7 @@ from app.routers import (
     openai,
     search,
     sources,
+    versions,
 )
 
 DESCRIPTION = """\
@@ -75,6 +76,7 @@ def create_app() -> FastAPI:
 
     app.include_router(ingest.router)
     app.include_router(sources.router)
+    app.include_router(versions.router)
     app.include_router(search.router)
     app.include_router(chat.router)
     app.include_router(graph.router)

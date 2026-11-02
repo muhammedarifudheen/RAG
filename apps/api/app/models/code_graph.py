@@ -9,6 +9,7 @@ from sqlalchemy import (
     Identity,
     Index,
     Integer,
+    LargeBinary,
     SmallInteger,
     String,
     Text,
@@ -51,6 +52,11 @@ class Source(Base):
     # How much it counts, set by the admin: 3 primary, 2 secondary, 1 derived; NULL is
     # automatic (app/services/weights.py).
     weight: Mapped[int | None] = mapped_column(SmallInteger)
+    # When the source itself last changed (its latest commit, an article's last edit), if
+    # known; created_at is when it was ingested.
+    source_updated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # Which ingest of it this is; the last three are kept in source_versions.
+    version: Mapped[int] = mapped_column(Integer, default=1, server_default="1")
 
 
 class File(Base):
@@ -93,6 +99,12 @@ class Symbol(Base):
     end_line: Mapped[int] = mapped_column(Integer)
     signature: Mapped[str | None] = mapped_column(Text)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    # Near-duplicate detection across sources: a MinHash of its text, and the canonical
+    # (most trusted) copy if this is a duplicate of one.
+    minhash: Mapped[bytes | None] = mapped_column(LargeBinary)
+    duplicate_of: Mapped[int | None] = mapped_column(
+        ForeignKey("symbols.id", ondelete="SET NULL"), index=True
+    )
 
 
 class Edge(Base):

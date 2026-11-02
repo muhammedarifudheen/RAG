@@ -13,6 +13,7 @@ import zipfile
 from collections import deque
 from collections.abc import Callable
 from dataclasses import dataclass
+from datetime import datetime
 from html.parser import HTMLParser
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote, unquote, urldefrag, urljoin, urlsplit
@@ -52,6 +53,9 @@ class Loaded:
     title: str
     url: str | None
     documents: list[Document]
+    # When the source itself last changed, if it says: an article's last edit, a page's
+    # Last-Modified header.
+    updated_at: datetime | None = None
 
 
 def detect_kind(url: str) -> str:
@@ -110,7 +114,7 @@ def load_web(url: str) -> Loaded:
         document = html_to_document(page.body, _web_path(page.url), page.url, host)
     if document is None:
         raise SourceError("No readable text was found on that page.")
-    return Loaded(document.title, page.url, [document])
+    return Loaded(document.title, page.url, [document], page.modified)
 
 
 # --- Wikipedia ----------------------------------------------------------------
@@ -148,7 +152,8 @@ def load_wikipedia(url: str) -> Loaded:
     # The official API returns clean article text, which scraping the page would not.
     api = (
         f"https://{language}.wikipedia.org/w/api.php?action=query&format=json&formatversion=2"
-        f"&prop=extracts&explaintext=1&exsectionformat=wiki&redirects=1&titles={quote(title)}"
+        f"&prop=extracts|revisions&rvprop=timestamp&explaintext=1&exsectionformat=wiki"
+        f"&redirects=1&titles={quote(title)}"
     )
     try:
         response = fetch(api, accept="application/json", max_bytes=20_000_000)
@@ -168,7 +173,10 @@ def load_wikipedia(url: str) -> Loaded:
         text=wikipedia_to_markdown(page["extract"]),
         url=article,
     )
-    return Loaded(f"{title} (Wikipedia)", article, [document])
+    edited = None
+    with contextlib.suppress(KeyError, IndexError, TypeError, ValueError):
+        edited = datetime.fromisoformat(page["revisions"][0]["timestamp"])
+    return Loaded(f"{title} (Wikipedia)", article, [document], edited)
 
 
 # --- Site crawl ---------------------------------------------------------------

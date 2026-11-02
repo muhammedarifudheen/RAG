@@ -385,7 +385,7 @@ def test_wikipedia_text_carries_its_licence_into_the_footer():
                    {"file": "a.py", "license": None}],
     }  # fmt: skip
     footer = with_footer(data, Options())["footer"]
-    assert footer == "[confidence: KNOWN] [sources: 1] [license: CC BY-SA 4.0]"
+    assert footer == "[confidence: KNOWN] [freshness: N/A] [sources: 1] [license: CC BY-SA 4.0]"
 
 
 # --- With the database (run in CI) -------------------------------------------------------

@@ -27,7 +27,7 @@ from app.models import Webhook
 
 logger = logging.getLogger("atlas.webhooks")
 
-EVENTS = ("ingest", "query", "gap")
+EVENTS = ("ingest", "query", "gap", "health")
 TIMEOUT_SECONDS = 5.0
 RETRY_AFTER_SECONDS = 2.0
 
@@ -79,6 +79,15 @@ def emit(event: str, data: dict, db: Session | None = None) -> None:
     """Tells every webhook that wants `event` about it, in the background."""
     if event not in EVENTS:
         raise ValueError(event)
+    if db is None:
+        # No session at hand (an ingest's thread): look the webhooks up in the background
+        # too, so the caller never waits on the database.
+        _pool.submit(_send, event, data, None)
+        return
+    _send(event, data, db)
+
+
+def _send(event: str, data: dict, db: Session | None) -> None:
     targets = _targets(db, event)
     if not targets:
         return

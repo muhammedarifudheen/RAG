@@ -266,7 +266,8 @@ def context_blocks(chunks: Sequence[CodeChunk], attachments: Sequence[Attachment
     for chunk in chunks:
         lines = chunk.snippet.split("\n")
         numbered = "\n".join(f"{chunk.start_line + i}| {line}" for i, line in enumerate(lines))
-        blocks.append(f"[{chunk.file}:{chunk.start_line}-{chunk.snippet_end_line}]\n{numbered}")
+        header = f"[{chunk.file}:{chunk.start_line}-{chunk.snippet_end_line}]{_dated(chunk)}"
+        blocks.append(f"{header}\n{numbered}")
     for a in attachments:
         if a.kind == "text" and a.text:
             lines = a.text.split("\n")
@@ -687,3 +688,44 @@ def with_drafts(turns: list[Turn], drafts: Sequence[str], limit: int = 3500) -> 
     )
     last = turns[-1]
     return [*turns[:-1], Turn(last.role, f"{last.content}\n\n{shown}", last.images)]
+
+
+# The 100x answer: the user's format for answers from the sources, and freshness.
+ANSWER_FORMAT = """\
+ANSWER FORMAT (answers from the sources):
+TL;DR: <one or two lines: the answer itself>
+
+<The detail, with inline citations [source_id:line_range]. Quote exactly for "what does \
+X say"; paraphrase only to synthesise. "How do I": numbered steps, each cited. "Why": the \
+mechanism, not just the claim. Code: the file, function, signature and call chain, and a \
+minimal runnable snippet.>
+
+Action: <one concrete next step or implication for the user>
+
+Then, only when the sources support them, one line each:
+Gotcha: <the most common mistake on this>
+Edge case: <what breaks this>
+
+Use every relevant excerpt; never answer from one when two or more are relevant. Match \
+the depth to the question: a line for a fact, a deep dive for how or why. Never pad, \
+never hedge without reason, never repeat the question."""
+
+FRESHNESS = """\
+FRESHNESS: each excerpt's header says when its source last changed and when it was \
+ingested. When excerpts conflict, prefer the newer and say so; then, at the very end, \
+after a line "Previous version:", say what the older one said, cited, so it is shown \
+collapsed. Never drop a conflicting older source silently."""
+
+
+def answer_format_prompt(system: str) -> str:
+    return _before_instructions(system, f"{ANSWER_FORMAT}\n\n{FRESHNESS}")
+
+
+def _dated(chunk: CodeChunk) -> str:
+    """When an excerpt's source changed and was ingested, for its header."""
+    parts = []
+    if chunk.source_updated_at is not None:
+        parts.append(f"source updated {chunk.source_updated_at:%Y-%m-%d}")
+    if chunk.ingested_at is not None:
+        parts.append(f"ingested {chunk.ingested_at:%Y-%m-%d}")
+    return f" ({', '.join(parts)})" if parts else ""

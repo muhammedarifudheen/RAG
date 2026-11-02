@@ -1,6 +1,7 @@
 import logging
 import re
 from collections.abc import Sequence
+from datetime import datetime
 
 from sqlalchemy import func, literal_column, select, text
 from sqlalchemy.orm import Session
@@ -8,6 +9,8 @@ from sqlalchemy.orm import Session
 from app.embedding import Embedder
 from app.models import File, Source, Symbol
 from app.schemas import Citation, CodeChunk
+from app.services.freshness import category, prefer_newer
+from app.services.freshness import label as freshness_label
 from app.services.weights import source_license, source_weight
 
 # A citation is `[path:42-58]` or `[path:42]`. Models also put several in one
@@ -55,6 +58,7 @@ def search_symbols(
     limit: int,
     max_lines: int,
     vector: Sequence[float] | None = None,
+    as_of: datetime | None = None,
 ) -> list[CodeChunk]:
     """The `limit` symbols whose embeddings are closest to the query, nearest first."""
     embedded = vector if vector is not None else embedder.embed(query)
@@ -65,7 +69,7 @@ def search_symbols(
         select(Symbol, File.path, File.language, File.content, distance, *_SOURCE)
         .join(File, File.id == Symbol.file_id)
         .join(Source, Source.id == File.source_id)
-        .where(Symbol.embedding.is_not(None))
+        .where(Symbol.embedding.is_not(None), *_current(as_of))
         .order_by(distance)
         .limit(limit)
     ).all()
@@ -78,6 +82,7 @@ def keyword_symbols(
     limit: int,
     max_lines: int,
     vector: Sequence[float] | None = None,
+    as_of: datetime | None = None,
 ) -> list[CodeChunk]:
     """The `limit` symbols whose words best match the query's (full-text search, ranked
     by cover density), best first. With the query's embedding, each keeps its cosine
@@ -103,15 +108,51 @@ def keyword_symbols(
         select(Symbol, File.path, File.language, File.content, score, *_SOURCE)
         .join(File, File.id == Symbol.file_id)
         .join(Source, Source.id == File.source_id)
-        .where(search.op("@@")(terms))
+        .where(search.op("@@")(terms), *_current(as_of))
         .order_by(named.desc(), rank.desc(), Symbol.id)
         .limit(limit)
     ).all()
     return _chunks(rows, max_lines)
 
 
+def _current(as_of: datetime | None) -> list:
+    """Filters for what retrieval sees: one copy of each passage (near-duplicates in
+    other sources point to the canonical one), and with `as_of`, only sources ingested by
+    then."""
+    filters = [Symbol.duplicate_of.is_(None)]
+    if as_of is not None:
+        filters.append(Source.created_at <= as_of)
+    return filters
+
+
+def also_seen_in(db: Session, chunks: list[CodeChunk]) -> list[CodeChunk]:
+    """Each excerpt with the other sources its passage was also found in."""
+    ids = [c.symbol_id for c in chunks if c.symbol_id > 0]
+    if not ids:
+        return chunks
+    rows = db.execute(
+        select(Symbol.duplicate_of, Source.title)
+        .join(File, File.id == Symbol.file_id)
+        .join(Source, Source.id == File.source_id)
+        .where(Symbol.duplicate_of.in_(ids))
+    ).all()
+    seen: dict[int, list[str]] = {}
+    for canonical, title in rows:
+        if title not in seen.setdefault(canonical, []):
+            seen[canonical].append(title)
+    return [
+        c.model_copy(update={"also_seen_in": seen[c.symbol_id]}) if c.symbol_id in seen else c
+        for c in chunks
+    ]
+
+
 def hybrid_search(
-    db: Session, embedder: Embedder, query: str, limit: int, max_lines: int
+    db: Session,
+    embedder: Embedder,
+    query: str,
+    limit: int,
+    max_lines: int,
+    as_of: datetime | None = None,
 ) -> tuple[list[CodeChunk], str | None]:
     """Vector and keyword search, CANDIDATES each, fused by reciprocal rank: an excerpt
     both find comes first. If vector search fails (the embedder or the index), keyword
@@ -123,12 +164,12 @@ def hybrid_search(
     vector: Sequence[float] | None = None
     try:
         vector = embedder.embed(query)
-        semantic = search_symbols(db, embedder, query, pool, max_lines, vector=vector)
+        semantic = search_symbols(db, embedder, query, pool, max_lines, vector=vector, as_of=as_of)
     except Exception:
         logger.exception("vector search failed; keyword search only")
         db.rollback()
         try:
-            return keyword_symbols(db, query, limit, max_lines), (
+            return keyword_symbols(db, query, limit, max_lines, as_of=as_of), (
                 "Retrieval failed, so this answer used keyword search."
             )
         except Exception:
@@ -136,21 +177,65 @@ def hybrid_search(
             db.rollback()
             raise
     try:
-        keyword = keyword_symbols(db, query, pool, max_lines, vector=vector)
+        keyword = keyword_symbols(db, query, pool, max_lines, vector=vector, as_of=as_of)
     except Exception:
         logger.exception("keyword search failed; vector search only")
         db.rollback()
-        return semantic[:limit], None
-    return fuse([semantic, keyword], limit), None
+        return also_seen_in(db, semantic[:limit]), None
+    # Twice as many fused; near-duplicates then give way to others (MMR), and of
+    # near-equal ones the newer source goes first.
+    fused = prefer_newer(diversify(fuse([semantic, keyword], limit * 2), limit))
+    return also_seen_in(db, fused), None
+
+
+def _tokens(text: str) -> set[str]:
+    return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", text.lower()))
+
+
+def diversify(chunks: Sequence[CodeChunk], limit: int, weight: float = 0.75) -> list[CodeChunk]:
+    """Maximal marginal relevance: each next excerpt scores `weight` x its relevance (by
+    rank) less (1 - weight) x its likeness (word overlap) to one already chosen. The best
+    stays first; only near-duplicates give way."""
+    pool = list(chunks)
+    words = {c.symbol_id: _tokens(c.snippet) for c in pool}
+    relevance = {c.symbol_id: 1 / (1 + rank) for rank, c in enumerate(pool)}
+    chosen: list[CodeChunk] = []
+
+    def gain(chunk: CodeChunk) -> float:
+        mine = words[chunk.symbol_id]
+        likeness = max(
+            (
+                len(mine & words[c.symbol_id]) / (len(mine | words[c.symbol_id]) or 1)
+                for c in chosen
+            ),
+            default=0.0,
+        )
+        return weight * relevance[chunk.symbol_id] - (1 - weight) * likeness
+
+    while pool and len(chosen) < limit:
+        best = max(pool, key=gain)
+        chosen.append(best)
+        pool.remove(best)
+    return chosen
 
 
 # What each excerpt's source counts for (see app/services/weights.py).
-_SOURCE = (Source.kind, Source.url, Source.title, Source.weight)
+_SOURCE = (
+    Source.kind,
+    Source.url,
+    Source.title,
+    Source.weight,
+    Source.id,
+    Source.created_at,
+    Source.source_updated_at,
+)
 
 
 def _chunks(rows: Sequence, max_lines: int) -> list[CodeChunk]:
     chunks = []
-    for symbol, path, language, content, dist, kind, url, title, override in rows:
+    for row in rows:
+        symbol, path, language, content, dist, kind, url, title, override = row[:9]
+        source_id, ingested, updated = row[9:12]
         code, last_line = snippet(content, symbol.start_line, symbol.end_line, max_lines)
         chunks.append(
             CodeChunk(
@@ -171,6 +256,10 @@ def _chunks(rows: Sequence, max_lines: int) -> list[CodeChunk]:
                 license=source_license(kind, url),
                 source_url=url,
                 source_title=title,
+                source_id=source_id,
+                ingested_at=ingested,
+                source_updated_at=updated,
+                freshness=freshness_label(ingested, category(kind, url, path)),
             )
         )
     return chunks

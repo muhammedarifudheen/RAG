@@ -292,7 +292,9 @@ def ask(
         notices: list[str] = []
 
         def retrieve(q: str, limit: int) -> list:
-            found, notice = hybrid_search(db, embedder, q, limit, settings.snippet_max_lines)
+            found, notice = hybrid_search(
+                db, embedder, q, limit, settings.snippet_max_lines, as_of=body.as_of
+            )
             if notice and notice not in notices:
                 notices.append(notice)
             return found

@@ -20,6 +20,7 @@ import type {
   HealthParams,
   HealthReport,
   IngestEvent,
+  IngestPreview,
   IngestFailure,
   IngestProgress,
   IngestRequest,
@@ -29,7 +30,9 @@ import type {
   ResearchStep,
   SharedChat,
   SiteConfig,
+  SourceHealthReport,
   SourceItem,
+  SourceVersion,
   Webhook,
   WebhookCreated,
   WebhookEvent,
@@ -513,6 +516,41 @@ export async function exportAnswers(): Promise<Blob> {
   const response = await adminFetch("/export/qa.jsonl", { method: "GET" });
   if (!response.ok) throw await errorFrom(response);
   return response.blob();
+}
+
+/** Each source's live health, with actions, and the overall score with its history. */
+export function getSourceHealth(): Promise<SourceHealthReport> {
+  return request<SourceHealthReport>("/health/sources");
+}
+
+/** A source's last three ingests, newest first. */
+export function getSourceVersions(id: number): Promise<SourceVersion[]> {
+  return request<SourceVersion[]>(`/sources/${id}/versions`);
+}
+
+/** Makes a kept version of a source current again (admin). */
+export async function rollbackSource(id: number, version: number): Promise<SourceItem> {
+  const response = await adminFetch(`/sources/${id}/rollback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ version }),
+  });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as SourceItem;
+}
+
+/** What re-ingesting a source would change, before anything is replaced (admin). */
+export async function previewSource(id: number): Promise<IngestPreview> {
+  const response = await adminFetch(`/sources/${id}/preview`, { method: "POST" });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as IngestPreview;
+}
+
+/** Up to three primary sources behind a secondary one, suggested by a model (admin). */
+export async function primaryCandidates(id: number): Promise<string[]> {
+  const response = await adminFetch(`/health/sources/${id}/candidates`, { method: "POST" });
+  if (!response.ok) throw await errorFrom(response);
+  return ((await response.json()) as { candidates: string[] }).candidates;
 }
 
 export async function deleteSource(id: number): Promise<void> {

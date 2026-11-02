@@ -36,9 +36,24 @@ export interface CodeChunk {
   /** Its source, for attribution. */
   source_url?: string | null;
   source_title?: string | null;
+  source_id?: number | null;
+  /** Other sources holding a near-duplicate of this passage. */
+  also_seen_in?: string[];
+  /** When its source was ingested, and when the source itself last changed. */
+  ingested_at?: string | null;
+  source_updated_at?: string | null;
+  freshness?: Freshness | null;
 }
 
-export type WebhookEvent = "ingest" | "query" | "gap";
+/** fresh within a third of the threshold since ingest, recent within it, stale beyond. */
+export type Freshness = "fresh" | "recent" | "stale";
+
+export interface AnswerFreshness {
+  label: Freshness;
+  ingested_at: string;
+}
+
+export type WebhookEvent = "ingest" | "query" | "gap" | "health";
 
 /** An address told about ingests, answers and gaps. */
 export interface Webhook {
@@ -345,8 +360,10 @@ export interface AskResponse {
   mode?: AtlasMode | null;
   /** From the request to the answer. */
   latency_ms?: number | null;
-  /** [confidence: X] [sources: N] [latency: Xms], for every answer. */
+  /** [confidence: X] [freshness: F] [sources: N] [latency: Xms], for every answer. */
   footer?: string | null;
+  /** How current the answer's sources are: the freshest it used. */
+  freshness?: AnswerFreshness | null;
   /** What was redacted from the answer (kinds, never values): "API key", "email", "link"… */
   redacted?: string[];
   /** For an answer from the sources: the uncertainty budget spent, of 3. */
@@ -621,6 +638,66 @@ export interface SourceItem {
   weight?: number;
   /** The admin's choice; unset is automatic. */
   weight_override?: number | null;
+  /** Which ingest of it this is; the last three are kept. */
+  version?: number;
+  /** When the source itself last changed, if known. */
+  source_updated_at?: string | null;
+}
+
+/** One of the last three ingests of a source. */
+export interface SourceVersion {
+  version: number;
+  created_at: string;
+  files: number;
+  symbols: number;
+  current: boolean;
+}
+
+/** What re-ingesting a source would change, by path. */
+export interface IngestPreview {
+  added: string[];
+  changed: string[];
+  removed: string[];
+  unchanged: number;
+}
+
+export type SourceHealthActionKind = "reingest" | "demote" | "merge" | "primary" | "gap" | "chunking";
+
+export interface SourceHealthAction {
+  kind: SourceHealthActionKind;
+  label: string;
+  detail: string;
+  /** For gaps: up to three sources to add. */
+  candidates?: string[];
+}
+
+/** One source's live health. */
+export interface SourceHealth {
+  id: number;
+  title: string;
+  kind: SourceKind;
+  url: string | null;
+  version: number;
+  score: number;
+  /** Share of logged answers that cited it (null: no answers yet). */
+  coverage: number | null;
+  freshness: { label: Freshness | null; age_days: number | null; trend: "improving" | "steady" | "degrading" };
+  /** Proposals to refresh it, from answers that found it outdated. */
+  staleness_risk: number;
+  /** Share of its passages also found in other sources. */
+  redundancy: number;
+  trust: { weight: number; label: string; evidence: string };
+  retrieval: { retrieved: number; cited: number; precision: number | null; mean_relevance: number | null };
+  gaps: { question: string; suggestion: string | null }[];
+  actions: SourceHealthAction[];
+}
+
+export interface SourceHealthReport {
+  /** The overall score, 0-100: a weighted average of the sources'. */
+  score: number;
+  answers: number;
+  history: { at: string; score: number }[];
+  sources: SourceHealth[];
 }
 
 /** `step` is set when a pipeline step starts and null for detail within the current step. */

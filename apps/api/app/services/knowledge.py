@@ -57,6 +57,10 @@ def log_answer(
                 for c in citations
             ],
             mode=data.get("mode"),
+            retrieved=[
+                {"file": c["file"], "score": c.get("score"), "relevance": c.get("relevance")}
+                for c in chunks
+            ],
         )
         db.add(row)
         db.flush()

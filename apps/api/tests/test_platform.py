@@ -129,6 +129,11 @@ def test_openapi_documents_every_endpoint(plain_client):
         "/v1/models",
         "/v1/chat/completions",
         "/mcp",
+        "/sources/{source_id}/versions",
+        "/sources/{source_id}/rollback",
+        "/sources/{source_id}/preview",
+        "/health/sources",
+        "/health/sources/{source_id}/candidates",
     }
     assert "text/event-stream" in spec["paths"]["/ingest"]["post"]["responses"]["200"]["content"]
 

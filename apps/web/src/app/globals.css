@@ -630,3 +630,29 @@ html[data-contrast="high"] .slab::before {
 html[data-contrast="high"] .chrome-text {
   animation: none;
 }
+
+/* The answer's parts: the TL;DR leads, the action closes, gotchas and edge cases are
+   marked, and a staleness warning cannot be missed. */
+.markdown .callout {
+  border-left: 3px solid;
+  border-radius: 0 10px 10px 0;
+  padding: 0.5rem 0.8rem;
+}
+.markdown .callout-tldr {
+  border-color: rgb(var(--signal));
+  background: rgb(var(--signal) / 0.08);
+  font-weight: 500;
+}
+.markdown .callout-action {
+  border-color: rgb(var(--acid));
+  background: rgb(var(--acid) / 0.08);
+}
+.markdown .callout-gotcha {
+  border-color: rgb(var(--warn) / 0.7);
+  background: rgb(var(--warn) / 0.06);
+}
+.markdown .callout-stale {
+  border-color: rgb(var(--warn));
+  background: rgb(var(--warn) / 0.12);
+  color: rgb(var(--warn));
+}

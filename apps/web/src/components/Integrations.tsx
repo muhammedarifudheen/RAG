@@ -10,6 +10,7 @@ const EVENTS: { value: WebhookEvent; label: string }[] = [
   { value: "ingest", label: "Ingests" },
   { value: "query", label: "Answers" },
   { value: "gap", label: "Gaps" },
+  { value: "health", label: "Health" },
 ];
 
 /** The server's own address, for the instructions (the API is proxied under /api locally). */
@@ -23,7 +24,7 @@ export function Integrations() {
   const [revision, setRevision] = useState(0);
   const hooks = useApi(getWebhooks, String(revision));
   const [url, setUrl] = useState("");
-  const [events, setEvents] = useState<WebhookEvent[]>(["ingest", "query", "gap"]);
+  const [events, setEvents] = useState<WebhookEvent[]>(["ingest", "query", "gap", "health"]);
   const [created, setCreated] = useState<WebhookCreated | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);

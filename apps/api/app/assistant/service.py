@@ -43,6 +43,7 @@ from app.schemas import (
     WebSource,
 )
 from app.security import Redactor, injection, redact
+from app.services.freshness import answer_freshness, stale_warning
 from app.services.search import extract_citations, tidy_citations
 
 from .agent import (
@@ -81,6 +82,7 @@ from .prompt import (
     SECONDARY_ONLY,
     FollowUpSplitter,
     _before_instructions,
+    answer_format_prompt,
     audit_prompt,
     context_blocks,
     conversation,
@@ -485,6 +487,23 @@ class Assistant:
             lambda text: text.strip() or None,
             GAP_SECONDS,
             max_tokens=2500,
+        )
+
+    def primary_candidates(self, title: str, url: str | None) -> tuple[list[str], str] | None:
+        """Up to three links to primary sources (code, specifications, official docs)
+        behind a secondary source, and who suggested them. None if no model answered."""
+
+        def links(text: str) -> list[str] | None:
+            found = list(dict.fromkeys(re.findall(r"https?://[^\s)\]>\"'`]+", text)))
+            return [u.rstrip(".,;") for u in found[:3]] or None
+
+        return self._race(
+            "You find primary sources. Reply with up to three URLs, one per line, and nothing "
+            "else: the source code, specification or official documentation behind the topic.",
+            f"Topic: {title[:300]}" + (f"\nCurrent (secondary) source: {url}" if url else ""),
+            links,
+            GAP_SECONDS,
+            max_tokens=400,
         )
 
     def audit_sources(self, catalog: str) -> tuple[str, str] | None:
@@ -899,6 +918,9 @@ class Assistant:
         if sources_question:
             # The user's epistemic states: known, inferred, partial, absent, conflicted.
             system = epistemic_prompt(system)
+            if options.mode in ("ASK", "BUILD", "AGENT") and not options.strict:
+                # TL;DR, detail, action; newer sources win conflicts.
+                system = answer_format_prompt(system)
         if options.mode == "COMPARE":
             system = _before_instructions(system, COMPARE)
         elif options.mode == "TEACH":
@@ -1687,14 +1709,22 @@ def _with_state(data: dict, options: Options | None) -> dict:
 
 
 def with_footer(data: dict, options: Options | None) -> dict:
-    """The mode, the latency, and the footer every answer ends with:
-    [confidence: X] [sources: N] [latency: Xms]."""
+    """The mode, the latency, the freshness, and the footer every answer ends with:
+    [confidence: X] [freshness: F] [sources: N] [latency: Xms]."""
     started = options.started if options else None
     latency = round((time.monotonic() - started) * 1000) if started else None
     cited = {c["file"] for c in data.get("citations") or [] if c.get("verified")}
     files = cited or {c["file"] for c in data.get("chunks") or []}
     state = (data.get("epistemic") or "general").upper()
-    footer = f"[confidence: {state}] [sources: {len(files)}]" + (
+    # Freshness: that of the freshest source it used; a stale answer says so first.
+    fresh = answer_freshness(data.get("chunks") or [], files)
+    if fresh is not None:
+        data = {**data, "freshness": fresh}
+        answer = data.get("answer") or ""
+        if fresh["label"] == "stale" and answer and not answer.startswith("⚠"):
+            data["answer"] = f"{stale_warning(fresh['ingested_at'])}\n\n{answer}"
+    chip = fresh["label"].upper() if fresh else "N/A"
+    footer = f"[confidence: {state}] [freshness: {chip}] [sources: {len(files)}]" + (
         f" [latency: {latency}ms]" if latency is not None else ""
     )
     # Licences the cited text is under (Wikipedia's CC BY-SA), which a reuse must keep.

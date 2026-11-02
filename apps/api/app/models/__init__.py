@@ -15,6 +15,7 @@ from app.models.code_graph import (
 from app.models.integrations import Webhook
 from app.models.knowledge import AnswerLog, KnowledgeSignal
 from app.models.security import ApiKey, AuditEvent
+from app.models.versions import HealthSnapshot, SourceVersion
 
 __all__ = [
     "EDGE_KINDS",
@@ -27,10 +28,12 @@ __all__ = [
     "Base",
     "Edge",
     "File",
+    "HealthSnapshot",
     "KnowledgeAudit",
     "KnowledgeSignal",
     "SharedChat",
     "Source",
+    "SourceVersion",
     "Symbol",
     "Webhook",
 ]

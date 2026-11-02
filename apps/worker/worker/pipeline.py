@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import dataclass, field
 from pathlib import Path, PurePosixPath
 
-from sqlalchemy import Engine, create_engine, text
+from sqlalchemy import Engine, create_engine, select, text
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -35,6 +35,8 @@ Progress = Callable[[str], None]
 
 _GO_MODULE = re.compile(rb"^module\s+(\S+)", re.MULTILINE)
 # Dependencies and build output. Hidden directories are skipped as well.
+# Documents with less text than this are not worth a passage.
+MIN_DOCUMENT_CHARS = 50
 _SKIP_DIRS = {"node_modules", "vendor", "__pycache__", "venv", "dist"}
 
 
@@ -111,7 +113,11 @@ def parse_repo(
 
 
 def embed_symbols(files: list[FileExtraction], embedder: Embedder, progress: Progress) -> None:
-    symbols = [symbol for f in files for symbol in f.symbols]
+    """Embeds every symbol that does not have its embedding yet (an unchanged file's
+    are reused, see reuse_embeddings)."""
+    symbols = [symbol for f in files for symbol in f.symbols if symbol.embedding is None]
+    if not symbols:
+        return
 
     reported = 0
 
@@ -125,6 +131,42 @@ def embed_symbols(files: list[FileExtraction], embedder: Embedder, progress: Pro
     vectors = embedder.encode([symbol_text(s) for s in symbols], report)
     for symbol, vector in zip(symbols, vectors, strict=True):
         symbol.embedding = vector
+
+
+def reuse_embeddings(engine: Engine, key: str, files: list[FileExtraction]) -> tuple[int, int]:
+    """Incremental ingest: a file whose content hash is unchanged since the last ingest
+    of this source keeps its symbols' embeddings, so only changed files are embedded.
+    Returns (embeddings reused, unchanged files)."""
+    from app import models
+
+    try:
+        with Session(engine) as session:
+            rows = session.execute(
+                select(
+                    models.File.path, models.File.hash, models.Symbol.name, models.Symbol.kind,
+                    models.Symbol.start_line, models.Symbol.end_line, models.Symbol.embedding,
+                )
+                .join(models.Symbol, models.Symbol.file_id == models.File.id)
+                .join(models.Source, models.Source.id == models.File.source_id)
+                .where(models.Source.key == key)
+            ).all()  # fmt: skip
+    except SQLAlchemyError:
+        return 0, 0
+    known: dict[tuple[str, str], dict[tuple, object]] = {}
+    for path, digest, name, kind, start, end, vector in rows:
+        known.setdefault((path, digest), {})[(name, kind, start, end)] = vector
+    reused = unchanged = 0
+    for f in files:
+        previous = known.get((f.path, f.hash))
+        if previous is None:
+            continue
+        unchanged += 1
+        for symbol in f.symbols:
+            vector = previous.get((symbol.name, symbol.kind, symbol.start_line, symbol.end_line))
+            if vector is not None:
+                symbol.embedding = list(vector)
+                reused += 1
+    return reused, unchanged
 
 
 def check_database(engine: Engine) -> None:
@@ -198,11 +240,16 @@ def ingest_directory(
     _under_prefix(repo.files, prefix)
 
     progress(f"[4/5] Embedding {symbol_count} symbols")
+    reused, unchanged = reuse_embeddings(engine, source.key, repo.files)
+    if unchanged:
+        progress(f"      {unchanged} unchanged files: {reused} embeddings reused")
     embed_symbols(repo.files, embedder, lambda m: progress(f"      {m}"))
 
     progress("[5/5] Writing to Postgres")
     with Session(engine) as session, session.begin():
-        store_source(session, source, repo.files, edges)
+        duplicates = store_source(session, source, repo.files, edges)
+    if duplicates:
+        progress(f"      {duplicates} passages were also found in other sources")
 
     return IngestResult(files=len(repo.files), symbols=symbol_count, edges=len(edges))
 
@@ -230,6 +277,7 @@ def ingest_repo(
                 key=f"repo:{owner}/{name}".lower(),
                 title=f"{owner}/{name}",
                 url=f"https://github.com/{owner}/{name}",
+                updated_at=cloned.committed_at,
             ),
             prefix=f"{owner}/{name}/",
             max_file_bytes=settings.max_file_bytes,
@@ -264,6 +312,13 @@ def ingest_documents(
         progress(f"[2/4] Splitting {len(loaded.documents)} document(s) into passages")
         files = []
         for document in loaded.documents:
+            # Validation: too little text to be worth a passage, or garbled encoding.
+            if len(document.text.strip()) < MIN_DOCUMENT_CHARS:
+                progress(f"      skipped {document.path}: under {MIN_DOCUMENT_CHARS} characters")
+                continue
+            garbled = document.text.count("�")
+            if garbled > len(document.text) * 0.005:
+                progress(f"      {document.path}: {garbled} unreadable characters (encoding issue)")
             try:
                 files.append(build_extraction(document))
             except ValueError as error:
@@ -274,12 +329,19 @@ def ingest_documents(
         progress(f"      {len(files)} document(s), {passages} passages")
 
         progress(f"[3/4] Embedding {passages} passages")
+        reused, unchanged = reuse_embeddings(engine, key, files)
+        if unchanged:
+            progress(f"      {unchanged} unchanged document(s): {reused} embeddings reused")
         embed_symbols(files, _load_embedder(settings, progress), lambda m: progress(f"      {m}"))
 
         progress("[4/4] Writing to Postgres")
-        source = SourceInfo(kind=kind, key=key, title=loaded.title, url=loaded.url)
+        source = SourceInfo(
+            kind=kind, key=key, title=loaded.title, url=loaded.url, updated_at=loaded.updated_at
+        )
         with Session(engine) as session, session.begin():
-            store_source(session, source, files, [])
+            duplicates = store_source(session, source, files, [])
+        if duplicates:
+            progress(f"      {duplicates} passages were also found in other sources")
         return IngestResult(
             files=len(files), symbols=sum(len(f.symbols) for f in files), edges=0
         )

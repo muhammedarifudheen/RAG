@@ -163,6 +163,11 @@ class Settings(BaseSettings):
     # Requests a minute for each API key (X-Atlas-Key).
     api_key_rate_limit_per_minute: int = 60
 
+    # Freshness: days after ingest before a source is STALE (a third of it is FRESH).
+    freshness_code_days: int = 30
+    freshness_docs_days: int = 90
+    freshness_news_days: int = 7
+
     # Integrations. Webhooks set on the server (comma-separated), beside the admin's own,
     # signed with this secret.
     atlas_webhooks: str | None = None

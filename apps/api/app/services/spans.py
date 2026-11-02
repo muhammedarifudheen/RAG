@@ -5,6 +5,8 @@ from sqlalchemy.orm import Session
 
 from app.models import File, Source
 from app.schemas import CodeChunk
+from app.services.freshness import category
+from app.services.freshness import label as freshness_label
 from app.services.weights import source_license, source_weight
 
 _COLUMNS = (
@@ -13,6 +15,7 @@ _COLUMNS = (
     File.language,
     File.content,
     *(Source.kind, Source.url, Source.title, Source.weight),
+    *(Source.id, Source.created_at, Source.source_updated_at),
 )
 
 
@@ -33,7 +36,8 @@ def read_span(db: Session, path: str, start: int, end: int) -> CodeChunk | None:
         if len(matches) != 1:
             return None
         row = matches[0]
-    file_id, file_path, language, content, kind, url, title, override = row
+    file_id, file_path, language, content, kind, url, title, override = row[:8]
+    source_id, ingested, updated = row[8:11]
     lines = (content or "").split("\n")
     if start < 1 or start > len(lines):
         return None
@@ -57,6 +61,10 @@ def read_span(db: Session, path: str, start: int, end: int) -> CodeChunk | None:
         license=source_license(kind, url),
         source_url=url,
         source_title=title,
+        source_id=source_id,
+        ingested_at=ingested,
+        source_updated_at=updated,
+        freshness=freshness_label(ingested, category(kind, url, file_path)),
     )
 
 

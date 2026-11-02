@@ -13,6 +13,8 @@ import urllib.error
 import urllib.request
 import urllib.robotparser
 from dataclasses import dataclass
+from datetime import datetime
+from email.utils import parsedate_to_datetime
 from urllib.parse import urljoin, urlsplit
 
 USER_AGENT = "AtlasBot/0.1 (knowledge-base ingestion; contact the site operator of this deployment)"
@@ -31,6 +33,8 @@ class Fetched:
     url: str  # after redirects
     body: bytes
     content_type: str
+    # The Last-Modified header, if the site sent one.
+    modified: datetime | None = None
 
 
 def check_public_url(url: str) -> str:
@@ -79,7 +83,12 @@ def fetch(url: str, *, max_bytes: int = MAX_BYTES, accept: str = "text/html,*/*;
                 body = response.read(max_bytes + 1)
                 if len(body) > max_bytes:
                     raise FetchError(f"That page is larger than {max_bytes // 1_000_000} MB.")
-                return Fetched(url, body, response.headers.get_content_type())
+                return Fetched(
+                    url,
+                    body,
+                    response.headers.get_content_type(),
+                    _http_date(response.headers.get("Last-Modified")),
+                )
         except urllib.error.HTTPError as error:
             location = error.headers.get("Location") if error.headers else None
             if error.code in (301, 302, 303, 307, 308) and location:
@@ -90,6 +99,15 @@ def fetch(url: str, *, max_bytes: int = MAX_BYTES, accept: str = "text/html,*/*;
             reason = getattr(error, "reason", error)
             raise FetchError(f"Could not reach {urlsplit(url).hostname}: {reason}") from error
     raise FetchError("Too many redirects.")
+
+
+def _http_date(value: str | None) -> datetime | None:
+    if not value:
+        return None
+    try:
+        return parsedate_to_datetime(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def robots_for(url: str) -> urllib.robotparser.RobotFileParser:
