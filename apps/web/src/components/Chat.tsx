@@ -65,9 +65,9 @@ const MODES: { value: AssistantMode; label: string; hint: string }[] = [
 
 const STARTERS = [
   { tag: "Sources", text: "How does itsdangerous sign data and check a signature?" },
-  { tag: "Picture", text: "Draw a retro-futurist city skyline at dusk, chrome and neon" },
+  { tag: "Explore", text: "Who calls verify_signature?" },
+  { tag: "Compare", text: "Compare Signer and TimestampSigner" },
   { tag: "Code", text: "Write a Python function that removes duplicates from a list, keeping order" },
-  { tag: "Explain", text: "Explain the difference between TCP and UDP in a table" },
 ];
 
 type DialogName = "settings" | "share" | "shortcuts" | null;
