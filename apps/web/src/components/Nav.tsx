@@ -14,6 +14,7 @@ const LINKS = [
   { href: "/graph", label: "Graph" },
   { href: "/health", label: "Health" },
   { href: "/analyze", label: "Analyse" },
+  { href: "/insights", label: "Insights" },
 ];
 
 /** A glass bar floating over the page. */

@@ -1,4 +1,5 @@
 import type {
+  AnalyticsResult,
   AnswerFormat,
   AnswerStyle,
   ApiErrorBody,
@@ -533,6 +534,30 @@ export function getKgNode(node: string): Promise<KgNodeDetail> {
 /** A question about the graph in words: shortest path, callers, dependencies… */
 export function askGraph(q: string): Promise<KgGraph> {
   return request<KgGraph>(`/kg/ask${query({ q })}`);
+}
+
+/** Rates an answer: up, or down with a reason (it then counts among the failing). */
+export async function sendFeedback(question: string, rating: "up" | "down", reason?: string): Promise<void> {
+  const response = await fetch(`${API_BASE}/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ question, rating, reason: reason || null }),
+  });
+  if (!response.ok) throw await errorFrom(response);
+}
+
+/** analytics.query(metric, window, filter) over the answer log (admin). */
+export async function getAnalytics(metric: string, window = 7, filter?: string): Promise<AnalyticsResult> {
+  const response = await adminFetch(`/analytics${query({ metric, window, filter })}`, { method: "GET" });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as AnalyticsResult;
+}
+
+/** An analytics query as CSV (admin). */
+export async function exportAnalytics(metric: string, window = 30): Promise<Blob> {
+  const response = await adminFetch(`/export/analytics.csv${query({ metric, window })}`, { method: "GET" });
+  if (!response.ok) throw await errorFrom(response);
+  return response.blob();
 }
 
 /** Each source's live health, with actions, and the overall score with its history. */

@@ -124,14 +124,15 @@ def test_embeddings_are_openai_compatible(plain_client):
 # --- With the database (run in CI) ---------------------------------------------------
 
 
-def test_feedback_and_analytics_follow_the_answers(client):
+def test_feedback_and_analytics_follow_the_answers(client, engine):
     client.post("/ask", json={"question": "Who calls format_name?", "style": "concise"})
     client.post("/ask", json={"question": "Who calls format_name?", "style": "concise"})
     # Answers the database gives directly are not logged; log one the usual way.
-    from app.db import SessionLocal
+    from sqlalchemy.orm import Session
+
     from app.models import AnswerLog
 
-    with SessionLocal() as db:
+    with Session(engine) as db:
         db.add(AnswerLog(question="What is the tagline?", state="absent", route="sources", citations=2,
                          verified=1, latency_ms=4200, mode="ASK"))  # fmt: skip
         db.commit()
@@ -158,9 +159,14 @@ def test_feedback_and_analytics_follow_the_answers(client):
     assert client.get("/v1/graph", params={"node": "format_name"}).json()["nodes"]
 
 
-def test_an_admin_key_can_query_analytics(client, monkeypatch):
+def test_an_admin_key_can_query_analytics(client, engine, monkeypatch):
+    from sqlalchemy.orm import sessionmaker
+
+    import app.db
     from app.config import settings
 
+    # Keys are looked up outside the request's session: in the test database here.
+    monkeypatch.setattr(app.db, "SessionLocal", sessionmaker(bind=engine))
     made = client.post("/keys", json={"name": "ops", "scope": "admin"}).json()
     monkeypatch.setattr(settings, "admin_token", "secret")
     assert client.get("/analytics", params={"metric": "feedback"}).status_code == 401

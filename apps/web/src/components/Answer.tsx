@@ -27,7 +27,7 @@ import {
   parseCitationHref,
   type CodeRange,
 } from "@/lib/citations";
-import { challengeAnswer, factCheck, findGaps } from "@/lib/api";
+import { challengeAnswer, factCheck, findGaps, sendFeedback } from "@/lib/api";
 import { copyText } from "@/lib/exporting";
 import { normalizeMath } from "@/lib/markdown";
 
@@ -231,6 +231,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
           {response.footer}
         </p>
       )}
+      {response.complete && response.route !== "image" && <Feedback question={response.question} />}
 
       {!response.complete && (
         <p className="mt-3 text-xs text-warn">This answer was cut off at the length limit.</p>
@@ -1018,6 +1019,60 @@ function CodePre({ node, children }: { node?: unknown; children?: ReactNode }) {
       ) : (
         <pre>{children}</pre>
       )}
+    </div>
+  );
+}
+
+/** 👍 or 👎 on an answer; a 👎 asks why. Both go to the answer log, where thumbs down
+ * join the failing questions on the Insights page. */
+function Feedback({ question }: { question: string }) {
+  const [state, setState] = useState<"idle" | "why" | "sent" | "failed">("idle");
+  const [reason, setReason] = useState("");
+
+  async function send(rating: "up" | "down", why?: string) {
+    try {
+      await sendFeedback(question, rating, why);
+      setState("sent");
+    } catch {
+      setState("failed");
+    }
+  }
+
+  if (state === "sent") return <p role="status" className="mt-2 text-xs text-muted">Thanks: that helps Atlas improve.</p>;
+  return (
+    <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-muted">
+      <span>Was this useful?</span>
+      <button type="button" aria-label="Helpful" onClick={() => void send("up")} className="rounded-full border border-line px-2 py-0.5 hover:border-ok/60 hover:text-ok">
+        👍
+      </button>
+      <button type="button" aria-label="Not helpful" onClick={() => setState("why")} className="rounded-full border border-line px-2 py-0.5 hover:border-danger/60 hover:text-danger">
+        👎
+      </button>
+      {state === "why" && (
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            void send("down", reason);
+          }}
+          className="flex items-center gap-2"
+        >
+          <label htmlFor={`why-${question.length}`} className="sr-only">
+            What was wrong?
+          </label>
+          <input
+            id={`why-${question.length}`}
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="What was wrong?"
+            maxLength={500}
+            className="w-56 rounded-full border border-line bg-ink px-3 py-0.5 text-xs outline-none focus:border-signal"
+          />
+          <button type="submit" className="rounded-full bg-signal px-2 py-0.5 text-on-signal">
+            Send
+          </button>
+        </form>
+      )}
+      {state === "failed" && <span className="text-danger">Not saved.</span>}
     </div>
   );
 }

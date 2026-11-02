@@ -37,7 +37,14 @@ import {
   type StoredMessage,
 } from "@/lib/chats";
 import type { CodeRange } from "@/lib/citations";
-import { chatToMarkdown, copyText, download, exportAllChats, fileNameOf } from "@/lib/exporting";
+import {
+  chatToMarkdown,
+  copyText,
+  download,
+  exportAllChats,
+  fileNameOf,
+  printChat,
+} from "@/lib/exporting";
 import { useSpeaker } from "@/lib/speech";
 
 import { Answer, Gallery, ResearchSteps, StreamingAnswer } from "./Answer";
@@ -589,6 +596,12 @@ export function Chat() {
             title="Save this chat as Markdown"
             disabled={messages.length === 0}
             onClick={() => download(fileNameOf(title, "md"), chatToMarkdown(title, stored()), "text/markdown")}
+          />
+          <HeaderButton
+            label="PDF"
+            title="Print or save this chat as PDF, citations as footnotes"
+            disabled={messages.length === 0}
+            onClick={() => printChat(title, stored())}
           />
         </div>
 

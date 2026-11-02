@@ -782,3 +782,13 @@ export interface KgNodeDetail extends KgNode {
     evidence: string | null;
   }[];
 }
+
+export type AnalyticsMetric = "top_questions" | "failing" | "gaps" | "slowest" | "sources" | "drift" | "feedback";
+
+/** A query over the answer log: rows whose fields depend on the metric. */
+export interface AnalyticsResult {
+  metric: AnalyticsMetric;
+  window: number;
+  filter?: string | null;
+  rows: Record<string, unknown>[];
+}
