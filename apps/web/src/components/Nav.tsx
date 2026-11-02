@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { applyTheme, currentTheme, type Theme } from "@/lib/theme";
 
-import { StarMark } from "./Ornament";
+import { DragonMark } from "./Ornament";
 
 const LINKS = [
   { href: "/", label: "Ingest" },
@@ -39,8 +39,8 @@ export function Nav() {
           className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3"
           aria-label="Atlas home"
         >
-          {/* The mark: an eight-pointed star of gold and lapis with a jade heart. */}
-          <StarMark className="h-7 w-7 drop-shadow-[0_0_10px_rgba(47,212,208,0.55)]" />
+          {/* The mark: the glass dragon coiled round its pearl. */}
+          <DragonMark className="h-8 w-8 drop-shadow-[0_0_10px_rgba(51,214,240,0.55)]" />
           <span className="chrome-text font-display text-[20px] font-semibold uppercase tracking-[0.22em]">
             Atlas
           </span>

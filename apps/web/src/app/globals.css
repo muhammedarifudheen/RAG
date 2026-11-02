@@ -2,82 +2,72 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Atlas, "Pietra dura": Mughal architecture as the layout (a pishtaq portal framing each
-   heading, a charbagh garden of quadrants and water channels, an inlaid frieze along the
-   top), in night-dark stone set with lapis, turquoise, jade, carnelian and gold, finished
-   futuristically: iridescent edges, flowing light, glass. The light theme (Settings →
-   Appearance) is marble by day. Colours are RGB triplets, so Tailwind's /opacity works:
-   rgb(var(--signal) / 0.4). */
+/* Atlas, "Glass dragon": an Eastern dragon of coloured glass (jade, turquoise, violet,
+   magenta, gold and flame) on deep night, frosted glass panels with iridescent edges,
+   light that flows, a texture of scales at the edges of the page. The light theme
+   (Settings → Appearance) is daylight glass. Colours are RGB triplets, so Tailwind's
+   /opacity works: rgb(var(--signal) / 0.4). */
 :root {
   color-scheme: dark;
-  --ink: 6 7 16; /* page: night stone */
-  --panel: 13 14 28; /* cards, bars */
-  --raised: 23 25 46; /* hover, inputs */
-  --line: 44 46 80;
-  --line-strong: 82 86 134;
-  --paper: 244 240 230; /* text: marble */
-  --soft: 214 211 226;
-  --muted: 160 158 188;
-  --faint: 118 116 148;
-  --signal: 240 186 76; /* gold, the accent */
-  --signal-hover: 252 208 120;
-  --on-signal: 22 13 2; /* text on gold */
-  --acid: 52 200 138; /* jade */
-  --cyan: 96 214 230; /* links: turquoise */
-  --danger: 240 98 86; /* carnelian */
-  --warn: 245 186 70;
-  --ok: 60 210 140;
-  --lapis: 74 109 255;
-  --turquoise: 47 212 208;
-  --carnelian: 236 92 76;
-  --amethyst: 164 110 255;
+  --ink: 5 6 14; /* page: night */
+  --panel: 12 13 26; /* cards, bars */
+  --raised: 22 24 44;
+  --line: 42 44 78;
+  --line-strong: 80 84 132;
+  --paper: 242 242 250; /* text */
+  --soft: 212 212 230;
+  --muted: 158 160 190;
+  --faint: 116 118 150;
+  --signal: 51 214 240; /* turquoise, the accent */
+  --signal-hover: 120 230 248;
+  --on-signal: 3 14 22;
+  --acid: 46 229 157; /* jade */
+  --cyan: 120 200 255; /* links */
+  --danger: 255 96 110;
+  --warn: 255 196 77; /* gold */
+  --ok: 46 229 157;
   --radius: 14px;
-  --glass: rgba(14, 15, 32, 0.7);
-  --glass-edge: rgba(255, 255, 255, 0.07);
+  --glass: rgba(14, 15, 32, 0.62);
+  --glass-edge: rgba(255, 255, 255, 0.08);
   --shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --glow: 0 0 26px -6px rgba(47, 212, 208, 0.45);
-  --code-inline: 120 220 236;
-  /* Iridescence: the stones in a row. */
+  --glow: 0 0 26px -6px rgba(51, 214, 240, 0.5);
+  --code-inline: 140 226 248;
+  /* Iridescence: the dragon's colours in a row. */
   --iris: linear-gradient(
     110deg,
-    rgb(74 109 255),
-    rgb(47 212 208),
-    rgb(52 200 138),
-    rgb(240 186 76),
-    rgb(236 92 76),
-    rgb(164 110 255),
-    rgb(74 109 255)
+    rgb(46 229 157),
+    rgb(51 214 240),
+    rgb(139 108 255),
+    rgb(255 79 179),
+    rgb(255 196 77),
+    rgb(46 229 157)
   );
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --ink: 247 244 238; /* white marble */
-  --panel: 255 253 249;
-  --raised: 238 234 226;
-  --line: 222 216 204;
-  --line-strong: 196 186 168;
-  --paper: 24 22 38;
-  --soft: 62 58 82;
-  --muted: 108 104 130;
-  --faint: 150 146 168;
-  --signal: 150 100 10;
-  --signal-hover: 120 78 4;
-  --on-signal: 255 251 240;
-  --acid: 10 128 86;
-  --cyan: 10 110 140;
-  --danger: 188 52 42;
+  --ink: 246 246 252;
+  --panel: 255 255 255;
+  --raised: 236 237 246;
+  --line: 222 222 236;
+  --line-strong: 192 194 214;
+  --paper: 18 18 34;
+  --soft: 58 58 84;
+  --muted: 104 106 134;
+  --faint: 148 150 176;
+  --signal: 6 120 150;
+  --signal-hover: 4 96 122;
+  --on-signal: 255 255 255;
+  --acid: 6 128 84;
+  --cyan: 20 90 190;
+  --danger: 196 40 60;
   --warn: 160 100 0;
   --ok: 10 130 80;
-  --lapis: 40 70 210;
-  --turquoise: 8 140 140;
-  --carnelian: 196 62 48;
-  --amethyst: 120 70 210;
-  --glass: rgba(255, 253, 248, 0.8);
-  --glass-edge: rgba(24, 22, 38, 0.08);
-  --shadow: 0 24px 60px -30px rgba(40, 70, 210, 0.25), 0 6px 18px -10px rgba(24, 22, 38, 0.12);
-  --glow: 0 0 18px -4px rgba(8, 140, 140, 0.4);
-  --code-inline: 30 70 190;
+  --glass: rgba(255, 255, 255, 0.72);
+  --glass-edge: rgba(18, 18, 34, 0.08);
+  --shadow: 0 24px 60px -30px rgba(90, 60, 200, 0.28), 0 6px 18px -10px rgba(18, 18, 34, 0.12);
+  --glow: 0 0 18px -4px rgba(6, 120, 150, 0.4);
+  --code-inline: 60 40 180;
 }
 
 html {
@@ -90,31 +80,31 @@ body {
   background-color: transparent;
 }
 
-/* Light from the stones, drifting slowly behind everything. */
+/* The dragon's colours glowing behind the glass, drifting slowly. */
 body::before {
   position: fixed;
   z-index: -2;
   inset: -20%;
   background:
-    radial-gradient(32% 28% at 16% 14%, rgba(74, 109, 255, 0.2), transparent 70%),
-    radial-gradient(28% 26% at 86% 12%, rgba(240, 186, 76, 0.12), transparent 70%),
-    radial-gradient(30% 28% at 80% 84%, rgba(47, 212, 208, 0.13), transparent 70%),
-    radial-gradient(28% 26% at 18% 86%, rgba(236, 92, 76, 0.1), transparent 70%),
-    radial-gradient(24% 22% at 50% 55%, rgba(164, 110, 255, 0.07), transparent 70%);
-  filter: blur(40px);
+    radial-gradient(30% 28% at 16% 16%, rgba(139, 108, 255, 0.22), transparent 70%),
+    radial-gradient(28% 26% at 86% 12%, rgba(255, 79, 179, 0.13), transparent 70%),
+    radial-gradient(30% 28% at 80% 84%, rgba(51, 214, 240, 0.16), transparent 70%),
+    radial-gradient(28% 26% at 18% 86%, rgba(46, 229, 157, 0.13), transparent 70%),
+    radial-gradient(22% 20% at 52% 50%, rgba(255, 196, 77, 0.06), transparent 70%);
+  filter: blur(42px);
   content: "";
   animation: drift 40s ease-in-out infinite;
   pointer-events: none;
 }
 
-/* A jaali of eight-pointed stars in gold and lapis, at the edges of the page. */
+/* Scales at the edges of the page, clear in the middle where the reading is. */
 body::after {
   position: fixed;
   z-index: -1;
   inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke-width='0.9'%3E%3Crect x='18' y='18' width='28' height='28' stroke='%23f0ba4c'/%3E%3Crect x='18' y='18' width='28' height='28' transform='rotate(45 32 32)' stroke='%234a6dff'/%3E%3Ccircle cx='32' cy='32' r='6' stroke='%232fd4d0'/%3E%3Cpath d='M0 0L18 18M64 0L46 18M0 64L18 46M64 64L46 46' stroke='%23f0ba4c'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 64px 64px;
-  opacity: 0.18;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='20' viewBox='0 0 36 20'%3E%3Cg fill='none' stroke='%2333d6f0' stroke-width='0.9'%3E%3Cpath d='M0 20A18 18 0 0 1 36 20'/%3E%3Cpath d='M-18 10A18 18 0 0 1 18 10' stroke='%238b6cff'/%3E%3Cpath d='M18 10A18 18 0 0 1 54 10' stroke='%238b6cff'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 36px 20px;
+  opacity: 0.16;
   content: "";
   -webkit-mask-image: radial-gradient(ellipse 62% 58% at 50% 42%, transparent 40%, #000 95%);
   mask-image: radial-gradient(ellipse 62% 58% at 50% 42%, transparent 40%, #000 95%);
@@ -123,161 +113,141 @@ body::after {
 
 :root[data-theme="light"] body::before {
   background:
-    radial-gradient(36% 32% at 18% 16%, rgba(120, 150, 255, 0.28), transparent 70%),
-    radial-gradient(32% 30% at 84% 16%, rgba(250, 210, 140, 0.4), transparent 70%),
-    radial-gradient(36% 34% at 74% 80%, rgba(120, 220, 210, 0.3), transparent 70%),
-    radial-gradient(30% 28% at 22% 84%, rgba(240, 160, 150, 0.25), transparent 70%);
+    radial-gradient(36% 32% at 18% 16%, rgba(170, 150, 255, 0.35), transparent 70%),
+    radial-gradient(32% 30% at 84% 16%, rgba(255, 170, 215, 0.35), transparent 70%),
+    radial-gradient(36% 34% at 74% 80%, rgba(140, 225, 245, 0.35), transparent 70%),
+    radial-gradient(30% 28% at 22% 84%, rgba(150, 240, 200, 0.3), transparent 70%);
   filter: blur(30px);
 }
 
 :root[data-theme="light"] body::after {
-  opacity: 0.14;
+  opacity: 0.12;
 }
 
-/* The frieze along the top of the site: a band of pietra dura, a diamond of turquoise
-   in a gold lozenge with lapis and carnelian between. */
-.inlay-band {
-  background-color: #09091a;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='12' viewBox='0 0 24 12'%3E%3Cpath d='M12 0.8L18 6L12 11.2L6 6Z' fill='none' stroke='%23f0ba4c' stroke-width='0.9'/%3E%3Cpath d='M12 3.4L15 6L12 8.6L9 6Z' fill='%232fd4d0'/%3E%3Ccircle cx='0' cy='6' r='1.8' fill='%234a6dff'/%3E%3Ccircle cx='24' cy='6' r='1.8' fill='%234a6dff'/%3E%3Ccircle cx='12' cy='6' r='0.9' fill='%23ec5c4c'/%3E%3C/svg%3E");
-  background-size: 24px 12px;
-  box-shadow: 0 1px 0 rgba(240, 186, 76, 0.35), 0 6px 22px -8px rgba(47, 212, 208, 0.45);
-}
-
-/* An inlaid rule for dividers: the stones in a line, fading out. */
-.inlay-rule {
+/* A rule in the dragon's colours, fading out. */
+.scale-rule {
   border-radius: 2px;
   background: var(--iris);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 60%);
-  mask-image: linear-gradient(90deg, transparent, #000 60%);
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%);
+  mask-image: linear-gradient(90deg, transparent, #000 70%);
 }
 
-/* The pishtaq: an inlaid frame (alfiz) around the recess. */
-.pishtaq {
-  position: relative;
-  border-radius: 6px;
-  padding: 12px;
-  background-color: #09091a;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24'%3E%3Cpath d='M12 1.5L22.5 12L12 22.5L1.5 12Z' fill='none' stroke='%23f0ba4c' stroke-width='0.9'/%3E%3Cpath d='M12 6L18 12L12 18L6 12Z' fill='%234a6dff'/%3E%3Cpath d='M12 9L15 12L12 15L9 12Z' fill='%232fd4d0'/%3E%3Ccircle cx='0' cy='0' r='2.2' fill='%23ec5c4c'/%3E%3Ccircle cx='24' cy='0' r='2.2' fill='%2334c88a'/%3E%3Ccircle cx='0' cy='24' r='2.2' fill='%2334c88a'/%3E%3Ccircle cx='24' cy='24' r='2.2' fill='%23ec5c4c'/%3E%3C/svg%3E");
-  background-size: 24px 24px;
-  box-shadow:
-    0 0 0 1px rgba(240, 186, 76, 0.55),
-    0 0 40px -10px rgba(74, 109, 255, 0.55),
-    0 0 70px -20px rgba(47, 212, 208, 0.4),
-    0 30px 60px -30px rgba(0, 0, 0, 0.9);
+/* The dragon: scales flowing along the body, whiskers swaying, the eye and the pearl
+   glowing, the whole floating gently. */
+.dragon {
+  overflow: visible;
 }
-.pishtaq-recess {
-  position: relative;
-  overflow: hidden;
-  border-radius: 2px;
-  background: rgb(var(--ink));
-  box-shadow: inset 0 0 0 1px rgba(240, 186, 76, 0.45);
+.dragon-float {
+  animation: dragon-float 9s ease-in-out infinite;
+  will-change: transform;
+}
+.dragon-scales {
+  animation: scales-flow 3.5s linear infinite;
+}
+.dragon-whiskers {
+  transform-box: fill-box;
+  transform-origin: left center;
+  animation: whiskers 4s ease-in-out infinite;
+}
+.dragon-eye {
+  animation: eye-glow 3s ease-in-out infinite;
+}
+.dragon-pearl,
+.pearl {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.dragon-pearl {
+  animation: pearl-float 5s ease-in-out infinite;
+}
+.pearl {
+  animation: pearl-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dragon-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-6px);
+  }
+}
+@keyframes scales-flow {
+  to {
+    stroke-dashoffset: -21;
+  }
+}
+@keyframes whiskers {
+  0%,
+  100% {
+    transform: rotate(0deg);
+  }
+  50% {
+    transform: rotate(7deg);
+  }
+}
+@keyframes eye-glow {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+@keyframes pearl-float {
+  0%,
+  100% {
+    transform: translate(0, 0);
+  }
+  50% {
+    transform: translate(-4px, -8px);
+  }
+}
+@keyframes pearl-pulse {
+  0%,
+  100% {
+    transform: scale(0.85);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.1);
+    opacity: 1;
+  }
 }
 
-/* Light flowing along the arch. */
-.arch-flow {
-  stroke-dasharray: 40 960;
-  animation: arch-flow 6s linear infinite;
-  filter: drop-shadow(0 0 4px #2fd4d0);
-}
-@keyframes arch-flow {
-  from {
-    stroke-dashoffset: 1000;
-  }
-  to {
-    stroke-dashoffset: 0;
-  }
-}
-
-/* The charbagh: water channels between the quadrants, flowing, and a fountain. */
-.charbagh .channel {
-  position: absolute;
-  z-index: 0;
-  border-radius: 2px;
-  background: linear-gradient(
-    var(--channel-angle, 180deg),
-    rgba(47, 212, 208, 0),
-    rgba(47, 212, 208, 0.9),
-    rgba(74, 109, 255, 0.9),
-    rgba(47, 212, 208, 0)
-  );
-  background-size: 100% 200%;
-  box-shadow: 0 0 14px rgba(47, 212, 208, 0.6);
-  animation: water 4s linear infinite;
-}
-.charbagh .channel-v {
-  top: -14px;
-  bottom: -14px;
-  left: calc(50% - 1.5px);
-  width: 3px;
-}
-.charbagh .channel-h {
-  --channel-angle: 90deg;
-  left: -14px;
-  right: -14px;
-  top: calc(50% - 1.5px);
-  height: 3px;
-  background-size: 200% 100%;
-}
-.charbagh > .glass {
-  z-index: 1;
-}
-.charbagh .fountain {
-  position: absolute;
-  z-index: 2;
-  top: 50%;
-  left: 50%;
-  display: grid;
-  height: 3.25rem;
-  width: 3.25rem;
-  place-items: center;
-  border-radius: 9999px;
-  background: rgb(var(--ink));
-  box-shadow:
-    0 0 0 1px rgba(240, 186, 76, 0.6),
-    0 0 26px rgba(47, 212, 208, 0.65);
-  transform: translate(-50%, -50%);
-}
-@keyframes water {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: 0 -200%;
-  }
-}
-.charbagh .channel-h {
-  animation-name: water-across;
-}
-@keyframes water-across {
-  from {
-    background-position: 0 0;
-  }
-  to {
-    background-position: -200% 0;
-  }
-}
-/* Each quadrant glows faintly with its stone. */
-.quadrant-glow {
+/* Glass cards, each lit from a corner by one of the dragon's colours. */
+.card-light {
   position: absolute;
   inset: 0;
-  background: radial-gradient(80% 70% at 0% 0%, color-mix(in srgb, var(--stone) 22%, transparent), transparent 70%);
+  background: radial-gradient(85% 75% at 0% 0%, color-mix(in srgb, var(--scale) 24%, transparent), transparent 70%);
   pointer-events: none;
 }
-.quadrant-gem {
+.card-gem {
   display: inline-block;
   height: 0.7rem;
   width: 0.7rem;
-  transform: rotate(45deg);
-  border-radius: 2px;
-  background: var(--stone);
-  box-shadow: 0 0 12px var(--stone);
+  border-radius: 9999px;
+  background: var(--scale);
+  box-shadow: 0 0 12px var(--scale);
+}
+.glass-card {
+  transition:
+    transform 0.25s ease,
+    box-shadow 0.25s ease;
+}
+.glass-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 18px 40px -20px var(--scale);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .arch-flow {
-    display: none;
-  }
-  .charbagh .channel,
+  .dragon-float,
+  .dragon-scales,
+  .dragon-whiskers,
+  .dragon-eye,
+  .dragon-pearl,
+  .pearl,
   .chrome-text,
   body::before {
     animation: none;
@@ -346,16 +316,16 @@ body::after {
 }
 
 @layer components {
-  /* Inlaid lettering: the stones flowing slowly through the letters. */
+  /* Lettering in the dragon's colours, flowing slowly. */
   .chrome-text {
     background: linear-gradient(
       100deg,
-      #7d98ff 0%,
-      #4fe3dc 20%,
-      #f3c45e 40%,
-      #ff8a6e 60%,
-      #b98bff 80%,
-      #7d98ff 100%
+      #5ef0b4 0%,
+      #5ee0f5 20%,
+      #a58dff 40%,
+      #ff76c6 60%,
+      #ffd06e 80%,
+      #5ef0b4 100%
     );
     background-size: 220% 100%;
     -webkit-background-clip: text;
@@ -385,7 +355,7 @@ body::after {
     -webkit-backdrop-filter: blur(18px) saturate(1.4);
     backdrop-filter: blur(18px) saturate(1.4);
   }
-  /* An iridescent edge of the stones on every glass panel (a utility class such as
+  /* An iridescent edge in the dragon's colours on every glass panel (a utility class such as
      absolute or fixed still wins over this position). */
   .glass,
   .slab {
@@ -565,8 +535,8 @@ body::after {
   user-select: none;
 }
 .code-view .line.cited {
-  background: rgba(47, 212, 208, 0.12);
-  box-shadow: inset 3px 0 0 #f0ba4c;
+  background: rgba(139, 108, 255, 0.16);
+  box-shadow: inset 3px 0 0 #33d6f0;
 }
 
 /* File nodes and dependency edges on the graph page. */
@@ -645,7 +615,7 @@ html[data-contrast="high"] {
   --soft: 240 240 248;
   --muted: 225 225 236;
   --faint: 205 205 220;
-  --signal: 255 214 130;
+  --signal: 130 232 250;
   --cyan: 130 236 240;
   --acid: 110 231 183;
   --glass: rgb(8, 8, 12);
@@ -661,7 +631,7 @@ html[data-theme="light"][data-contrast="high"] {
   --soft: 20 22 42;
   --muted: 29 31 51;
   --faint: 43 46 69;
-  --signal: 100 70 10;
+  --signal: 4 84 110;
   --cyan: 0 90 62;
   --acid: 0 107 82;
   --glass: #ffffff;
@@ -683,25 +653,19 @@ html[data-contrast="high"] :focus-visible {
   outline-offset: 2px;
 }
 
-/* Inlaid lettering that still reads on marble: deeper stones. */
+/* Lettering that still reads by day: deeper colours. */
 :root[data-theme="light"] .chrome-text {
   background-image: linear-gradient(
     100deg,
-    #2846d2 0%,
-    #08807e 20%,
-    #9a6406 40%,
-    #b83a2c 60%,
-    #6c3fc4 80%,
-    #2846d2 100%
+    #067a52 0%,
+    #06708c 20%,
+    #5b3fd0 40%,
+    #c0287e 60%,
+    #a86a00 80%,
+    #067a52 100%
   );
 }
-:root[data-theme="light"] .inlay-band,
-:root[data-theme="light"] .pishtaq {
-  background-color: #f3eee4;
-}
-:root[data-theme="light"] .pishtaq-recess {
-  background: rgb(var(--panel));
-}
+
 html[data-contrast="high"] .glass::before,
 html[data-contrast="high"] .slab::before {
   display: none;

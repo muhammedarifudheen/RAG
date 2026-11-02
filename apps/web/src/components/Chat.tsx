@@ -42,7 +42,7 @@ import { useSpeaker } from "@/lib/speech";
 
 import { Answer, Gallery, ResearchSteps, StreamingAnswer } from "./Answer";
 import { KnowledgeHealthNote } from "./KnowledgeHealthNote";
-import { Pishtaq, StarRule } from "./Ornament";
+import { Dragon, Pearl, PearlRule } from "./Ornament";
 import { ChatComposer, type ComposerHandle } from "./ChatComposer";
 import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
 import { ChatSidebar } from "./ChatSidebar";
@@ -700,7 +700,9 @@ export function Chat() {
             {pending && streaming && !drawing && <StreamingAnswer text={streaming} />}
 
             {pending && (!streaming || drawing) && (
-              <div role="status" className="slab py-2 pl-4 text-sm text-muted">
+              <div role="status" className="slab flex items-center gap-2.5 py-2 pl-4 text-sm text-muted">
+                {/* The dragon's pearl, glowing while Atlas thinks. */}
+                <Pearl className="h-4 w-4 shrink-0" />
                 <p className="animate-pulse">
                   {drawing
                     ? progress.images.length
@@ -876,23 +878,22 @@ function CouncilPanel({ agents }: { agents: CouncilAgent[] }) {
 
 function EmptyState() {
   return (
-    // The heading in a pishtaq: an inlaid frame around a pointed-arch recess.
-    <Pishtaq className="mx-auto mt-4 max-w-xl sm:mt-8">
-      <div className="px-8 pb-10 pt-24 text-center sm:px-16 sm:pt-28">
-        <p className="label flex items-center justify-center gap-3 text-muted">
-          <span className="bg-signal px-1.5 py-0.5 text-on-signal">02</span>
-          Assistant
-        </p>
-        <h1 className="mt-5 font-display text-3xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
-          Ask about the codebase <span className="text-signal">—</span>{" "}
-          <span className="chrome-text italic">grounded in your sources</span>
-        </h1>
-        <StarRule className="mx-auto mt-6 max-w-xs" />
-        <p className="label mt-5 text-signal">
-          Grounded answers. Verifiable sources. Zero guesswork.
-        </p>
-      </div>
-    </Pishtaq>
+    // The heading, with the glass dragon coiled through it.
+    <div className="hero relative mx-auto mt-2 max-w-2xl px-4 pb-12 pt-28 text-center sm:mt-6 sm:pt-32">
+      <Dragon className="absolute left-1/2 top-0 h-full w-full -translate-x-1/2 sm:w-[124%]" />
+      <p className="label relative flex items-center justify-center gap-3 text-muted">
+        <span className="bg-signal px-1.5 py-0.5 text-on-signal">02</span>
+        Assistant
+      </p>
+      <h1 className="relative mt-5 font-display text-3xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
+        Ask about the codebase <span className="text-signal">—</span>{" "}
+        <span className="chrome-text italic">grounded in your sources</span>
+      </h1>
+      <PearlRule className="relative mx-auto mt-6 max-w-xs" />
+      <p className="label relative mt-5 text-signal">
+        Grounded answers. Verifiable sources. Zero guesswork.
+      </p>
+    </div>
   );
 }
 
@@ -980,7 +981,7 @@ function UserMessage({
         </form>
       ) : (
         <>
-          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-gradient-to-br from-signal to-[#ec8a4c] px-4 py-2.5 text-[15px] text-on-signal shadow-glow">
+          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-gradient-to-br from-signal to-[#8b6cff] px-4 py-2.5 text-[15px] text-on-signal shadow-glow">
             {message.text}
           </p>
           <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
