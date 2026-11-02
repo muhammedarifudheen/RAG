@@ -2,61 +2,64 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Atlas: dark slate with an electric cyan accent, frosted glass panels, light text and
-   monospace for citations. The light theme (Settings → Appearance) keeps the
-   airy "liquid light" look. Colours are RGB triplets, so Tailwind's /opacity works:
-   rgb(var(--signal) / 0.4). */
+/* Atlas, "Onyx & gold": black marble inlaid with burnished gold and emerald, after
+   Mughal pietra dura, with a cool holographic edge. Cusped arches frame the headings, a
+   jaali lattice glows faintly at the edges of the page, and monospace marks citations.
+   The light theme (Settings → Appearance) is ivory sandstone with the same gold.
+   Colours are RGB triplets, so Tailwind's /opacity works: rgb(var(--signal) / 0.4). */
 :root {
   color-scheme: dark;
-  --ink: 11 17 28; /* page: dark slate */
-  --panel: 17 25 39; /* cards, bars */
-  --raised: 28 38 56; /* hover, inputs */
-  --line: 42 54 75;
-  --line-strong: 66 81 107;
-  --paper: 230 237 245; /* text */
-  --soft: 190 201 216;
-  --muted: 140 154 175;
-  --faint: 106 120 141;
-  --signal: 0 229 255; /* electric cyan, the accent */
-  --signal-hover: 103 240 255;
-  --on-signal: 3 12 22; /* text on the accent */
-  --acid: 52 211 153;
-  --cyan: 125 211 252;
-  --danger: 248 113 113;
-  --warn: 251 191 36;
-  --ok: 74 222 128;
+  --ink: 7 8 11; /* page: onyx */
+  --panel: 15 17 22; /* cards, bars */
+  --raised: 25 27 34; /* hover, inputs */
+  --line: 48 44 36; /* warm, like gold under shadow */
+  --line-strong: 92 80 58;
+  --paper: 243 238 227; /* text: ivory */
+  --soft: 216 208 192;
+  --muted: 163 153 134;
+  --faint: 120 112 98;
+  --signal: 212 175 106; /* burnished gold, the accent */
+  --signal-hover: 232 200 138;
+  --on-signal: 14 11 6; /* text on gold */
+  --acid: 47 211 160; /* emerald */
+  --cyan: 94 222 184; /* links: a lighter emerald */
+  --danger: 244 114 120;
+  --warn: 245 190 80;
+  --ok: 74 222 160;
   --radius: 14px;
-  --glass: rgba(15, 23, 36, 0.66);
-  --glass-edge: rgba(255, 255, 255, 0.08);
-  --shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --glow: 0 0 28px -6px rgba(0, 229, 255, 0.45);
-  --code-inline: 103 232 249;
+  --glass: rgba(14, 15, 20, 0.72);
+  --glass-edge: rgba(212, 175, 106, 0.2);
+  --shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(212, 175, 106, 0.05);
+  --glow: 0 0 28px -6px rgba(212, 175, 106, 0.5);
+  --code-inline: 236 205 140;
+  --jaali: rgba(212, 175, 106, 0.16);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --ink: 244 247 250;
-  --panel: 255 255 255;
-  --raised: 236 241 246;
-  --line: 222 229 237;
-  --line-strong: 196 206 218;
-  --paper: 15 23 42;
-  --soft: 51 65 85;
-  --muted: 100 116 139;
-  --faint: 140 154 175;
-  --signal: 14 116 144;
-  --signal-hover: 21 94 117;
-  --on-signal: 255 255 255;
-  --acid: 15 169 133;
-  --cyan: 3 105 161;
-  --danger: 217 61 66;
-  --warn: 184 116 0;
-  --ok: 15 157 88;
-  --glass: rgba(255, 255, 255, 0.72);
-  --glass-edge: rgba(255, 255, 255, 0.9);
-  --shadow: 0 24px 60px -30px rgba(14, 116, 144, 0.3), 0 6px 18px -10px rgba(15, 23, 42, 0.1);
-  --glow: 0 0 18px -4px rgba(14, 116, 144, 0.4);
-  --code-inline: 14 116 144;
+  --ink: 248 243 233; /* ivory sandstone */
+  --panel: 255 252 245;
+  --raised: 241 233 217;
+  --line: 228 216 192;
+  --line-strong: 204 186 150;
+  --paper: 30 24 14;
+  --soft: 72 60 40;
+  --muted: 118 102 76;
+  --faint: 160 144 116;
+  --signal: 138 100 32;
+  --signal-hover: 112 80 22;
+  --on-signal: 255 250 238;
+  --acid: 4 120 87;
+  --cyan: 4 110 80;
+  --danger: 190 40 50;
+  --warn: 160 100 0;
+  --ok: 10 130 80;
+  --glass: rgba(255, 251, 242, 0.78);
+  --glass-edge: rgba(138, 100, 32, 0.22);
+  --shadow: 0 24px 60px -30px rgba(120, 86, 24, 0.35), 0 6px 18px -10px rgba(30, 24, 14, 0.12);
+  --glow: 0 0 18px -4px rgba(138, 100, 32, 0.45);
+  --code-inline: 120 84 18;
+  --jaali: rgba(138, 100, 32, 0.14);
 }
 
 html {
@@ -69,46 +72,90 @@ body {
   background-color: transparent;
 }
 
-/* Auroras drifting slowly behind everything: cyan, sky and a little teal over slate. */
+/* Lamplight behind everything: gold above, emerald below, drifting slowly. */
 body::before {
   position: fixed;
   z-index: -2;
   inset: -20%;
   background:
-    radial-gradient(34% 30% at 16% 18%, rgba(0, 229, 255, 0.16), transparent 70%),
-    radial-gradient(30% 28% at 84% 14%, rgba(56, 189, 248, 0.14), transparent 70%),
-    radial-gradient(32% 30% at 74% 82%, rgba(45, 212, 191, 0.1), transparent 70%),
-    radial-gradient(26% 24% at 22% 86%, rgba(71, 85, 105, 0.3), transparent 70%);
+    radial-gradient(34% 30% at 18% 14%, rgba(212, 175, 106, 0.16), transparent 70%),
+    radial-gradient(28% 26% at 86% 12%, rgba(232, 200, 138, 0.08), transparent 70%),
+    radial-gradient(32% 30% at 78% 84%, rgba(47, 211, 160, 0.1), transparent 70%),
+    radial-gradient(30% 28% at 20% 88%, rgba(120, 40, 60, 0.12), transparent 70%);
   filter: blur(40px);
   content: "";
-  animation: drift 36s ease-in-out infinite;
+  animation: drift 40s ease-in-out infinite;
   pointer-events: none;
 }
 
-/* A faint dotted grid over the dark, fading towards the edges. */
+/* A jaali (pierced-stone lattice) of eight-pointed stars, glowing at the edges of the
+   page and clear in the middle, where the reading is. */
 body::after {
   position: fixed;
   z-index: -1;
   inset: 0;
-  background-image: radial-gradient(rgba(255, 255, 255, 0.06) 1px, transparent 1px);
-  background-size: 26px 26px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%23d4af6a' stroke-width='0.9'%3E%3Crect x='18' y='18' width='28' height='28'/%3E%3Crect x='18' y='18' width='28' height='28' transform='rotate(45 32 32)'/%3E%3Ccircle cx='32' cy='32' r='6'/%3E%3Cpath d='M0 0L18 18M64 0L46 18M0 64L18 46M64 64L46 46M32 0V12M32 52V64M0 32H12M52 32H64'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 64px 64px;
+  opacity: 0.2;
   content: "";
-  -webkit-mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 85%);
-  mask-image: radial-gradient(ellipse 70% 60% at 50% 40%, #000 30%, transparent 85%);
+  -webkit-mask-image: radial-gradient(ellipse 62% 58% at 50% 42%, transparent 40%, #000 95%);
+  mask-image: radial-gradient(ellipse 62% 58% at 50% 42%, transparent 40%, #000 95%);
   pointer-events: none;
 }
 
 :root[data-theme="light"] body::before {
   background:
-    radial-gradient(38% 34% at 18% 22%, rgba(165, 243, 252, 0.5), transparent 70%),
-    radial-gradient(32% 30% at 82% 18%, rgba(186, 230, 253, 0.5), transparent 70%),
-    radial-gradient(36% 34% at 72% 78%, rgba(153, 246, 228, 0.4), transparent 70%),
-    radial-gradient(30% 28% at 24% 82%, rgba(203, 213, 225, 0.45), transparent 70%);
+    radial-gradient(38% 34% at 18% 18%, rgba(232, 200, 138, 0.45), transparent 70%),
+    radial-gradient(32% 30% at 84% 16%, rgba(250, 230, 190, 0.5), transparent 70%),
+    radial-gradient(36% 34% at 74% 80%, rgba(160, 230, 200, 0.35), transparent 70%),
+    radial-gradient(30% 28% at 22% 84%, rgba(240, 200, 200, 0.3), transparent 70%);
   filter: blur(30px);
 }
 
 :root[data-theme="light"] body::after {
-  background-image: radial-gradient(rgba(22, 24, 39, 0.05) 1px, transparent 1px);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64' viewBox='0 0 64 64'%3E%3Cg fill='none' stroke='%238a6420' stroke-width='0.9'%3E%3Crect x='18' y='18' width='28' height='28'/%3E%3Crect x='18' y='18' width='28' height='28' transform='rotate(45 32 32)'/%3E%3Ccircle cx='32' cy='32' r='6'/%3E%3Cpath d='M0 0L18 18M64 0L46 18M0 64L18 46M64 64L46 46M32 0V12M32 52V64M0 32H12M52 32H64'/%3E%3C/g%3E%3C/svg%3E");
+  opacity: 0.16;
+}
+
+/* A gold rule that fades out, for section labels. */
+.rule-gold {
+  background: linear-gradient(90deg, rgb(var(--signal) / 0.7), rgb(var(--signal) / 0) 85%);
+}
+
+/* The arch's outline, drawn in slowly, then a light running along it: futuristic gold. */
+.arch-line {
+  stroke-dasharray: 1000;
+  stroke-dashoffset: 1000;
+  animation: arch-draw 2.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+.arch-shimmer {
+  stroke-dasharray: 45 955;
+  animation: arch-run 7s linear 2.4s infinite;
+}
+@keyframes arch-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes arch-run {
+  from {
+    stroke-dashoffset: 1000;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .arch-line {
+    animation: none;
+    stroke-dashoffset: 0;
+  }
+  .arch-shimmer {
+    display: none;
+  }
+  body::before {
+    animation: none;
+  }
 }
 
 @keyframes drift {
@@ -173,9 +220,9 @@ body::after {
 }
 
 @layer components {
-  /* The gradient lettering of headings and the mark. */
+  /* Gold-foil lettering for headings and the name: champagne, burnished gold, bronze. */
   .chrome-text {
-    background: linear-gradient(100deg, #a594ff 0%, #5cc8ff 50%, #4ee0b0 100%);
+    background: linear-gradient(100deg, #f7e9c4 0%, #d4af6a 38%, #a37a36 62%, #f1d9a0 100%);
     -webkit-background-clip: text;
     background-clip: text;
     color: transparent;
@@ -349,8 +396,8 @@ body::after {
   user-select: none;
 }
 .code-view .line.cited {
-  background: rgba(0, 229, 255, 0.14);
-  box-shadow: inset 3px 0 0 #22d3ee;
+  background: rgba(212, 175, 106, 0.14);
+  box-shadow: inset 3px 0 0 #d4af6a;
 }
 
 /* File nodes and dependency edges on the graph page. */
@@ -429,8 +476,8 @@ html[data-contrast="high"] {
   --soft: 240 240 248;
   --muted: 225 225 236;
   --faint: 205 205 220;
-  --signal: 103 240 255;
-  --cyan: 165 243 252;
+  --signal: 240 208 140;
+  --cyan: 130 236 200;
   --acid: 110 231 183;
   --glass: rgb(8, 8, 12);
   --glass-edge: rgb(150, 150, 170);
@@ -445,8 +492,8 @@ html[data-theme="light"][data-contrast="high"] {
   --soft: 20 22 42;
   --muted: 29 31 51;
   --faint: 43 46 69;
-  --signal: 21 94 117;
-  --cyan: 0 80 122;
+  --signal: 100 70 10;
+  --cyan: 0 90 62;
   --acid: 0 107 82;
   --glass: #ffffff;
   --glass-edge: rgb(75, 79, 102);
@@ -465,4 +512,11 @@ html[data-contrast="high"] .glass {
 html[data-contrast="high"] :focus-visible {
   outline: 3px solid rgb(var(--paper)) !important;
   outline-offset: 2px;
+}
+
+/* Gold foil that still reads on ivory. */
+:root[data-theme="light"] .chrome-text {
+  background: linear-gradient(100deg, #6e4c12 0%, #a87a2a 40%, #5a3d0e 66%, #94692a 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
 }

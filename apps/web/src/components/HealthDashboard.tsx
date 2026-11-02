@@ -21,7 +21,7 @@ import { KnowledgeAudit } from "./KnowledgeAudit";
 import { KnowledgeHealthNote } from "./KnowledgeHealthNote";
 import { ErrorMessage, Loading, NothingIngested } from "./States";
 
-const BAR = "#22d3ee";
+const BAR = "#d4af6a";
 const RED = "#dc2626";
 const AMBER = "#f59e0b";
 const CHART_ROWS = 12;

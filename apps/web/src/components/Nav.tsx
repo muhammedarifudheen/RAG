@@ -6,6 +6,8 @@ import { useEffect, useState } from "react";
 
 import { applyTheme, currentTheme, type Theme } from "@/lib/theme";
 
+import { StarMark } from "./Ornament";
+
 const LINKS = [
   { href: "/", label: "Ingest" },
   { href: "/chat", label: "Chat" },
@@ -37,13 +39,10 @@ export function Nav() {
           className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3"
           aria-label="Atlas home"
         >
-          {/* The mark: a soft orb of the accent colours. */}
-          <span
-            aria-hidden="true"
-            className="h-7 w-7 rounded-full bg-[conic-gradient(from_200deg,#00e5ff,#38bdf8,#2dd4bf,#64748b,#00e5ff)] shadow-[0_0_22px_-2px_rgba(0,229,255,0.7)]"
-          />
-          <span className="chrome-text font-display text-[17px] font-semibold tracking-tight">
-            atlas
+          {/* The mark: an eight-pointed star in gold with an emerald at its heart. */}
+          <StarMark className="h-7 w-7 drop-shadow-[0_0_10px_rgba(212,175,106,0.55)]" />
+          <span className="chrome-text font-display text-[20px] font-semibold uppercase tracking-[0.22em]">
+            Atlas
           </span>
         </Link>
 
@@ -57,7 +56,7 @@ export function Nav() {
                   aria-current={active ? "page" : undefined}
                   className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
                     active
-                      ? "bg-signal/90 text-white shadow-glow"
+                      ? "bg-signal/90 text-on-signal shadow-glow"
                       : "text-muted hover:bg-raised/70 hover:text-paper"
                   }`}
                 >
