@@ -31,6 +31,31 @@ export interface CodeChunk {
   relevance_reason?: string | null;
   /** How much its source counts: 3 primary, 2 secondary, 1 derived. */
   weight?: number | null;
+  /** The licence its source's text is under, which a reuse must keep (Wikipedia: CC BY-SA 4.0). */
+  license?: string | null;
+  /** Its source, for attribution. */
+  source_url?: string | null;
+  source_title?: string | null;
+}
+
+export type WebhookEvent = "ingest" | "query" | "gap";
+
+/** An address told about ingests, answers and gaps. */
+export interface Webhook {
+  /** Null for one set on the server (ATLAS_WEBHOOKS). */
+  id: number | null;
+  url: string;
+  events: WebhookEvent[];
+  created_at?: string | null;
+  /** The last delivery's HTTP status; 0 if it was not reached. */
+  last_status?: number | null;
+  last_at?: string | null;
+  configured?: boolean;
+}
+
+export interface WebhookCreated extends Webhook {
+  /** Signs each delivery (X-Atlas-Signature-256); shown only once. */
+  secret: string;
 }
 
 export interface SearchResponse {

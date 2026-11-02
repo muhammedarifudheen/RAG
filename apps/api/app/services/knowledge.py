@@ -51,6 +51,12 @@ def log_answer(
             verified=sum(1 for c in citations if c.get("verified")),
             citations=len(citations),
             embedding=embedder.embed(question),
+            answer=(data.get("answer") or "")[:20000] or None,
+            cited=[
+                {k: c.get(k) for k in ("ref", "file", "start_line", "end_line", "verified")}
+                for c in citations
+            ],
+            mode=data.get("mode"),
         )
         db.add(row)
         db.flush()

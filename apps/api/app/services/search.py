@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 from app.embedding import Embedder
 from app.models import File, Source, Symbol
 from app.schemas import Citation, CodeChunk
-from app.services.weights import source_weight
+from app.services.weights import source_license, source_weight
 
 # A citation is `[path:42-58]` or `[path:42]`. Models also put several in one
 # bracket, as `[path:5-7, 10-12]` or `[path:5-7, other/path:10-12]`; a range with
@@ -168,6 +168,9 @@ def _chunks(rows: Sequence, max_lines: int) -> list[CodeChunk]:
                 truncated=last_line < symbol.end_line,
                 citation=f"[{path}:{symbol.start_line}-{last_line}]",
                 weight=source_weight(kind, url, title, override),
+                license=source_license(kind, url),
+                source_url=url,
+                source_title=title,
             )
         )
     return chunks

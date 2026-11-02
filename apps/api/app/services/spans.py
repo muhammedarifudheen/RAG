@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from app.models import File, Source
 from app.schemas import CodeChunk
-from app.services.weights import source_weight
+from app.services.weights import source_license, source_weight
 
 _COLUMNS = (
     File.id,
@@ -54,6 +54,9 @@ def read_span(db: Session, path: str, start: int, end: int) -> CodeChunk | None:
         truncated=False,
         citation=f"[{file_path}:{start}-{end}]",
         weight=source_weight(kind, url, title, override),
+        license=source_license(kind, url),
+        source_url=url,
+        source_title=title,
     )
 
 

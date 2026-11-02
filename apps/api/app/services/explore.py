@@ -44,10 +44,10 @@ def explore(db: Session, anchors: list[CodeChunk]) -> str:
         cite = f"[{anchor.file}:{anchor.start_line}-{anchor.snippet_end_line}]"
         lines = [f"### `{anchor.name}` ({anchor.kind}) {cite}", ""]
         if out:
-            lines.append("**Uses:**")
+            lines += ["**Uses:**", ""]
             lines += [f"- {k} `{n}` [{p}:{s}-{e}]" for k, n, s, e, p in out]
         if into:
-            lines.append("**Used by:**")
+            lines += ["", "**Used by:**", ""]
             lines += [f"- `{n}` {k} it [{p}:{s}-{e}]" for k, n, s, e, p in into]
         if not out and not into:
             lines.append("No calls, imports or inheritance were resolved for it.")

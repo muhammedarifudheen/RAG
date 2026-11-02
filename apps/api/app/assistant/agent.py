@@ -6,7 +6,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from app.schemas import CodeChunk
 
@@ -17,9 +17,8 @@ READ_LINES = 120
 HIT_LINES = 8
 HITS_SHOWN = 5
 
-TOOLS = ("search", "read", "note", "done")
+TOOLS = ("search", "read", "note", "mcp", "done")
 
-_OBJECT = re.compile(r"\{.*?\}", re.DOTALL)
 _RANGE = re.compile(r"(\d+)\s*(?:-|–|to|,)\s*(\d+)|(\d+)")
 _CITED = re.compile(r"^\[?([^\[\]]+?):(\d+)(?:-(\d+))?\]?$")
 
@@ -30,6 +29,10 @@ class ResearchTools:
 
     search: Callable[[str], list[CodeChunk]]
     read: Callable[[str, int, int], CodeChunk | None]
+    # External MCP servers' read-only tools (ATLAS_MCP_SERVERS): one line describing each,
+    # and call(qualified name, arguments) -> its text, or None for no such tool.
+    external: Sequence[str] = field(default_factory=tuple)
+    call: Callable[[str, dict], str | None] | None = None
 
 
 @dataclass
@@ -40,8 +43,12 @@ class Action:
     start: int = 0
     end: int = 0
     text: str = ""  # note
+    name: str = ""  # mcp: the external tool, server.tool
+    arguments: dict = field(default_factory=dict)
 
     def described(self) -> str:
+        if self.tool == "mcp":
+            return f"{self.name} {json.dumps(self.arguments)[:200]}"
         if self.tool == "search":
             return self.query
         if self.tool == "read":
@@ -53,11 +60,7 @@ def parse_action(reply: str) -> Action | None:
     """The agent's tool call: {"tool": "search", "query": ...}, {"tool": "read",
     "source_id": ..., "line_range": "10-40"}, {"tool": "note", "text": ...} or
     {"tool": "done"}. None if the reply holds none."""
-    for found in _OBJECT.finditer(reply or ""):
-        try:
-            data = json.loads(found.group(0))
-        except ValueError:
-            continue
+    for data in _objects(reply or ""):
         if not isinstance(data, dict):
             continue
         tool = str(data.get("tool") or data.get("action") or "").strip().lower()
@@ -73,6 +76,11 @@ def parse_action(reply: str) -> Action | None:
             action = _read_action(data)
             if action:
                 return action
+        elif tool == "mcp":
+            name = str(data.get("name") or data.get("tool_name") or "").strip()
+            arguments = data.get("arguments") or data.get("args") or {}
+            if name and isinstance(arguments, dict):
+                return Action("mcp", name=name[:120], arguments=arguments)
         elif tool == "note":
             text = str(data.get("text") or data.get("note") or data.get("input") or "").strip()
             if text:
@@ -80,6 +88,17 @@ def parse_action(reply: str) -> Action | None:
         else:
             return Action("done")
     return None
+
+
+def _objects(text: str):
+    """The JSON objects in a reply, nested ones (an mcp call's arguments) whole."""
+    decoder = json.JSONDecoder()
+    for start in (i for i, char in enumerate(text) if char == "{"):
+        try:
+            data, _ = decoder.raw_decode(text, start)
+        except ValueError:
+            continue
+        yield data
 
 
 def _read_action(data: dict) -> Action | None:

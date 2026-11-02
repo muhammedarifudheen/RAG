@@ -7,7 +7,19 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import settings
 from app.middleware import log_requests
-from app.routers import chat, files, graph, health, ingest, keys, search, sources
+from app.routers import (
+    chat,
+    files,
+    graph,
+    health,
+    ingest,
+    integrations,
+    keys,
+    mcp,
+    openai,
+    search,
+    sources,
+)
 
 DESCRIPTION = """\
 Build a knowledge base from GitHub repositories, web pages, Wikipedia articles and
@@ -26,6 +38,9 @@ TAGS = [
     {"name": "chat", "description": "Attached files and shared chats, for the chat page."},
     {"name": "graph", "description": "Call graph traversal."},
     {"name": "health", "description": "Static measures of the ingested code."},
+    {"name": "integrations", "description": "Webhooks, GitHub re-indexing and exports."},
+    {"name": "openai", "description": "An OpenAI-compatible API: Atlas as a drop-in model."},
+    {"name": "mcp", "description": "Atlas as an MCP server, for MCP-compatible agents."},
     {"name": "ops", "description": "Operational endpoints."},
 ]
 
@@ -66,6 +81,9 @@ def create_app() -> FastAPI:
     app.include_router(files.router)
     app.include_router(health.router)
     app.include_router(keys.router)
+    app.include_router(integrations.router)
+    app.include_router(openai.router)
+    app.include_router(mcp.router)
     return app
 
 

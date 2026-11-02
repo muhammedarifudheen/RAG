@@ -121,6 +121,14 @@ def test_openapi_documents_every_endpoint(plain_client):
         "/healthz",
         "/keys",
         "/keys/{key_id}",
+        "/webhooks",
+        "/webhooks/{webhook_id}",
+        "/hooks/github",
+        "/export/qa.jsonl",
+        "/export/audit.md",
+        "/v1/models",
+        "/v1/chat/completions",
+        "/mcp",
     }
     assert "text/event-stream" in spec["paths"]["/ingest"]["post"]["responses"]["200"]["content"]
 

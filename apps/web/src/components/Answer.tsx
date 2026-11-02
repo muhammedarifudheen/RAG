@@ -320,6 +320,27 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
                   {cited && <span className="rounded-full bg-cyan/10 px-1.5 text-cyan">cited</span>}
                   <CopyCitation chunk={chunk} />
                 </span>
+                {chunk.license && (
+                  <span aria-label="Attribution" className="block pl-4 text-faint">
+                    From{" "}
+                    {chunk.source_url ? (
+                      <a href={chunk.source_url} target="_blank" rel="noreferrer" className="underline">
+                        {chunk.source_title ?? chunk.source_url}
+                      </a>
+                    ) : (
+                      chunk.source_title
+                    )}
+                    , licensed{" "}
+                    <a
+                      href="https://creativecommons.org/licenses/by-sa/4.0/"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="underline"
+                    >
+                      {chunk.license}
+                    </a>
+                  </span>
+                )}
                 <pre className="mt-1 max-h-16 overflow-hidden whitespace-pre-wrap rounded-lg bg-raised px-2 py-1 font-mono text-[11px] leading-snug text-soft">
                   {chunk.snippet.split("\n").slice(0, 3).join("\n")}
                 </pre>

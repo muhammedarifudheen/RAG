@@ -2,7 +2,14 @@
 
 import type { IngestEvent, IngestResult } from "@atlas/shared";
 import Link from "next/link";
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import {
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type DragEvent,
+  type FormEvent,
+} from "react";
 
 import {
   ApiError,
@@ -18,6 +25,7 @@ import {
 import { useApi } from "@/lib/useApi";
 
 import { AdminUnlock } from "./AdminUnlock";
+import { Integrations } from "./Integrations";
 import { SourceList } from "./SourceList";
 
 interface Step {
@@ -33,7 +41,8 @@ type Phase =
   | { name: "done"; result: IngestResult }
   | { name: "error"; message: string };
 
-const FILE_TYPES = ".pdf,.epub,.txt,.md,.markdown,.html,.htm";
+const FILE_TYPES =
+  ".pdf,.epub,.docx,.txt,.md,.markdown,.html,.htm,.py,.ts,.mts,.cts,.tsx,.go";
 const DEFAULT_CRAWL_PAGES = 20;
 
 export function IngestForm() {
@@ -132,6 +141,14 @@ export function IngestForm() {
   }
 
   const busy = phase.name === "running";
+  const [dragging, setDragging] = useState(false);
+
+  function onDrop(event: DragEvent<HTMLElement>) {
+    event.preventDefault();
+    setDragging(false);
+    const file = event.dataTransfer.files?.[0];
+    if (file && !busy) void run(ingestFile(file));
+  }
 
   if (!canManage) {
     return (
@@ -155,7 +172,17 @@ export function IngestForm() {
           </button>
         </p>
       )}
-      <form onSubmit={onSubmit}>
+      <form
+        onSubmit={onSubmit}
+        aria-label="Add a source"
+        onDragOver={(event) => {
+          event.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+        className={dragging ? "outline-dashed outline-2 outline-offset-8 outline-cyan" : undefined}
+      >
         <div className="flex flex-col gap-2 sm:flex-row">
           <label htmlFor="source-url" className="sr-only">
             Paste a link
@@ -225,7 +252,10 @@ export function IngestForm() {
             aria-label="File to upload"
             className="hidden"
           />
-          <span className="text-xs text-muted">PDF, EPUB, text, Markdown or HTML</span>
+          <span className="text-xs text-muted">
+            PDF, EPUB, Word, text, Markdown, HTML or code (Python, TypeScript, Go), or drop one
+            here
+          </span>
         </div>
       </form>
       <p className="mt-3 text-xs text-muted">
@@ -304,6 +334,7 @@ export function IngestForm() {
       )}
 
       <SourceList revision={revision} canManage />
+      <Integrations />
     </section>
   );
 }

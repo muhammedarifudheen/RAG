@@ -27,7 +27,10 @@ MAX_CRAWL_PAGES = 100
 MAX_CRAWL_DEPTH = 3
 CRAWL_DELAY_SECONDS = 0.5
 MAX_UPLOAD_BYTES = 30_000_000
-UPLOAD_TYPES = (".pdf", ".epub", ".txt", ".md", ".markdown", ".html", ".htm")
+DOCUMENT_TYPES = (".pdf", ".epub", ".docx", ".txt", ".md", ".markdown", ".html", ".htm")
+# Code is parsed like a repository's: functions, classes and the calls between them.
+CODE_TYPES = (".py", ".ts", ".mts", ".cts", ".tsx", ".go")
+UPLOAD_TYPES = DOCUMENT_TYPES + CODE_TYPES
 
 _WIKIPEDIA_HOST = re.compile(r"^([a-z]{2,3}(?:-[a-z0-9-]+)?)\.(?:m\.)?wikipedia\.org$")
 _WIKI_HEADING = re.compile(r"^(={2,6})\s*(.+?)\s*\1\s*$", re.MULTILINE)
@@ -301,6 +304,75 @@ def _epub_text(path: Path) -> str:
     return "\n\n".join(chapters)
 
 
+_W = "{http://schemas.openxmlformats.org/wordprocessingml/2006/main}"
+_HEADING = re.compile(r"(?i)heading\s*([1-6])")
+
+
+def _docx_runs(paragraph: ElementTree.Element) -> str:
+    parts = []
+    for node in paragraph.iter():
+        if node.tag == f"{_W}t":
+            parts.append(node.text or "")
+        elif node.tag == f"{_W}tab":
+            parts.append("\t")
+        elif node.tag in (f"{_W}br", f"{_W}cr"):
+            parts.append("\n")
+    return "".join(parts)
+
+
+def _docx_paragraph(paragraph: ElementTree.Element) -> str:
+    """A paragraph as Markdown: headings (and the title) as headings, list items as items."""
+    text = _docx_runs(paragraph).strip()
+    if not text:
+        return ""
+    style = paragraph.find(f"{_W}pPr/{_W}pStyle")
+    name = (style.get(f"{_W}val") if style is not None else None) or ""
+    if level := _HEADING.fullmatch(name):
+        return "#" * int(level.group(1)) + " " + text
+    if name.lower() == "title":
+        return "# " + text
+    if paragraph.find(f"{_W}pPr/{_W}numPr") is not None:
+        return "- " + text
+    return text
+
+
+def _docx_table(table: ElementTree.Element) -> str:
+    rows: list[list[str]] = []
+    for row in table.iter(f"{_W}tr"):
+        cells = [
+            " ".join(_docx_runs(p).strip() for p in cell.iter(f"{_W}p")).strip().replace("|", "\\|")
+            for cell in row.iter(f"{_W}tc")
+        ]
+        if cells:
+            rows.append(cells)
+    if not rows:
+        return ""
+    lines = ["| " + " | ".join(cells) + " |" for cells in rows]
+    lines.insert(1, "|" + " --- |" * len(rows[0]))
+    return "\n".join(lines)
+
+
+def _docx_text(path: Path) -> str:
+    """A Word document's paragraphs and tables in order. Its headings become Markdown
+    headings, so passages split where the document's sections do."""
+    try:
+        with zipfile.ZipFile(path) as document:
+            root = ElementTree.fromstring(document.read("word/document.xml"))
+    except (zipfile.BadZipFile, KeyError, ElementTree.ParseError) as error:
+        raise SourceError("That file could not be read as a Word document.") from error
+    body = root.find(f"{_W}body")
+    blocks = []
+    for element in body if body is not None else []:
+        if element.tag == f"{_W}p":
+            blocks.append(_docx_paragraph(element))
+        elif element.tag == f"{_W}tbl":
+            blocks.append(_docx_table(element))
+    blocks = [block for block in blocks if block]
+    if not blocks:
+        raise SourceError("No readable text was found in that Word document.")
+    return "\n\n".join(blocks)
+
+
 def load_upload(path: Path, filename: str) -> Loaded:
     name = PurePosixPath(filename.replace("\\", "/")).name or "upload"
     suffix = PurePosixPath(name).suffix.lower()
@@ -315,6 +387,8 @@ def load_upload(path: Path, filename: str) -> Loaded:
         document = Document(document_file, title, _pdf_text(path))
     elif suffix == ".epub":
         document = Document(document_file, title, _epub_text(path))
+    elif suffix == ".docx":
+        document = Document(document_file, title, _docx_text(path))
     elif suffix in (".html", ".htm"):
         document = html_to_document(path.read_bytes(), document_file, None, title)
         if document is None:

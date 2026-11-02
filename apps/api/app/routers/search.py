@@ -14,6 +14,7 @@ from sqlalchemy.orm import Session
 from app.assistant import Assistant, AssistantError, Options, cache, get_assistant
 from app.assistant.agent import ResearchTools
 from app.assistant.gaps import suggested_source
+from app.assistant.mcp_client import call_tool, external_tools
 from app.assistant.modes import classify_mode
 from app.assistant.planner import fuse
 from app.assistant.rerank import rerank
@@ -40,6 +41,7 @@ from app.services.explore import audit_answer, explore
 from app.services.knowledge import health_note, knowledge_health, log_answer, note_suggestion
 from app.services.search import extract_citations, hybrid_search, search_symbols
 from app.services.spans import read_span
+from app.services.webhooks import emit, query_event
 
 # How long to wait for the ranker once the judge is done (it has its own time limit).
 RANK_WAIT = 10.0
@@ -226,6 +228,16 @@ def ask(
             raise HTTPException(503, "The gap finder is busy; try again in a minute.")
         report, found_by = found
         note_suggestion(db, question, chat, suggested_source(report))
+        emit(
+            "gap",
+            {
+                "question": question,
+                "found_by": "gap finder",
+                "report": report,
+                "suggestion_url": suggested_source(report),
+            },
+            db,
+        )
         return AskResponse(
             question=question,
             answer=report,
@@ -359,6 +371,9 @@ def ask(
             research=ResearchTools(
                 search=lambda q: retrieve(q, 6),
                 read=lambda path, start, end: read_span(db, path, start, end),
+                # External MCP servers' read-only tools, when ATLAS_MCP_SERVERS names some.
+                external=[t.described() for t in external_tools()],
+                call=call_tool if settings.atlas_mcp_servers else None,
             )
             if research
             else None,
@@ -407,6 +422,9 @@ def _after(db: Session, embedder: Embedder, question: str, data: dict, chat: str
     """An answer's records: the knowledge log, and the audit trail (hashes and ids)."""
     log_answer(db, embedder, data, chat)
     record(db, "answer", digest(chat), answer_event(question, data))
+    emit("query", query_event(question, data), db)
+    if data.get("epistemic") in ("absent", "partial"):
+        emit("gap", {"question": question, "found_by": "answer", "state": data["epistemic"]}, db)
     if data.get("redacted"):
         record(db, "redaction", digest(chat), {"kinds": data["redacted"]})
 
@@ -429,6 +447,8 @@ def _mode_answer(mode: str, question: str, db: Session, embedder: Embedder) -> d
         "route": "sources",
         "suggestions": [],
         "mode": mode,
+        # Read from the database itself: known, or absent if nothing matched.
+        "epistemic": "known" if mode == "AUDIT" or chunks else "absent",
     }
 
 

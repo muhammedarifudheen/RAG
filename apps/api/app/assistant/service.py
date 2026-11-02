@@ -42,7 +42,7 @@ from app.schemas import (
     SelfChallenge,
     WebSource,
 )
-from app.security import Redactor, redact
+from app.security import Redactor, injection, redact
 from app.services.search import extract_citations, tidy_citations
 
 from .agent import (
@@ -68,6 +68,7 @@ from .images import (
     TogetherImages,
     gallery,
 )
+from .mcp_client import result_chunk
 from .modes import COMPARE, TEACH
 from .planner import parse_queries
 from .prompt import (
@@ -76,7 +77,6 @@ from .prompt import (
     MERGE,
     NOT_IN_SOURCES,
     QUERY_PLANNER,
-    RESEARCH_PROTOCOL,
     REVIEW,
     SECONDARY_ONLY,
     FollowUpSplitter,
@@ -91,6 +91,7 @@ from .prompt import (
     judge_prompt,
     rank_prompt,
     research_prompt,
+    research_protocol,
     strict_prompt,
     system_prompt,
     take_head,
@@ -602,6 +603,7 @@ class Assistant:
         excerpts it found and read, and its notes."""
         models = [p for p in self._judges() if not self._resting(p)]
         turns = [Turn("user", research_prompt(question[:4000]))]
+        protocol = research_protocol(tools.external if tools.call else ())
         gathered: dict[int, CodeChunk] = {}
         notes: list[str] = []
         calls, unreadable, current = 0, 0, 0
@@ -611,7 +613,7 @@ class Assistant:
             try:
                 reply = "".join(
                     self.providers[name].stream(
-                        model, RESEARCH_PROTOCOL, turns, Outcome(), web=False, max_tokens=1500
+                        model, protocol, turns, Outcome(), web=False, max_tokens=1500
                     )
                 )
             except (ProviderError, ValueError, KeyError) as error:
@@ -644,6 +646,18 @@ class Assistant:
                     gathered[span.symbol_id] = span
                 result = read_text(span)
                 summary = "read" if span else "nothing there"
+            elif action.tool == "mcp":
+                text = tools.call(action.name, action.arguments) if tools.call else None
+                if text is None:
+                    result, summary = f"No such external tool: {action.name}.", "no such tool"
+                elif injection(text):
+                    # Instructions inside a tool's result are never followed, or kept.
+                    result, summary = "Refused: the result contained instructions.", "refused"
+                else:
+                    found = result_chunk(action.name, text, calls)
+                    gathered[found.symbol_id] = found
+                    result = f"<external_tool_result>\n{read_text(found)}\n</external_tool_result>"
+                    summary = f"{found.end_line} lines"
             else:
                 notes.append(action.text)
                 result, summary = "Saved.", "saved"
@@ -1683,6 +1697,12 @@ def with_footer(data: dict, options: Options | None) -> dict:
     footer = f"[confidence: {state}] [sources: {len(files)}]" + (
         f" [latency: {latency}ms]" if latency is not None else ""
     )
+    # Licences the cited text is under (Wikipedia's CC BY-SA), which a reuse must keep.
+    licences = sorted(
+        {c["license"] for c in data.get("chunks") or [] if c.get("license") and c["file"] in files}
+    )
+    if licences:
+        footer += f" [license: {', '.join(licences)}]"
     return {
         **data,
         "mode": options.mode if options else "ASK",

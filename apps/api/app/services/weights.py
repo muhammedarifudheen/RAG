@@ -40,3 +40,16 @@ def automatic_weight(kind: str, url: str | None, title: str = "") -> int:
 
 def source_weight(kind: str, url: str | None, title: str, override: int | None) -> int:
     return override if override in LABELS else automatic_weight(kind, url, title)
+
+
+# Wikipedia's text is licensed CC BY-SA 4.0: reuse must credit it and keep the licence.
+WIKIPEDIA_LICENSE = "CC BY-SA 4.0"
+_WIKIMEDIA = re.compile(r"(^|\.)(wikipedia|wikibooks|wikiversity|wikivoyage|wikinews)\.org$")
+
+
+def source_license(kind: str, url: str | None) -> str | None:
+    """The licence a citation of the source must carry, if one is known."""
+    host = (urlparse(url).hostname or "").lower() if url else ""
+    if kind == "wikipedia" or _WIKIMEDIA.search(host):
+        return WIKIPEDIA_LICENSE
+    return None

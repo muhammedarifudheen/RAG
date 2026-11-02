@@ -12,6 +12,7 @@ from app.models.code_graph import (
     Source,
     Symbol,
 )
+from app.models.integrations import Webhook
 from app.models.knowledge import AnswerLog, KnowledgeSignal
 from app.models.security import ApiKey, AuditEvent
 
@@ -31,4 +32,5 @@ __all__ = [
     "SharedChat",
     "Source",
     "Symbol",
+    "Webhook",
 ]

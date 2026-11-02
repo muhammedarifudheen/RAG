@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import tempfile
 from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from sqlalchemy import Engine, create_engine, text
 from sqlalchemy.exc import SQLAlchemyError
@@ -13,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from worker.clone import clone_repo, parse_github_url, remove_clone
 from worker.config import Settings
-from worker.documents import build_extraction
+from worker.documents import build_extraction, document_path
 from worker.embed import Embedder, LocalEmbedder, symbol_text
 from worker.extract import FileExtraction, extract_source, language_for
 from worker.resolve import Edge, resolve
@@ -336,7 +338,10 @@ def _wikipedia_identity(url: str) -> tuple[str, str]:
 def ingest_upload(
     path: Path, filename: str, *, settings: Settings, progress: Progress = _silent
 ) -> IngestResult:
-    """Ingests a PDF, EPUB, text, Markdown or HTML file that is already on disk."""
+    """Ingests a PDF, EPUB, Word, text, Markdown or HTML file that is already on disk, or
+    a Python, TypeScript or Go file, which is parsed like a repository's."""
+    if language_for(filename.replace("\\", "/")):
+        return _ingest_code_upload(path, filename, settings=settings, progress=progress)
     return ingest_documents(
         "upload",
         f"upload:{filename}".lower(),
@@ -345,3 +350,27 @@ def ingest_upload(
         settings=settings,
         progress=progress,
     )
+
+
+def _ingest_code_upload(
+    path: Path, filename: str, *, settings: Settings, progress: Progress
+) -> IngestResult:
+    """One uploaded code file, as a repository of one: its functions, classes and calls."""
+    name = PurePosixPath(document_path("uploads", PurePosixPath(filename.replace("\\", "/")).name)).name
+    folder = Path(tempfile.mkdtemp(prefix="atlas-code-"))
+    engine = _open_database(settings)
+    try:
+        progress(f"[1/5] Reading {name}")
+        shutil.copyfile(path, folder / name)
+        return ingest_directory(
+            folder,
+            engine=engine,
+            embedder=_load_embedder(settings, progress),
+            source=SourceInfo(kind="upload", key=f"upload:{filename}".lower(), title=name),
+            prefix="uploads/",
+            max_file_bytes=settings.max_file_bytes,
+            progress=progress,
+        )
+    finally:
+        shutil.rmtree(folder, ignore_errors=True)
+        engine.dispose()

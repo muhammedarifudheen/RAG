@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Literal
 
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class CodeChunk(BaseModel):
@@ -31,6 +31,13 @@ class CodeChunk(BaseModel):
         "2 secondary (Wikipedia, tutorials), 1 derived (summaries).",
     )
     relevance_reason: str | None = Field(default=None, description="The judge's one-line reason.")
+    license: str | None = Field(
+        default=None,
+        description="The licence its source's text is under, which a reuse must keep "
+        "(Wikipedia: CC BY-SA 4.0).",
+    )
+    source_url: str | None = Field(default=None, description="Its source, for attribution.")
+    source_title: str | None = Field(default=None, description="Its source's title.")
 
 
 class SearchResponse(BaseModel):
@@ -660,6 +667,40 @@ class AdminSession(BaseModel):
     expires_at: float
 
 
+WebhookEvent = Literal["ingest", "query", "gap"]
+
+
+class WebhookCreate(BaseModel):
+    url: str = Field(min_length=8, max_length=2000, examples=["https://example.com/atlas"])
+    events: list[WebhookEvent] = Field(
+        default=["ingest", "query", "gap"],
+        min_length=1,
+        description="`ingest`: a source was added or re-indexed; `query`: an answer was "
+        "given; `gap`: the knowledge base fell short of a question.",
+    )
+
+
+class WebhookOut(BaseModel):
+    id: int | None = Field(description="None for one set in ATLAS_WEBHOOKS on the server.")
+    url: str
+    events: list[WebhookEvent]
+    created_at: datetime | None = None
+    last_status: int | None = Field(
+        default=None, description="The last delivery's HTTP status; 0 if it was not reached."
+    )
+    last_at: datetime | None = None
+    configured: bool = Field(
+        default=False, description="Set on the server (ATLAS_WEBHOOKS), so not removable here."
+    )
+
+
+class WebhookCreated(WebhookOut):
+    secret: str = Field(
+        description="Signs each delivery (X-Atlas-Signature-256: sha256=HMAC of the body). "
+        "Shown only now."
+    )
+
+
 class ApiKeyCreate(BaseModel):
     name: str = Field(min_length=1, max_length=80)
     scope: Literal["read", "write"] = "read"
@@ -774,3 +815,39 @@ class SharedChat(BaseModel):
     title: str
     messages: list[dict]
     created_at: datetime
+
+
+# --- The OpenAI-compatible API (/v1/chat/completions) -----------------------------------
+
+
+class OpenAIMessage(BaseModel):
+    """A message in OpenAI's format: text, or a list of parts of which the text ones count."""
+
+    model_config = ConfigDict(extra="allow")
+
+    role: Literal["system", "developer", "user", "assistant", "tool"]
+    content: str | list[dict] | None = None
+
+    def text(self) -> str:
+        if isinstance(self.content, str):
+            return self.content
+        return "\n".join(
+            str(part.get("text") or "")
+            for part in self.content or []
+            if isinstance(part, dict) and part.get("type") in ("text", "input_text")
+        )
+
+
+class ChatCompletionRequest(BaseModel):
+    """OpenAI's chat completion request; fields Atlas does not use are accepted and ignored."""
+
+    model_config = ConfigDict(extra="allow")
+
+    model: str = Field(
+        default="atlas",
+        description="`atlas`: grounded, answers only from the knowledge base; `atlas-open`: "
+        "also the web and general knowledge.",
+    )
+    messages: list[OpenAIMessage] = Field(min_length=1, max_length=200)
+    stream: bool = False
+    temperature: float | None = Field(default=None, ge=0, le=2)

@@ -26,6 +26,7 @@ from app.admin import ADMIN_REQUIRED, require_signed_admin
 from app.config import settings
 from app.ratelimit import rate_limit
 from app.schemas import IngestRequest
+from app.services.webhooks import emit
 
 logger = logging.getLogger("atlas.api.ingest")
 
@@ -86,6 +87,7 @@ def _work(
     try:
         result = job(lambda message: events.put(_progress_event(message)))
         events.put(("done", result))
+        emit("ingest", {"source": what, "status": "done", **result})
     except IngestError as error:
         events.put(("error", {"message": str(error)}))
     except Exception:
@@ -96,6 +98,36 @@ def _work(
             cleanup()
         _running.release()
         events.put(None)
+
+
+_pending: set[str] = set()
+
+
+def reindex(url: str) -> bool:
+    """Re-ingests a repository in the background, after any ingest already running (a
+    push re-indexes it). False if it is already waiting to be."""
+    with _pending_lock:
+        if url in _pending:
+            return False
+        _pending.add(url)
+
+    def run() -> None:
+        with _running:
+            with _pending_lock:
+                _pending.discard(url)
+            try:
+                result = run_ingest(url, "repo", 1, lambda _message: None)
+                logger.info("re-indexed %s: %s", url, result)
+                emit("ingest", {"source": url, "status": "done", "reason": "push", **result})
+            except Exception as error:
+                logger.exception("re-indexing %s failed", url)
+                emit("ingest", {"source": url, "status": "failed", "error": str(error)[:300]})
+
+    threading.Thread(target=run, daemon=True).start()
+    return True
+
+
+_pending_lock = threading.Lock()
 
 
 def _stream(events: "queue.Queue[Event | None]") -> Iterator[str]:

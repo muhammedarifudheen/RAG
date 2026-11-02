@@ -30,6 +30,9 @@ import type {
   SharedChat,
   SiteConfig,
   SourceItem,
+  Webhook,
+  WebhookCreated,
+  WebhookEvent,
   WebSource,
 } from "@atlas/shared";
 
@@ -480,6 +483,36 @@ export async function setSourceWeight(id: number, weight: number | null): Promis
   });
   if (!response.ok) throw await errorFrom(response);
   return (await response.json()) as SourceItem;
+}
+
+/** The webhooks (admin). */
+export async function getWebhooks(): Promise<Webhook[]> {
+  const response = await adminFetch("/webhooks", { method: "GET" });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as Webhook[];
+}
+
+/** Adds a webhook; its signing secret is in the reply, and only there. */
+export async function createWebhook(url: string, events: WebhookEvent[]): Promise<WebhookCreated> {
+  const response = await adminFetch("/webhooks", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ url, events }),
+  });
+  if (!response.ok) throw await errorFrom(response);
+  return (await response.json()) as WebhookCreated;
+}
+
+export async function deleteWebhook(id: number): Promise<void> {
+  const response = await adminFetch(`/webhooks/${id}`, { method: "DELETE" });
+  if (!response.ok) throw await errorFrom(response);
+}
+
+/** Every logged answer as JSONL (question, answer, citations), for evaluation (admin). */
+export async function exportAnswers(): Promise<Blob> {
+  const response = await adminFetch("/export/qa.jsonl", { method: "GET" });
+  if (!response.ok) throw await errorFrom(response);
+  return response.blob();
 }
 
 export async function deleteSource(id: number): Promise<void> {

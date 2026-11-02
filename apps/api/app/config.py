@@ -163,6 +163,19 @@ class Settings(BaseSettings):
     # Requests a minute for each API key (X-Atlas-Key).
     api_key_rate_limit_per_minute: int = 60
 
+    # Integrations. Webhooks set on the server (comma-separated), beside the admin's own,
+    # signed with this secret.
+    atlas_webhooks: str | None = None
+    atlas_webhook_secret: str | None = None
+    # GitHub's push webhook re-indexes a repository source; deliveries are verified with
+    # this secret (X-Hub-Signature-256). Unset, /hooks/github answers 404.
+    github_webhook_secret: str | None = None
+    # MCP servers whose read-only tools the AGENT mode may call: comma-separated
+    # name=url pairs (or bare URLs). Results are treated as untrusted retrieved text.
+    atlas_mcp_servers: str | None = None
+    # Sent to them as `Authorization: Bearer`, if set.
+    atlas_mcp_token: str | None = None
+
     # Requests per client IP per minute; 0 disables. /ask has its own, lower limit
     # because every call is billed.
     rate_limit_per_minute: int = 60

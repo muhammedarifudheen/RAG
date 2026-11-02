@@ -30,6 +30,11 @@ class AnswerLog(Base):
     # The source the gap finder suggested adding, when it ran for this question.
     suggestion: Mapped[str | None] = mapped_column(Text)
     embedding: Mapped[list[float] | None] = mapped_column(Vector(EMBEDDING_DIM))
+    # For the JSONL export (evaluation): the answer, its citations and the mode. Not in
+    # the backup, which keeps questions only.
+    answer: Mapped[str | None] = mapped_column(Text)
+    cited: Mapped[list] = mapped_column(JSONB, default=list)
+    mode: Mapped[str | None] = mapped_column(Text)
 
 
 class KnowledgeSignal(Base):
