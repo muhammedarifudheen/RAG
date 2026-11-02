@@ -42,7 +42,8 @@ import { useSpeaker } from "@/lib/speech";
 
 import { Answer, Gallery, ResearchSteps, StreamingAnswer } from "./Answer";
 import { KnowledgeHealthNote } from "./KnowledgeHealthNote";
-import { Dragon, Pearl, PearlRule } from "./Ornament";
+import { DragonHead } from "./DragonArt";
+import { Pearl, PearlRule } from "./Ornament";
 import { ChatComposer, type ComposerHandle } from "./ChatComposer";
 import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
 import { ChatSidebar } from "./ChatSidebar";
@@ -878,9 +879,9 @@ function CouncilPanel({ agents }: { agents: CouncilAgent[] }) {
 
 function EmptyState() {
   return (
-    // The heading, with the glass dragon coiled through it.
-    <div className="hero relative mx-auto mt-2 max-w-2xl px-4 pb-12 pt-28 text-center sm:mt-6 sm:pt-32">
-      <Dragon className="absolute left-1/2 top-0 h-full w-full -translate-x-1/2 sm:w-[124%]" />
+    // The heading, crowned by the dragon's head.
+    <div className="hero relative mx-auto mt-2 max-w-2xl px-4 pb-12 text-center sm:mt-4">
+      <DragonHead className="mx-auto -mb-2 h-40 w-40 sm:h-52 sm:w-52" />
       <p className="label relative flex items-center justify-center gap-3 text-muted">
         <span className="bg-signal px-1.5 py-0.5 text-on-signal">02</span>
         Assistant
