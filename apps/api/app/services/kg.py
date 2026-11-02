@@ -501,11 +501,19 @@ def answer(db: Session, question: str) -> tuple[str, dict] | None:
         data = directed(db, refs[0], kind, reverse=reverse, depth=3 if op == "depends" else 1)
     nodes = {n["id"]: n for n in data["nodes"]}
     lines = [f"**{_TITLES[op].format(names[0])}:**", ""]
+    listed: set[tuple[str, str]] = set()
     for edge in data["edges"]:
-        other = edge["target"] if edge["source"] == refs[0] else edge["source"]
+        # The node each edge leads to: what is depended on, who calls, the other side.
+        if op == "depends":
+            other = edge["target"]
+        elif op in ("callers", "supersedes"):
+            other = edge["source"]
+        else:
+            other = edge["target"] if edge["source"] == refs[0] else edge["source"]
         node = nodes.get(other)
-        if other == refs[0] or node is None:
+        if other == refs[0] or node is None or (edge["kind"], other) in listed:
             continue
+        listed.add((edge["kind"], other))
         cite = f" {node['citation']}" if node.get("citation") else ""
         evidence = f" (evidence {edge['evidence']})" if edge.get("evidence") else ""
         lines.append(f"- {edge['kind']}: `{node['label']}` ({node['type']}){cite}{evidence}")
