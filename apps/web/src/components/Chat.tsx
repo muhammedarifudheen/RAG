@@ -63,13 +63,6 @@ const MODES: { value: AssistantMode; label: string; hint: string }[] = [
   { value: "best", label: "Best model", hint: "Always starts with the strongest AI available" },
 ];
 
-const STARTERS = [
-  { tag: "Sources", text: "How does itsdangerous sign data and check a signature?" },
-  { tag: "Explore", text: "Who calls verify_signature?" },
-  { tag: "Compare", text: "Compare Signer and TimestampSigner" },
-  { tag: "Code", text: "Write a Python function that removes duplicates from a list, keeping order" },
-];
-
 type DialogName = "settings" | "share" | "shortcuts" | null;
 
 /** What the server has said about the answer being prepared. */
@@ -611,7 +604,7 @@ export function Chat() {
                 onClose={() => setHealthNote(null)}
               />
             )}
-            {messages.length === 0 && <EmptyState onPick={(text) => void send(text, [], text.startsWith("Draw"))} />}
+            {messages.length === 0 && <EmptyState />}
 
             {messages.map((message) => {
               if (message.role === "user") {
@@ -880,7 +873,7 @@ function CouncilPanel({ agents }: { agents: CouncilAgent[] }) {
   );
 }
 
-function EmptyState({ onPick }: { onPick: (text: string) => void }) {
+function EmptyState() {
   return (
     <div className="pt-6 sm:pt-12">
       <p className="label flex items-center gap-3 text-muted">
@@ -893,28 +886,6 @@ function EmptyState({ onPick }: { onPick: (text: string) => void }) {
         <span className="chrome-text">grounded in your sources</span>
       </h1>
       <p className="label mt-4 text-cyan">Grounded answers. Verifiable sources. Zero guesswork.</p>
-      <p className="mt-4 max-w-xl text-sm text-soft">
-        Atlas answers from your sources, citing the exact lines, and says plainly when they do
-        not hold the answer. Turn on the web to let it reach further. Attach PDFs, code or
-        images, and follow up: it remembers the conversation.
-      </p>
-      <ul className="mt-8 grid gap-3 sm:grid-cols-2">
-        {STARTERS.map((starter, index) => (
-          <li key={starter.text}>
-            <button
-              type="button"
-              onClick={() => onPick(starter.text)}
-              className="glass group flex h-full w-full flex-col gap-2 rounded-glass p-4 text-left shadow-block transition-all hover:-translate-y-1 hover:shadow-float"
-            >
-              <span className="label flex items-center gap-2 text-muted">
-                <span className="text-signal">{String(index + 1).padStart(2, "0")}</span>
-                {starter.tag}
-              </span>
-              <span className="text-sm text-soft group-hover:text-paper">{starter.text}</span>
-            </button>
-          </li>
-        ))}
-      </ul>
     </div>
   );
 }

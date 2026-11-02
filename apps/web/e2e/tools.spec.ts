@@ -307,14 +307,6 @@ test("keyboard: Enter sends, Shift+Enter breaks the line, Ctrl+/ lists the short
   await expect(shortcuts).toBeHidden();
 });
 
-test("a starter on the empty page asks its question", async ({ page }) => {
-  const sent = await mockAssistant(page, [reply("Sorted.")]);
-  await page.goto("/chat");
-  await page.getByRole("button", { name: /removes duplicates from a list/ }).click();
-  await expect(answers(page)).toContainText("Sorted.");
-  expect(sent[0].question).toMatch(/^Write a Python function/);
-});
-
 test("a gallery shows each service's picture, and data pictures can only be saved", async ({ page }) => {
   await page.route("https://draw.example/**", (route) =>
     route.fulfill({ status: 200, contentType: "image/png", body: PNG }),
