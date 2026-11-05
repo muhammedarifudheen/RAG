@@ -1,0 +1,11 @@
+{"id": "hybrid-search", "question": "How does hybrid search combine vector and keyword results?", "relevant": ["apps/api/app/services/search.py"], "must_include": ["reciprocal"]}
+{"id": "embedding-onnx", "question": "Why are embeddings computed with ONNX Runtime instead of PyTorch?", "relevant": ["apps/worker/worker/embed.py"], "must_include": ["512"]}
+{"id": "passage-split", "question": "How are text documents split into passages for embedding?", "relevant": ["apps/worker/worker/documents.py"], "must_include": ["heading"]}
+{"id": "research-tools", "question": "Which tools can the deep research agent call, and how many calls may it make?", "relevant": ["apps/api/app/assistant/agent.py"], "must_include": ["search", "read", "note"]}
+{"id": "confidence", "question": "How is an answer's confidence level worked out?", "relevant": ["apps/api/app/assistant/confidence.py"], "must_include": ["citation"]}
+{"id": "relevance-judge", "question": "How does the relevance judge rerank retrieved excerpts?", "relevant": ["apps/api/app/assistant/rerank.py"], "must_include": []}
+{"id": "rate-limit", "question": "How does the API rate limit requests?", "relevant": ["apps/api/app/ratelimit.py"], "must_include": []}
+{"id": "kg-path", "question": "How does the knowledge graph find the shortest path between two nodes?", "relevant": ["apps/api/app/services/kg.py"], "must_include": []}
+{"id": "diversify", "question": "How are near-duplicate excerpts removed from search results?", "relevant": ["apps/api/app/services/search.py"], "must_include": ["marginal"]}
+{"id": "unanswerable-price", "question": "What is the price of the enterprise subscription plan?", "relevant": [], "answerable": false, "must_include": []}
+{"id": "unanswerable-ceo", "question": "Who is the chief executive officer of Atlas?", "relevant": [], "answerable": false, "must_include": []}
