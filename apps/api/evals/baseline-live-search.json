@@ -1,0 +1,23 @@
+{
+  "mode": "search",
+  "golden": "golden/live.jsonl",
+  "summary": {
+    "questions": 12,
+    "errors": 0,
+    "hit@1": 1.0,
+    "recall@1": 0.95,
+    "ndcg@1": 1.0,
+    "hit@3": 1.0,
+    "recall@3": 0.95,
+    "ndcg@3": 0.9613147192765459,
+    "hit@5": 1.0,
+    "recall@5": 0.95,
+    "ndcg@5": 0.9613147192765459,
+    "hit@10": 1.0,
+    "recall@10": 1.0,
+    "ndcg@10": 0.9831554629583623,
+    "mrr": 1.0,
+    "latency_p50_ms": 1056.0,
+    "latency_p95_ms": 2632.3999999999983
+  }
+}

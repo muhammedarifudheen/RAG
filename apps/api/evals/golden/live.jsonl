@@ -1,0 +1,13 @@
+# The public server's starter sources: pallets/itsdangerous, the Python hmac docs and HMAC on Wikipedia.
+{"id": "verify-signature", "question": "How is a signature verified?", "relevant": ["itsdangerous/signer.py"], "must_include": []}
+{"id": "dumps", "question": "What does Serializer.dumps do?", "relevant": ["itsdangerous/serializer.py"], "must_include": []}
+{"id": "expired", "question": "How does the timestamp signer reject an expired signature?", "relevant": ["itsdangerous/timed.py", "itsdangerous/exc.py"], "must_include": ["max_age"]}
+{"id": "url-safe", "question": "How does the URL-safe serializer compress its payload?", "relevant": ["itsdangerous/url_safe.py"], "must_include": ["zlib"]}
+{"id": "what-is-hmac", "question": "What is HMAC and how is it computed?", "relevant": ["wikipedia/en/HMAC"], "must_include": ["hash"]}
+{"id": "derive-key", "question": "How is the signing key derived from the secret key?", "relevant": ["itsdangerous/signer.py"], "must_include": ["derive"]}
+{"id": "bad-signature", "question": "Which exception is raised when a signature does not match?", "relevant": ["itsdangerous/exc.py"], "must_include": ["BadSignature"]}
+{"id": "base64", "question": "How are bytes encoded to and from URL-safe base64?", "relevant": ["itsdangerous/encoding.py"], "must_include": ["base64"]}
+{"id": "default-hash", "question": "Which hash algorithm does the signer use by default?", "relevant": ["itsdangerous/signer.py"], "must_include": ["sha1"]}
+{"id": "python-hmac", "question": "How do I compute an HMAC with Python's hmac module?", "relevant": ["hmac.html"], "must_include": ["hmac.new"]}
+{"id": "unanswerable-price", "question": "What is the price of the enterprise subscription plan?", "relevant": [], "answerable": false, "must_include": []}
+{"id": "unanswerable-oauth", "question": "How do I set up OAuth login with Google in Django?", "relevant": [], "answerable": false, "must_include": []}

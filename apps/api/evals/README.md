@@ -18,8 +18,14 @@ Useful flags: `--api URL`, `--token T`, `-k 10` (excerpts retrieved), `--limit N
 `--no-plan` / `--no-rerank` (ask mode: switch a stage off to see what it adds),
 `--out report.json`.
 
-The sample questions are about **this repository**, so first ingest it: paste
-`https://github.com/muhammedarifudheen/RAG` on the Ingest page (or `POST /ingest`).
+Two question sets are included:
+
+- `golden/atlas.jsonl`: questions about **this repository**; ingest it first (paste
+  `https://github.com/muhammedarifudheen/RAG` on the Ingest page, or `POST /ingest`).
+- `golden/live.jsonl`: questions about the public server's starter sources (itsdangerous and
+  HMAC). Run it with `--golden evals/golden/live.jsonl --api <the server>`;
+  `baseline-live-search.json` is its search-mode baseline. The free server sleeps when idle,
+  so the first request can take a minute.
 
 ## What it reports
 

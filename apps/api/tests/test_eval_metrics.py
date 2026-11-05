@@ -38,6 +38,12 @@ def test_ranking_metrics():
     assert math.isclose(r.ndcg_at[3], (1 / math.log2(3)) / (1 + 1 / math.log2(3)))
 
 
+def test_ndcg_never_exceeds_one_when_a_file_has_many_hits():
+    hits = [Hit("a.py", i, i + 1) for i in range(1, 6)]  # five excerpts, all from a.py
+    r = score_retrieval(hits, [Target("a.py")], ks=(5,))
+    assert r.ndcg_at[5] == 1.0 and r.recall_at[5] == 1.0
+
+
 def test_nothing_found():
     r = score_retrieval([Hit("a.py", 1, 2)], [Target("b.py")], ks=(5,))
     assert r.reciprocal_rank == 0 and r.hit_at[5] == 0 and r.ndcg_at[5] == 0

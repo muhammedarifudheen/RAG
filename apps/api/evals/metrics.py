@@ -73,13 +73,21 @@ class Retrieval:
 def score_retrieval(
     hits: Sequence[Hit], targets: Sequence[Target], ks: Iterable[int] = KS
 ) -> Retrieval:
-    """Binary-relevance metrics. A hit is relevant if it matches any target; recall counts
-    how many distinct targets were found."""
+    """Binary-relevance metrics. A hit is relevant if it matches a target not already found by
+    a higher-ranked hit; recall counts how many distinct targets were found."""
     result = Retrieval()
     ranks = [found_at(hits, t) for t in targets]
     first = min((r for r in ranks if r is not None), default=None)
     result.reciprocal_rank = 1 / first if first else 0.0
-    relevant_flags = [any(matches(h, t) for t in targets) for h in hits]
+    # A target is credited once, to the first hit that matches it: further excerpts from the
+    # same file add nothing, so DCG can never exceed the ideal (one hit per target).
+    open_targets = list(targets)
+    relevant_flags = []
+    for hit in hits:
+        gained = next((t for t in open_targets if matches(hit, t)), None)
+        if gained is not None:
+            open_targets.remove(gained)
+        relevant_flags.append(gained is not None)
     for k in ks:
         result.hit_at[k] = 1.0 if first is not None and first <= k else 0.0
         result.recall_at[k] = (
