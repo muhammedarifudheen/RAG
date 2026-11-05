@@ -1,12 +1,15 @@
+import { fileURLToPath } from "node:url";
+
 import type { Config } from "tailwindcss";
 
-// "Midnight glass" (and a light theme): the colours are CSS variables, RGB triplets set
+// "Black court": near-black, hairlines, one teal light (and a light theme): the colours are CSS variables, RGB triplets set
 // in globals.css per theme, so every class follows the theme. The token names are kept
 // from the first design (ink is the page, paper the text).
 const v = (name: string) => `rgb(var(--${name}) / <alpha-value>)`;
 
 const config: Config = {
-  content: ["./src/**/*.{ts,tsx}"],
+  // Absolute, so it holds whichever directory the build starts from.
+  content: [fileURLToPath(new URL("./src/**/*.{ts,tsx}", import.meta.url))],
   theme: {
     extend: {
       colors: {
@@ -33,13 +36,23 @@ const config: Config = {
         mono: ["var(--font-mono)", "ui-monospace", "monospace"],
       },
       boxShadow: {
-        block: "0 18px 40px -18px rgba(0, 0, 0, 0.55), 0 0 22px -10px rgb(var(--signal) / 0.5)",
+        block: "0 0 0 1px rgb(var(--line-strong))",
         "block-acid": "0 14px 32px -16px rgb(var(--acid) / 0.5)",
         float: "var(--shadow)",
         glow: "var(--glow)",
       },
+      // Sharp: everything is a hairline box, pills and dots included.
       borderRadius: {
-        glass: "22px",
+        none: "0",
+        sm: "1px",
+        DEFAULT: "2px",
+        md: "2px",
+        lg: "2px",
+        xl: "2px",
+        "2xl": "2px",
+        "3xl": "2px",
+        glass: "2px",
+        full: "2px",
       },
       keyframes: {
         drift: {

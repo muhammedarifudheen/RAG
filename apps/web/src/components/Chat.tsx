@@ -49,8 +49,6 @@ import { useSpeaker } from "@/lib/speech";
 
 import { Answer, Gallery, ResearchSteps, StreamingAnswer } from "./Answer";
 import { KnowledgeHealthNote } from "./KnowledgeHealthNote";
-import { DragonHead } from "./DragonArt";
-import { Pearl, PearlRule } from "./Ornament";
 import { ChatComposer, type ComposerHandle } from "./ChatComposer";
 import { SettingsDialog, ShareDialog, ShortcutsDialog } from "./ChatDialogs";
 import { ChatSidebar } from "./ChatSidebar";
@@ -538,7 +536,7 @@ export function Chat() {
       )}
 
       <main className="flex min-w-0 flex-1 flex-col">
-        <div className="flex items-center gap-2 border-b border-line/40 bg-ink/30 px-4 py-2 backdrop-blur-xl">
+        <div className="flex items-center gap-2 border-b border-line bg-ink/80 px-4 py-2">
           <button
             type="button"
             onClick={() => setShowChats((v) => !v)}
@@ -573,7 +571,7 @@ export function Chat() {
                 title={option.hint}
                 onClick={() => chooseMode(option.value)}
                 className={`whitespace-nowrap rounded-full px-3 py-1 font-mono text-[11px] uppercase tracking-[0.1em] transition-colors ${
-                  mode === option.value ? "bg-signal text-on-signal shadow-glow" : "text-muted hover:text-paper"
+                  mode === option.value ? "bg-signal text-on-signal" : "text-muted hover:text-paper"
                 }`}
               >
                 {option.label}
@@ -686,7 +684,7 @@ export function Chat() {
                   <div
                     role="toolbar"
                     aria-label="Answer tools"
-                    className="mt-2 inline-flex items-center gap-0.5 rounded-full border border-line/60 bg-panel/50 px-1 py-0.5 backdrop-blur"
+                    className="mt-2 inline-flex items-center gap-0.5 border border-line bg-panel px-1 py-0.5"
                   >
                     <ActionButton label="Copy answer" onClick={() => void copyAnswer(message.response.answer)}>
                       ⧉ Copy
@@ -719,8 +717,8 @@ export function Chat() {
 
             {pending && (!streaming || drawing) && (
               <div role="status" className="slab flex items-center gap-2.5 py-2 pl-4 text-sm text-muted">
-                {/* The dragon's pearl, glowing while Atlas thinks. */}
-                <Pearl className="h-4 w-4 shrink-0" />
+                {/* One square of light while Atlas thinks. */}
+                <span aria-hidden="true" className="h-2 w-2 shrink-0 animate-pulse bg-signal" />
                 <p className="animate-pulse">
                   {drawing
                     ? progress.images.length
@@ -896,21 +894,14 @@ function CouncilPanel({ agents }: { agents: CouncilAgent[] }) {
 
 function EmptyState() {
   return (
-    // The heading, crowned by the dragon's head.
-    <div className="hero relative mx-auto mt-2 max-w-2xl px-4 pb-12 text-center sm:mt-4">
-      <DragonHead className="mx-auto -mb-2 h-40 w-40 sm:h-52 sm:w-52" />
-      <p className="label relative flex items-center justify-center gap-3 text-muted">
-        <span className="bg-signal px-1.5 py-0.5 text-on-signal">02</span>
-        Assistant
-      </p>
-      <h1 className="relative mt-5 font-display text-3xl font-semibold leading-[1.05] tracking-tight sm:text-5xl">
-        Ask about the codebase <span className="text-signal">—</span>{" "}
-        <span className="chrome-text italic">grounded in your sources</span>
+    <div className="mx-auto mt-6 max-w-2xl px-4 pb-12 sm:mt-14">
+      <p className="label text-signal">02 — Assistant</p>
+      <h1 className="mt-5 font-display text-4xl font-semibold leading-[0.98] tracking-tight sm:text-6xl">
+        Ask about the codebase.
+        <br />
+        <span className="text-signal">Grounded in your sources.</span>
       </h1>
-      <PearlRule className="relative mx-auto mt-6 max-w-xs" />
-      <p className="label relative mt-5 text-signal">
-        Grounded answers. Verifiable sources. Zero guesswork.
-      </p>
+      <p className="label mt-6 text-faint">Grounded answers. Verifiable sources. Zero guesswork.</p>
     </div>
   );
 }
@@ -999,7 +990,7 @@ function UserMessage({
         </form>
       ) : (
         <>
-          <p className="max-w-[85%] whitespace-pre-wrap rounded-[20px] rounded-br-md bg-gradient-to-br from-signal to-[#8b6cff] px-4 py-2.5 text-[15px] text-on-signal shadow-glow">
+          <p className="max-w-[85%] whitespace-pre-wrap border border-line-strong border-r-signal bg-panel px-4 py-2.5 text-[15px] text-paper">
             {message.text}
           </p>
           <div className="mt-1 flex items-center gap-1 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">

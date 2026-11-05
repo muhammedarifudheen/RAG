@@ -2,72 +2,62 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Atlas, "Neon dragon": Eastern dragons drawn in neon (a navy body of scales, a glowing
-   turquoise belly line, violet and pink fins) coiled round temple pillars, on deep night, frosted glass panels with iridescent edges,
-   light that flows, a texture of scales at the edges of the page. The light theme
-   (Settings → Appearance) is daylight glass. Colours are RGB triplets, so Tailwind's
+/* Atlas, "Black court": a black page, hairline rules, sharp corners, and one light, the
+   dragon's turquoise. No glass, no gradients but the dragon itself. The light theme
+   (Settings → Appearance) is the same, inverted. Colours are RGB triplets, so Tailwind's
    /opacity works: rgb(var(--signal) / 0.4). */
 :root {
   color-scheme: dark;
-  --ink: 5 6 14; /* page: night */
-  --panel: 12 13 26; /* cards, bars */
-  --raised: 22 24 44;
-  --line: 42 44 78;
-  --line-strong: 80 84 132;
-  --paper: 242 242 250; /* text */
-  --soft: 212 212 230;
-  --muted: 158 160 190;
-  --faint: 116 118 150;
-  --signal: 51 214 240; /* turquoise, the accent */
-  --signal-hover: 120 230 248;
-  --on-signal: 3 14 22;
-  --acid: 46 229 157; /* jade */
-  --cyan: 120 200 255; /* links */
-  --danger: 255 96 110;
-  --warn: 255 196 77; /* gold */
-  --ok: 46 229 157;
-  --radius: 14px;
-  --glass: rgba(14, 15, 32, 0.62);
-  --glass-edge: rgba(255, 255, 255, 0.08);
-  --shadow: 0 30px 70px -34px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.03);
-  --glow: 0 0 26px -6px rgba(51, 214, 240, 0.5);
-  --code-inline: 140 226 248;
-  /* Iridescence: the dragon's colours in a row. */
-  --iris: linear-gradient(
-    110deg,
-    rgb(46 229 157),
-    rgb(51 214 240),
-    rgb(139 108 255),
-    rgb(255 79 179),
-    rgb(255 196 77),
-    rgb(46 229 157)
-  );
+  --ink: 0 0 0; /* page */
+  --panel: 8 10 13; /* cards, bars */
+  --raised: 17 20 25;
+  --line: 32 38 46;
+  --line-strong: 66 76 90;
+  --paper: 236 240 245; /* text */
+  --soft: 200 208 218;
+  --muted: 130 140 152;
+  --faint: 98 108 120;
+  --signal: 63 240 224; /* turquoise, from the dragon's belly: the only accent */
+  --signal-hover: 130 248 238;
+  --on-signal: 0 10 12;
+  --acid: 63 240 224;
+  --cyan: 92 222 236; /* links */
+  --danger: 255 92 110;
+  --warn: 255 196 77;
+  --ok: 63 240 180;
+  --radius: 2px;
+  --glass: rgb(8, 10, 13);
+  --glass-edge: rgb(32, 38, 46);
+  --shadow: none;
+  --glow: 0 0 22px -8px rgba(63, 240, 224, 0.55);
+  --code-inline: 140 236 240;
+  --iris: rgb(63 240 224);
 }
 
 :root[data-theme="light"] {
   color-scheme: light;
-  --ink: 246 246 252;
+  --ink: 250 250 251;
   --panel: 255 255 255;
-  --raised: 236 237 246;
-  --line: 222 222 236;
-  --line-strong: 192 194 214;
-  --paper: 18 18 34;
-  --soft: 58 58 84;
-  --muted: 104 106 134;
-  --faint: 148 150 176;
-  --signal: 6 120 150;
-  --signal-hover: 4 96 122;
+  --raised: 240 242 244;
+  --line: 224 228 233;
+  --line-strong: 176 184 194;
+  --paper: 10 12 16;
+  --soft: 44 50 60;
+  --muted: 96 104 116;
+  --faint: 140 148 158;
+  --signal: 4 118 132;
+  --signal-hover: 3 92 104;
   --on-signal: 255 255 255;
-  --acid: 6 128 84;
-  --cyan: 20 90 190;
+  --acid: 4 118 132;
+  --cyan: 4 96 150;
   --danger: 196 40 60;
   --warn: 160 100 0;
   --ok: 10 130 80;
-  --glass: rgba(255, 255, 255, 0.72);
-  --glass-edge: rgba(18, 18, 34, 0.08);
-  --shadow: 0 24px 60px -30px rgba(90, 60, 200, 0.28), 0 6px 18px -10px rgba(18, 18, 34, 0.12);
-  --glow: 0 0 18px -4px rgba(6, 120, 150, 0.4);
-  --code-inline: 60 40 180;
+  --glass: #ffffff;
+  --glass-edge: rgb(224, 228, 233);
+  --glow: 0 0 14px -4px rgba(4, 118, 132, 0.35);
+  --code-inline: 4 96 150;
+  --iris: rgb(4 118 132);
 }
 
 html {
@@ -75,152 +65,38 @@ html {
 }
 
 body {
-  position: relative;
-  isolation: isolate;
   background-color: transparent;
 }
 
-/* The dragon's colours glowing behind the glass, drifting slowly. */
-body::before {
-  position: fixed;
-  z-index: -2;
-  inset: -20%;
-  background:
-    radial-gradient(30% 28% at 16% 16%, rgba(139, 108, 255, 0.22), transparent 70%),
-    radial-gradient(28% 26% at 86% 12%, rgba(255, 79, 179, 0.13), transparent 70%),
-    radial-gradient(30% 28% at 80% 84%, rgba(51, 214, 240, 0.16), transparent 70%),
-    radial-gradient(28% 26% at 18% 86%, rgba(46, 229, 157, 0.13), transparent 70%),
-    radial-gradient(22% 20% at 52% 50%, rgba(255, 196, 77, 0.06), transparent 70%);
-  filter: blur(42px);
-  content: "";
-  animation: drift 40s ease-in-out infinite;
-  pointer-events: none;
+/* The dragon's image: black screened away, a fade towards the text on its left. Strong on
+   the home page, softer in the assistant, faint elsewhere. The light theme has none. */
+.dragon-backdrop {
+  mix-blend-mode: screen;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
+  mask-image: linear-gradient(90deg, transparent 0%, #000 45%);
 }
-
-/* Scales at the edges of the page, clear in the middle where the reading is. */
-body::after {
-  position: fixed;
-  z-index: -1;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='36' height='20' viewBox='0 0 36 20'%3E%3Cg fill='none' stroke='%2333d6f0' stroke-width='0.9'%3E%3Cpath d='M0 20A18 18 0 0 1 36 20'/%3E%3Cpath d='M-18 10A18 18 0 0 1 18 10' stroke='%238b6cff'/%3E%3Cpath d='M18 10A18 18 0 0 1 54 10' stroke='%238b6cff'/%3E%3C/g%3E%3C/svg%3E");
-  background-size: 36px 20px;
-  opacity: 0.16;
-  content: "";
-  -webkit-mask-image: radial-gradient(ellipse 62% 58% at 50% 42%, transparent 40%, #000 95%);
-  mask-image: radial-gradient(ellipse 62% 58% at 50% 42%, transparent 40%, #000 95%);
-  pointer-events: none;
+.dragon-backdrop[data-level="strong"] {
+  opacity: 1;
 }
-
-:root[data-theme="light"] body::before {
-  background:
-    radial-gradient(36% 32% at 18% 16%, rgba(170, 150, 255, 0.35), transparent 70%),
-    radial-gradient(32% 30% at 84% 16%, rgba(255, 170, 215, 0.35), transparent 70%),
-    radial-gradient(36% 34% at 74% 80%, rgba(140, 225, 245, 0.35), transparent 70%),
-    radial-gradient(30% 28% at 22% 84%, rgba(150, 240, 200, 0.3), transparent 70%);
-  filter: blur(30px);
+.dragon-backdrop[data-level="mid"] {
+  opacity: 0.22;
 }
-
-:root[data-theme="light"] body::after {
-  opacity: 0.12;
+.dragon-backdrop[data-level="faint"] {
+  opacity: 0.14;
 }
-
-/* A rule in the dragon's colours, fading out. */
-.scale-rule {
-  border-radius: 2px;
-  background: var(--iris);
-  -webkit-mask-image: linear-gradient(90deg, transparent, #000 70%);
-  mask-image: linear-gradient(90deg, transparent, #000 70%);
+:root[data-theme="light"] .dragon-backdrop {
+  display: none;
 }
-
-/* The dragons: whiskers swaying, eyes glowing; the pearl pulsing while Atlas thinks. */
-.dragon-whiskers {
-  transform-box: fill-box;
-  transform-origin: left center;
-  animation: whiskers 4s ease-in-out infinite;
+/* The mark: the head, cropped from the same image. */
+.dragon-mark {
+  background-color: #000;
+  background-repeat: no-repeat;
+  background-size: 520% auto;
+  background-position: 17% 20%;
 }
-.dragon-eye {
-  animation: eye-glow 3s ease-in-out infinite;
-}
-.pearl {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: pearl-pulse 1.6s ease-in-out infinite;
-}
-@keyframes whiskers {
-  0%,
-  100% {
-    transform: rotate(0deg);
-  }
-  50% {
-    transform: rotate(6deg);
-  }
-}
-@keyframes eye-glow {
-  0%,
-  100% {
-    opacity: 1;
-  }
-  50% {
+@media (max-width: 767px) {
+  .dragon-backdrop[data-level="strong"] {
     opacity: 0.55;
-  }
-}
-@keyframes pearl-pulse {
-  0%,
-  100% {
-    transform: scale(0.85);
-    opacity: 0.7;
-  }
-  50% {
-    transform: scale(1.1);
-    opacity: 1;
-  }
-}
-
-/* Glass cards, each lit from a corner by one of the dragon's colours. */
-.card-light {
-  position: absolute;
-  inset: 0;
-  background: radial-gradient(85% 75% at 0% 0%, color-mix(in srgb, var(--scale) 24%, transparent), transparent 70%);
-  pointer-events: none;
-}
-.card-gem {
-  display: inline-block;
-  height: 0.7rem;
-  width: 0.7rem;
-  border-radius: 9999px;
-  background: var(--scale);
-  box-shadow: 0 0 12px var(--scale);
-}
-.glass-card {
-  transition:
-    transform 0.25s ease,
-    box-shadow 0.25s ease;
-}
-.glass-card:hover {
-  transform: translateY(-3px);
-  box-shadow: 0 18px 40px -20px var(--scale);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dragon-whiskers,
-  .dragon-eye,
-  .pearl,
-  .chrome-text,
-  body::before {
-    animation: none;
-  }
-}
-
-@keyframes drift {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-  33% {
-    transform: translate3d(3%, -2%, 0) scale(1.05);
-  }
-  66% {
-    transform: translate3d(-2%, 3%, 0) scale(0.97);
   }
 }
 
@@ -275,20 +151,7 @@ body::after {
 @layer components {
   /* Lettering in the dragon's colours, flowing slowly. */
   .chrome-text {
-    background: linear-gradient(
-      100deg,
-      #5ef0b4 0%,
-      #5ee0f5 20%,
-      #a58dff 40%,
-      #ff76c6 60%,
-      #ffd06e 80%,
-      #5ef0b4 100%
-    );
-    background-size: 220% 100%;
-    -webkit-background-clip: text;
-    background-clip: text;
-    color: transparent;
-    animation: iris-flow 12s linear infinite;
+    color: rgb(var(--signal));
   }
   /* Small caps for labels and the numbering of sections. */
   .label {
@@ -297,53 +160,12 @@ body::after {
     letter-spacing: 0.14em;
     text-transform: uppercase;
   }
-  /* A floating glass card. */
-  .slab {
-    border: 1px solid var(--glass-edge);
-    border-radius: 22px;
-    background: var(--glass);
-    box-shadow: var(--shadow);
-    -webkit-backdrop-filter: blur(18px) saturate(1.4);
-    backdrop-filter: blur(18px) saturate(1.4);
-  }
+  /* A hairline box. */
+  .slab,
   .glass {
-    border: 1px solid var(--glass-edge);
-    background: var(--glass);
-    -webkit-backdrop-filter: blur(18px) saturate(1.4);
-    backdrop-filter: blur(18px) saturate(1.4);
-  }
-  /* An iridescent edge in the dragon's colours on every glass panel (a utility class such as
-     absolute or fixed still wins over this position). */
-  .glass,
-  .slab {
     position: relative;
-  }
-  .glass::before,
-  .slab::before {
-    position: absolute;
-    inset: -1px;
-    padding: 1px;
-    border-radius: inherit;
-    background: var(--iris);
-    opacity: 0.45;
-    content: "";
-    -webkit-mask:
-      linear-gradient(#000 0 0) content-box,
-      linear-gradient(#000 0 0);
-    -webkit-mask-composite: xor;
-    mask:
-      linear-gradient(#000 0 0) content-box exclude,
-      linear-gradient(#000 0 0);
-    pointer-events: none;
-  }
-}
-
-@keyframes iris-flow {
-  from {
-    background-position: 0% 0;
-  }
-  to {
-    background-position: 220% 0;
+    border: 1px solid rgb(var(--line));
+    background: rgb(var(--panel));
   }
 }
 
@@ -463,7 +285,7 @@ body::after {
 
 /* Shiki output in the code panel (a dark theme): one .line span per source line. */
 .code-view {
-  background: #101010;
+  background: #05070a;
   color: #e6e6e6;
 }
 .code-view pre {
@@ -492,8 +314,8 @@ body::after {
   user-select: none;
 }
 .code-view .line.cited {
-  background: rgba(139, 108, 255, 0.16);
-  box-shadow: inset 3px 0 0 #33d6f0;
+  background: rgba(63, 240, 224, 0.1);
+  box-shadow: inset 2px 0 0 #3ff0e0;
 }
 
 /* File nodes and dependency edges on the graph page. */
@@ -610,25 +432,9 @@ html[data-contrast="high"] :focus-visible {
   outline-offset: 2px;
 }
 
-/* Lettering that still reads by day: deeper colours. */
-:root[data-theme="light"] .chrome-text {
-  background-image: linear-gradient(
-    100deg,
-    #067a52 0%,
-    #06708c 20%,
-    #5b3fd0 40%,
-    #c0287e 60%,
-    #a86a00 80%,
-    #067a52 100%
-  );
-}
-
 html[data-contrast="high"] .glass::before,
 html[data-contrast="high"] .slab::before {
   display: none;
-}
-html[data-contrast="high"] .chrome-text {
-  animation: none;
 }
 
 /* The answer's parts: the TL;DR leads, the action closes, gotchas and edge cases are

@@ -1,0 +1,360 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Atlas — Dragon Court</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@400;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0E1116;
+    --ink: #E8E1D2;
+    --muted: #8B8578;
+    --gold: #C8A24A;
+    --lapis: #2A3B5C;
+    --hair: rgba(200, 162, 74, 0.28);
+    --display: "Amiri", Georgia, serif;
+    --ui: "Inter", system-ui, sans-serif;
+    --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; }
+  html, body { height: 100%; }
+  body { background: var(--bg); color: var(--ink); font: 14px/1.6 var(--ui); overflow: hidden; }
+
+  .court {
+    height: 100vh;
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    grid-template-rows: 56px 1fr 32px;
+    grid-template-areas: "top top top" "left center right" "rail rail rail";
+  }
+
+  /* top bar */
+  .top {
+    grid-area: top;
+    display: grid; grid-template-columns: 1fr minmax(0, 560px) 1fr; align-items: center; gap: 16px;
+    padding: 0 24px; border-bottom: 1px solid var(--hair);
+  }
+  .wordmark { font-family: var(--display); font-size: 22px; letter-spacing: 0.32em; color: var(--gold); justify-self: start; }
+  .searchbox { position: relative; }
+  .search {
+    width: 100%; height: 34px; background: transparent; color: var(--ink);
+    border: 1px solid var(--hair); border-radius: 2px; padding: 0 14px;
+    font: 14px var(--ui); text-align: center; outline: none;
+    transition: border-color 400ms ease-out;
+  }
+  .search::placeholder { color: var(--muted); }
+  .search:focus { border-color: var(--gold); }
+  .progress { position: absolute; left: 0; bottom: -4px; height: 1px; width: 0; background: var(--gold); opacity: 0; }
+  .progress.on { opacity: 1; transition: width 500ms ease-out; }
+  .icon-btn { justify-self: end; width: 34px; height: 34px; display: grid; place-items: center; background: none; border: 0; color: var(--muted); cursor: pointer; transition: color 400ms ease-out; }
+  .icon-btn:hover, .icon-btn:focus-visible { color: var(--gold); outline: none; }
+
+  /* side panels: jali dot-grid */
+  .side {
+    padding: 24px 20px; overflow: auto;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16'%3E%3Ccircle cx='8' cy='8' r='0.9' fill='%23C8A24A' fill-opacity='0.10'/%3E%3C/svg%3E");
+  }
+  .left  { grid-area: left;  border-right: 1px solid var(--hair); }
+  .right { grid-area: right; border-left:  1px solid var(--hair); }
+  .label { font: 500 12px var(--ui); letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-bottom: 16px; }
+  .sources { list-style: none; padding: 0; }
+  .sources li { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid rgba(200,162,74,0.12); background: var(--bg); }
+  .sources .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .sources .kind { color: var(--muted); font-size: 12px; flex: none; }
+  .note { color: var(--muted); font-size: 12px; background: var(--bg); }
+
+  .graph { display: block; width: 100%; height: auto; background: var(--bg); }
+  .graph line { stroke: var(--gold); stroke-opacity: 0.35; stroke-width: 1; }
+  .graph circle { fill: var(--bg); stroke: var(--gold); stroke-width: 1; }
+  .graph circle.hub { fill: var(--lapis); }
+  .graph text { font: 9px var(--mono); fill: var(--muted); text-anchor: middle; }
+
+  /* centre */
+  .center { grid-area: center; display: flex; flex-direction: column; align-items: center; min-height: 0; padding: 20px 32px 0; }
+  .arch-wrap { flex: 0 1 46%; min-height: 200px; width: 100%; display: flex; justify-content: center; }
+  .arch { height: 100%; width: auto; max-width: 100%; overflow: visible; }
+  .arch-line { fill: none; stroke: var(--gold); stroke-opacity: 0.55; stroke-width: 1; vector-effect: non-scaling-stroke; transition: stroke-opacity 400ms ease-out; }
+  .arch-line.inner { stroke-opacity: 0.22; }
+  .court:has(.search:focus) .arch-line:not(.inner) { stroke-opacity: 0.9; }
+
+  .dragon .eye-shape, .dragon .pupil { transform-box: fill-box; transform-origin: center; }
+
+  .answer { flex: 1 1 0; min-height: 0; overflow: auto; width: 100%; max-width: 640px; padding: 20px 0 24px; opacity: 0; transition: opacity 300ms ease-out; }
+  .answer.show { opacity: 1; }
+  .answer h1 { font-family: var(--display); font-weight: 700; font-size: 26px; line-height: 1.3; color: var(--gold); text-align: center; margin-bottom: 16px; }
+  .answer .body { font: 15px/1.65 var(--ui); white-space: pre-wrap; }
+  .cite { font: 12px var(--mono); color: var(--gold); }
+  .answer .err { color: var(--muted); text-align: center; }
+
+  /* rail */
+  .rail {
+    grid-area: rail; display: flex; align-items: center; justify-content: center; gap: 10px;
+    border-top: 1px solid var(--hair); font: 12px var(--ui); letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+    white-space: nowrap; overflow: hidden;
+  }
+  .rail b { color: var(--gold); font-weight: 700; margin-right: 6px; }
+  .rail .dot { opacity: 0.6; }
+
+  @media (max-width: 899px) {
+    .court { grid-template-columns: 1fr; grid-template-areas: "top" "center" "rail"; }
+    .side { display: none; }
+    .top { grid-template-columns: auto 1fr auto; padding: 0 16px; }
+    .center { padding: 16px 20px 0; }
+    .rail { font-size: 10px; gap: 6px; letter-spacing: 0.04em; }
+  }
+</style>
+</head>
+<body>
+<div class="court">
+
+  <header class="top">
+    <span class="wordmark">ATLAS</span>
+    <form class="searchbox" id="ask" autocomplete="off">
+      <input class="search" id="q" type="search" placeholder="Ask your sources…" aria-label="Ask a question">
+      <div class="progress" id="progress"></div>
+    </form>
+    <button class="icon-btn" id="settings" aria-label="Settings (API address)" title="API address">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" stroke-linecap="round"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M19.1 4.9L17 7M7 17l-2.1 2.1"/></svg>
+    </button>
+  </header>
+
+  <aside class="side left">
+    <div class="label">Sources</div>
+    <ul class="sources" id="sources"></ul>
+    <p class="note" id="sources-note">Connecting…</p>
+  </aside>
+
+  <main class="center">
+    <div class="arch-wrap">
+      <svg class="arch" viewBox="0 0 400 520" preserveAspectRatio="xMidYMax meet" role="img" aria-label="A multi-foil arch framing a dragon head">
+        <path id="arch" class="arch-line" d=""/>
+        <path id="arch-inner" class="arch-line inner" d=""/>
+
+        <svg class="dragon" x="60" y="190" width="280" height="243" viewBox="0 0 300 260" overflow="visible">
+          <defs>
+            <radialGradient id="skin" cx="50%" cy="35%" r="75%">
+              <stop offset="0" stop-color="#3A4A66"/><stop offset="0.55" stop-color="#1D2738"/><stop offset="1" stop-color="#0E1116"/>
+            </radialGradient>
+            <linearGradient id="horn" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#E8E1D2"/><stop offset="1" stop-color="#8B8578"/>
+            </linearGradient>
+          </defs>
+          <g id="head">
+            <path fill="url(#skin)" stroke="#3A4A66" d="M60 260 C50 210 56 150 80 110 L70 90 L92 100 L84 70 L110 90 L120 60 L150 80 L180 60 L190 90 L216 70 L208 100 L230 90 L220 110 C244 150 250 210 240 260Z"/>
+            <path fill="url(#horn)" d="M96 62 C84 34 62 18 40 12 C58 34 66 56 78 80Z"/>
+            <path fill="url(#horn)" d="M204 62 C216 34 238 18 260 12 C242 34 234 56 222 80Z"/>
+            <path fill="url(#skin)" stroke="#3A4A66" d="M150 40 C200 40 232 80 232 128 C232 170 212 204 190 220 L184 240 C176 252 124 252 116 240 L110 220 C88 204 68 170 68 128 C68 80 100 40 150 40Z"/>
+            <path fill="#0E1116" fill-opacity="0.7" stroke="#3A4A66" d="M82 106 C100 84 128 86 142 102 L142 112 C126 100 102 100 82 118Z"/>
+            <path fill="#0E1116" fill-opacity="0.7" stroke="#3A4A66" d="M218 106 C200 84 172 86 158 102 L158 112 C174 100 198 100 218 118Z"/>
+            <path fill="url(#skin)" stroke="#3A4A66" d="M126 150 C126 180 124 200 130 216 L170 216 C176 200 174 180 174 150 C160 160 140 160 126 150Z"/>
+            <ellipse cx="141" cy="201" rx="3.2" ry="4.4" fill="#0E1116"/><ellipse cx="159" cy="201" rx="3.2" ry="4.4" fill="#0E1116"/>
+            <path fill="none" stroke="#8B8578" stroke-linecap="round" d="M116 228 C136 244 164 244 184 228"/>
+            <path class="eye-shape" fill="#C8A24A" d="M92 118 C104 104 126 104 134 120 C124 130 102 130 92 118Z"/>
+            <path class="eye-shape" fill="#C8A24A" d="M208 118 C196 104 174 104 166 120 C176 130 198 130 208 118Z"/>
+            <g id="pupil-l"><ellipse class="pupil" cx="113" cy="118" rx="3.5" ry="8" fill="#0E1116"/></g>
+            <g id="pupil-r"><ellipse class="pupil" cx="187" cy="118" rx="3.5" ry="8" fill="#0E1116"/></g>
+          </g>
+        </svg>
+      </svg>
+    </div>
+
+    <section class="answer" id="answer" aria-live="polite"></section>
+  </main>
+
+  <aside class="side right">
+    <div class="label">Graph</div>
+    <svg class="graph" id="graph" viewBox="0 0 240 240" role="img" aria-label="Most connected nodes of the knowledge graph"></svg>
+    <p class="note" id="graph-note"></p>
+  </aside>
+
+  <footer class="rail" id="rail" aria-label="Answer status">
+    <span><b>Confidence</b><span id="r-conf">—</span></span><span class="dot">·</span>
+    <span><b>Freshness</b><span id="r-fresh">—</span></span><span class="dot">·</span>
+    <span><b>Sources</b><span id="r-src">—</span></span><span class="dot">·</span>
+    <span><b>Latency</b><span id="r-lat">—</span></span>
+  </footer>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (id) { return document.getElementById(id); };
+  var reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  /* ---------- API address (settings icon) ----------
+     Serve this page from an origin the API allows (its default is http://localhost:3000),
+     e.g.  npx serve -l 3000 design   */
+  function apiBase() {
+    try { return (localStorage.getItem("atlas-api") || "http://localhost:8000").replace(/\/+$/, ""); }
+    catch (e) { return "http://localhost:8000"; }
+  }
+  $("settings").addEventListener("click", function () {
+    var v = prompt("Atlas API address", apiBase());
+    if (!v) return;
+    try { localStorage.setItem("atlas-api", v); } catch (e) {}
+    loadSources(); loadGraph();
+  });
+
+  function esc(s) { return String(s).replace(/[&<>"]/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]; }); }
+
+  /* ---------- arch: symmetric cusped path, hairline only ---------- */
+  var CX = 200, SPRING = 300, HALF = 150, RISE = 270;
+  function archPath(inset, foils) {
+    var half = HALF - inset, rise = RISE - inset * 1.4, l = [], i;
+    for (i = 0; i <= foils; i++) { var s = i / foils; l.push([CX - half + half * s, SPRING - rise * Math.pow(s, 0.62)]); }
+    var pts = l.concat(l.slice(0, -1).reverse().map(function (p) { return [2 * CX - p[0], p[1]]; }));
+    var d = "M" + (CX - half) + " 500 L" + pts[0][0] + " " + pts[0][1];
+    for (i = 1; i < pts.length; i++) {
+      var a = pts[i - 1], b = pts[i], r = Math.hypot(b[0] - a[0], b[1] - a[1]) * 0.62;
+      d += " A" + r.toFixed(2) + " " + r.toFixed(2) + " 0 0 1 " + b[0].toFixed(2) + " " + b[1].toFixed(2);
+    }
+    return d + " L" + (CX + half) + " 500";
+  }
+  $("arch").setAttribute("d", archPath(0, 6));
+  $("arch-inner").setAttribute("d", archPath(12, 6));
+
+  /* ---------- sources + graph (left / right panels) ---------- */
+  function getJSON(path) {
+    return fetch(apiBase() + path).then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); });
+  }
+
+  function loadSources() {
+    var ul = $("sources"), note = $("sources-note");
+    getJSON("/sources").then(function (items) {
+      ul.innerHTML = items.slice(0, 40).map(function (s) {
+        return '<li><span class="name" title="' + esc(s.url || s.title) + '">' + esc(s.title) + '</span><span class="kind">' + esc(s.kind) + "</span></li>";
+      }).join("");
+      note.textContent = items.length ? items.length + (items.length === 1 ? " source" : " sources") : "Nothing ingested yet.";
+    }).catch(function () { ul.innerHTML = ""; note.textContent = "API unreachable at " + apiBase() + ". The settings icon changes the address."; });
+  }
+
+  function loadGraph() {
+    var svg = $("graph"), note = $("graph-note");
+    getJSON("/kg/overview?limit=24").then(function (g) {
+      var nodes = (g.nodes || []).slice(0, 13), pos = {}, out = "";
+      // deterministic, symmetric layout: first node at the centre, the rest on two rings
+      nodes.forEach(function (n, i) {
+        if (i === 0) { pos[n.id] = [120, 120]; return; }
+        var ring = i <= 6 ? 1 : 2, idx = ring === 1 ? i - 1 : i - 7, count = ring === 1 ? 6 : 6;
+        var ang = (idx / count) * Math.PI * 2 - Math.PI / 2 + (ring === 2 ? Math.PI / 6 : 0), rad = ring === 1 ? 52 : 98;
+        pos[n.id] = [120 + Math.cos(ang) * rad, 120 + Math.sin(ang) * rad];
+      });
+      (g.edges || []).forEach(function (e) {
+        var a = pos[e.source], b = pos[e.target];
+        if (a && b) out += '<line x1="' + a[0].toFixed(1) + '" y1="' + a[1].toFixed(1) + '" x2="' + b[0].toFixed(1) + '" y2="' + b[1].toFixed(1) + '"/>';
+      });
+      nodes.forEach(function (n, i) {
+        var p = pos[n.id], lab = String(n.label || "").slice(0, 14);
+        out += '<circle class="' + (i === 0 ? "hub" : "") + '" cx="' + p[0].toFixed(1) + '" cy="' + p[1].toFixed(1) + '" r="' + (i === 0 ? 8 : 5) + '"/>';
+        out += '<text x="' + p[0].toFixed(1) + '" y="' + (p[1] + (i === 0 ? 20 : 15)).toFixed(1) + '">' + esc(lab) + "</text>";
+      });
+      svg.innerHTML = out;
+      note.textContent = nodes.length ? "The " + nodes.length + " most connected nodes." : "No graph yet.";
+    }).catch(function () { svg.innerHTML = ""; note.textContent = ""; });
+  }
+  loadSources(); loadGraph();
+
+  /* ---------- progress line (1px, under the search input) ---------- */
+  var bar = $("progress"), tick = null;
+  function progressStart() {
+    clearInterval(tick);
+    bar.style.transition = "none"; bar.style.width = "0"; bar.className = "progress on";
+    void bar.offsetWidth;
+    bar.style.transition = ""; var w = 0;
+    tick = setInterval(function () { w += (90 - w) * 0.25; bar.style.width = w + "%"; }, 500);
+    bar.style.width = "20%";
+  }
+  function progressEnd() {
+    clearInterval(tick); bar.style.width = "100%";
+    setTimeout(function () { bar.className = "progress"; bar.style.width = "0"; }, 500);
+  }
+
+  /* ---------- ask ---------- */
+  var answerEl = $("answer"), busy = false;
+
+  function renderAnswer(question, text) {
+    var body = esc(text).replace(/\[([^\[\]\s][^\[\]]*?:\d+(?:-\d+)?)\]/g, '<span class="cite">[$1]</span>');
+    answerEl.innerHTML = "<h1>" + esc(question) + '</h1><div class="body">' + body + "</div>";
+  }
+  function showAnswer() { requestAnimationFrame(function () { answerEl.classList.add("show"); }); }
+
+  function setRail(r) {
+    var conf = r.epistemic || (r.confidence && r.confidence.level) || "—";
+    var fresh = (r.freshness && r.freshness.label) || "—";
+    var m = r.footer && /\[sources:\s*(\d+)\]/.exec(r.footer), src;
+    if (m) src = m[1];
+    else if (r.citations) src = String(new Set(r.citations.map(function (c) { return c.file; })).size);
+    else src = "—";
+    $("r-conf").textContent = conf;
+    $("r-fresh").textContent = fresh;
+    $("r-src").textContent = src;
+    $("r-lat").textContent = r.latency_ms != null ? r.latency_ms + " ms" : "—";
+  }
+
+  $("ask").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var q = $("q").value.trim();
+    if (!q || busy) return;
+    busy = true;
+    answerEl.classList.remove("show");
+    progressStart();
+    var t0 = performance.now();
+    fetch(apiBase() + "/ask", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ question: q }) })
+      .then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (j) {
+          if (!r.ok) throw new Error(typeof j.detail === "string" ? j.detail : "The API answered " + r.status + ".");
+          return j;
+        });
+      })
+      .then(function (r) {
+        if (r.latency_ms == null) r.latency_ms = Math.round(performance.now() - t0);
+        renderAnswer(q, r.answer || "");
+        setRail(r);
+      })
+      .catch(function (err) {
+        answerEl.innerHTML = "<h1>" + esc(q) + '</h1><p class="err">' + esc(err instanceof TypeError ? "Could not reach the API at " + apiBase() + "." : err.message) + "</p>";
+      })
+      .then(function () { busy = false; progressEnd(); showAnswer(); blink(); });
+  });
+
+  /* ---------- dragon: tracking + one blink on submit ---------- */
+  var head = $("head"), pl = $("pupil-l"), pr = $("pupil-r"), dragonEl = document.querySelector(".dragon");
+  var target = { x: 0, y: 0 }, h = { x: 0, y: 0 }, p = { x: 0, y: 0 }, lastMove = performance.now();
+  var clamp = function (v) { return Math.max(-1, Math.min(1, v)); };
+
+  window.addEventListener("pointermove", function (e) {
+    var r = dragonEl.getBoundingClientRect();
+    target.x = clamp((e.clientX - (r.left + r.width / 2)) / (innerWidth / 2));
+    target.y = clamp((e.clientY - (r.top + r.height / 2)) / (innerHeight / 2));
+    lastMove = performance.now();
+  }, { passive: true });
+
+  function blink() {
+    if (reduce) return;
+    var parts = document.querySelectorAll(".eye-shape, .pupil");
+    for (var i = 0; i < parts.length; i++) {
+      parts[i].animate([{ transform: "scaleY(1)" }, { transform: "scaleY(0.1)" }, { transform: "scaleY(1)" }], { duration: 500, easing: "ease-out" });
+    }
+  }
+
+  function frame(now) {
+    if (!reduce && now - lastMove > 2500) {
+      var t = now / 1000;
+      target.x = Math.sin(t * 0.7) * 0.35;
+      target.y = Math.cos(t * 0.5) * 0.18;
+    }
+    h.x += (target.x - h.x) * 0.08; h.y += (target.y - h.y) * 0.08;
+    p.x += (target.x - p.x) * 0.22; p.y += (target.y - p.y) * 0.22;
+    head.setAttribute("transform", "translate(" + (h.x * 10).toFixed(2) + " " + (h.y * 10).toFixed(2) + ") rotate(" + (h.x * 8).toFixed(2) + " 150 150)");
+    var pt = "translate(" + (p.x * 3).toFixed(2) + " " + (p.y * 2).toFixed(2) + ")";
+    pl.setAttribute("transform", pt); pr.setAttribute("transform", pt);
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

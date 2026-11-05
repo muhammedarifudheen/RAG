@@ -1,15 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Cormorant_Garamond, Inter, JetBrains_Mono } from "next/font/google";
+import { Inter, JetBrains_Mono, Space_Grotesk } from "next/font/google";
 
+import { DragonBackdrop } from "@/components/DragonImage";
 import { Nav } from "@/components/Nav";
 import { THEME_SCRIPT } from "@/lib/theme";
 
 import "katex/dist/katex.min.css";
 import "./globals.css";
 
-// Cormorant Garamond for headings (high-contrast couture serif), Inter for text,
-// JetBrains Mono for code, labels and citations. next/font serves them from the site.
-const display = Cormorant_Garamond({
+// Space Grotesk for headings, Inter for text, JetBrains Mono for code, labels and citations.
+// next/font serves them from the site.
+const display = Space_Grotesk({
   subsets: ["latin"],
   weight: ["500", "600", "700"],
   variable: "--font-display",
@@ -23,7 +24,7 @@ export const metadata: Metadata = {
   description: "Grounded answers. Verifiable sources. Zero guesswork.",
 };
 
-export const viewport: Viewport = { themeColor: "#07080b" };
+export const viewport: Viewport = { themeColor: "#000000" };
 
 export default function RootLayout({
   children,
@@ -37,6 +38,7 @@ export default function RootLayout({
         <script dangerouslySetInnerHTML={{ __html: THEME_SCRIPT }} />
       </head>
       <body className="flex min-h-screen flex-col font-sans text-paper antialiased">
+        <DragonBackdrop />
         <Nav />
         <div className="flex min-h-0 flex-1 flex-col">{children}</div>
       </body>

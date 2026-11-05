@@ -6,7 +6,7 @@ import { useEffect, useState } from "react";
 
 import { applyTheme, currentTheme, type Theme } from "@/lib/theme";
 
-import { DragonMark } from "./Ornament";
+import { DragonMark } from "./DragonImage";
 
 const LINKS = [
   { href: "/", label: "Ingest" },
@@ -17,7 +17,7 @@ const LINKS = [
   { href: "/insights", label: "Insights" },
 ];
 
-/** A glass bar floating over the page. */
+/** A single hairline bar: the mark, the pages, the theme. */
 export function Nav() {
   const pathname = usePathname();
   const [theme, setTheme] = useState<Theme>("dark");
@@ -30,24 +30,16 @@ export function Nav() {
   }, []);
 
   return (
-    <header className="relative z-20 px-3 pt-3">
-      <nav
-        aria-label="Main"
-        className="glass mx-auto flex h-12 max-w-6xl items-center gap-1 rounded-full pl-2 pr-2 shadow-float"
-      >
-        <Link
-          href="/chat"
-          className="flex items-center gap-2 rounded-full py-1 pl-1 pr-3"
-          aria-label="Atlas home"
-        >
-          {/* The mark: the glass dragon coiled round its pearl. */}
-          <DragonMark className="h-8 w-8 drop-shadow-[0_0_10px_rgba(51,214,240,0.55)]" />
-          <span className="chrome-text font-display text-[20px] font-semibold uppercase tracking-[0.22em]">
+    <header className="relative z-20 border-b border-line bg-ink/80 backdrop-blur-sm">
+      <nav aria-label="Main" className="mx-auto flex h-12 max-w-6xl items-center gap-6 px-4">
+        <Link href="/chat" className="flex items-center gap-3" aria-label="Atlas home">
+          <DragonMark />
+          <span className="font-display text-[15px] font-semibold uppercase tracking-[0.34em]">
             Atlas
           </span>
         </Link>
 
-        <ul className="flex items-center gap-0.5 overflow-x-auto">
+        <ul className="flex h-full items-stretch overflow-x-auto">
           {LINKS.map(({ href, label }) => {
             const active = pathname === href;
             return (
@@ -55,10 +47,10 @@ export function Nav() {
                 <Link
                   href={href}
                   aria-current={active ? "page" : undefined}
-                  className={`rounded-full px-3 py-1.5 text-[13px] transition-colors ${
+                  className={`label flex items-center border-b px-3 transition-colors duration-300 ${
                     active
-                      ? "bg-signal/90 text-on-signal shadow-glow"
-                      : "text-muted hover:bg-raised/70 hover:text-paper"
+                      ? "border-signal text-paper"
+                      : "border-transparent text-muted hover:text-paper"
                   }`}
                 >
                   {label}
@@ -68,16 +60,12 @@ export function Nav() {
           })}
         </ul>
 
-        <p className="ml-auto hidden items-center gap-2 text-[12px] text-muted md:flex">
-          <span aria-hidden="true" className="h-1.5 w-1.5 animate-pulse rounded-full bg-acid" />
-          Multi-model AI
-        </p>
         <button
           type="button"
           onClick={() => applyTheme(theme === "dark" ? "light" : "dark")}
           aria-label={theme === "dark" ? "Switch to the light theme" : "Switch to the dark theme"}
           title={theme === "dark" ? "Light theme" : "Dark theme"}
-          className="ml-2 flex h-8 w-8 items-center justify-center rounded-full text-muted transition-colors hover:bg-raised hover:text-paper md:ml-3"
+          className="ml-auto flex h-8 w-8 items-center justify-center text-muted transition-colors duration-300 hover:text-signal"
         >
           <span aria-hidden="true">{theme === "dark" ? "☀" : "☾"}</span>
         </button>

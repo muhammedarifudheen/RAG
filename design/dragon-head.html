@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dragon Head</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #0E1116; }
+  body { display: grid; place-items: center; }
+  svg { width: min(100vw, 100vh * 300 / 260); height: min(100vh, 100vw * 260 / 300); display: block; touch-action: none; }
+  #head { transform-box: view-box; transform-origin: 150px 150px; }
+</style>
+</head>
+<body>
+<svg id="dragon" viewBox="0 0 300 260" role="img" aria-label="A dragon head that turns toward the cursor">
+  <defs>
+    <radialGradient id="skin" cx="50%" cy="35%" r="75%">
+      <stop offset="0"    stop-color="#3A4A66"/>
+      <stop offset="0.55" stop-color="#1D2738"/>
+      <stop offset="1"    stop-color="#0E1116"/>
+    </radialGradient>
+    <linearGradient id="horn" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#E8E1D2"/>
+      <stop offset="1" stop-color="#8B8578"/>
+    </linearGradient>
+  </defs>
+
+  <g id="head">
+    <!-- mane / neck -->
+    <path id="mane" fill="url(#skin)" stroke="#3A4A66" stroke-width="1"
+      d="M60 260 C50 210 56 150 80 110 L70 90 L92 100 L84 70 L110 90 L120 60 L150 80 L180 60 L190 90 L216 70 L208 100 L230 90 L220 110 C244 150 250 210 240 260Z"/>
+
+    <!-- horns -->
+    <path id="horn-l" fill="url(#horn)" d="M96 62 C84 34 62 18 40 12 C58 34 66 56 78 80Z"/>
+    <path id="horn-r" fill="url(#horn)" d="M204 62 C216 34 238 18 260 12 C242 34 234 56 222 80Z"/>
+
+    <!-- skull -->
+    <path id="skull" fill="url(#skin)" stroke="#3A4A66" stroke-width="1"
+      d="M150 40 C200 40 232 80 232 128 C232 170 212 204 190 220 L184 240 C176 252 124 252 116 240 L110 220 C88 204 68 170 68 128 C68 80 100 40 150 40Z"/>
+
+    <!-- brow ridge -->
+    <path id="brow-l" fill="#0E1116" fill-opacity="0.7" stroke="#3A4A66" stroke-width="1"
+      d="M82 106 C100 84 128 86 142 102 L142 112 C126 100 102 100 82 118Z"/>
+    <path id="brow-r" fill="#0E1116" fill-opacity="0.7" stroke="#3A4A66" stroke-width="1"
+      d="M218 106 C200 84 172 86 158 102 L158 112 C174 100 198 100 218 118Z"/>
+
+    <!-- snout -->
+    <path id="snout" fill="url(#skin)" stroke="#3A4A66" stroke-width="1"
+      d="M126 150 C126 180 124 200 130 216 L170 216 C176 200 174 180 174 150 C160 160 140 160 126 150Z"/>
+    <ellipse cx="141" cy="201" rx="3.2" ry="4.4" fill="#0E1116"/>
+    <ellipse cx="159" cy="201" rx="3.2" ry="4.4" fill="#0E1116"/>
+
+    <!-- jaw line -->
+    <path id="jaw" fill="none" stroke="#8B8578" stroke-width="1" stroke-linecap="round"
+      d="M116 228 C136 244 164 244 184 228"/>
+
+    <!-- eyes -->
+    <path id="eye-l" fill="#C8A24A" d="M92 118 C104 104 126 104 134 120 C124 130 102 130 92 118Z"/>
+    <path id="eye-r" fill="#C8A24A" d="M208 118 C196 104 174 104 166 120 C176 130 198 130 208 118Z"/>
+
+    <!-- pupils (vertical slits; they lead the head) -->
+    <g id="pupil-l"><ellipse cx="113" cy="118" rx="3.5" ry="8" fill="#0E1116"/></g>
+    <g id="pupil-r"><ellipse cx="187" cy="118" rx="3.5" ry="8" fill="#0E1116"/></g>
+  </g>
+</svg>
+
+<script>
+(function () {
+  var svg = document.getElementById("dragon");
+  var head = document.getElementById("head");
+  var pl = document.getElementById("pupil-l");
+  var pr = document.getElementById("pupil-r");
+
+  var HEAD_LERP = 0.08;       // head smoothing
+  var PUPIL_LERP = 0.22;      // pupils are quicker, so they lead
+  var IDLE_MS = 2500;
+
+  var target = { x: 0, y: 0 };            // -1..1
+  var headPos = { x: 0, y: 0 };
+  var pupilPos = { x: 0, y: 0 };
+  var lastMove = performance.now();
+
+  function clamp(v) { return Math.max(-1, Math.min(1, v)); }
+
+  svg.addEventListener("pointermove", function (e) {
+    var r = svg.getBoundingClientRect();
+    target.x = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2));
+    target.y = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2));
+    lastMove = performance.now();
+  }, { passive: true });
+
+  function frame(now) {
+    if (now - lastMove > IDLE_MS) {
+      var t = now / 1000;
+      target.x = Math.sin(t * 0.7) * 0.35;
+      target.y = Math.cos(t * 0.5) * 0.18;
+    }
+
+    headPos.x  += (target.x - headPos.x)  * HEAD_LERP;
+    headPos.y  += (target.y - headPos.y)  * HEAD_LERP;
+    pupilPos.x += (target.x - pupilPos.x) * PUPIL_LERP;
+    pupilPos.y += (target.y - pupilPos.y) * PUPIL_LERP;
+
+    head.style.transform =
+      "translate(" + (headPos.x * 10).toFixed(2) + "px," + (headPos.y * 10).toFixed(2) + "px) " +
+      "rotate(" + (headPos.x * 8).toFixed(2) + "deg)";
+
+    var pt = "translate(" + (pupilPos.x * 3).toFixed(2) + " " + (pupilPos.y * 2).toFixed(2) + ")";
+    pl.setAttribute("transform", pt);
+    pr.setAttribute("transform", pt);
+
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>

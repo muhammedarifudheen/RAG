@@ -1,0 +1,227 @@
+<!doctype html>
+<!--
+  3D dragon head (Three.js) with a layered-SVG fallback.
+
+  MODEL: put a GLB next to this file as ./dragon-head.glb (or change MODEL_URL below).
+  Serve over http (e.g. `npx serve design`) - browsers block GLB fetches from file://,
+  in which case the SVG fallback is shown.
+
+  Candidate models, all CC Attribution (credit the author; confirm the licence and the
+  GLB download option on each page, and check that eyes and horns are separate, visible
+  parts - I have not opened or downloaded any of them):
+    1. Low poly Dragon Head - TheEmerald (CC-BY, ~5.4k tris)
+       https://sketchfab.com/3d-models/low-poly-dragon-head-9dbb8bd5a0b24566ba5aca6ab861de8e
+    2. Dragon Head (LowPoly) - SenyorEtziba (CC-BY, ~1k tris)
+       https://sketchfab.com/3d-models/dragon-head-lowpoly-e6c6a095ec0a431d9d17563e7fd6c1cb
+    3. Dragon Head Base Mesh - AaronJOlson (CC-BY, low poly)
+       https://sketchfab.com/3d-models/dragon-head-base-mesh-5b96482914194800ae48e697c0d9e431
+  Not suggested: "dragon head 3d model" by grodan has the horns and glowing eyes but is ~1.9M
+  triangles, far over the 2MB budget.
+
+  Eye pulse: meshes or materials whose name matches /eye/i get a gold emissive pulse.
+  If your model names them differently, adjust EYE_PATTERN.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dragon Head 3D</title>
+<style>
+  html, body { height: 100%; margin: 0; background: #0E1116; }
+  #stage { position: fixed; inset: 0; display: grid; place-items: center; }
+  canvas#gl { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+  svg#fallback { display: none; width: min(100vw, 100vh * 300 / 260); height: min(100vh, 100vw * 260 / 300); touch-action: none; }
+  #fb-head { transform-box: view-box; transform-origin: 150px 150px; }
+  .fallback #fallback { display: block; }
+  .fallback #gl { display: none; }
+</style>
+<script type="importmap">
+{ "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.min.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"
+} }
+</script>
+</head>
+<body>
+<div id="stage">
+  <canvas id="gl"></canvas>
+
+  <!-- fallback: layered SVG dragon -->
+  <svg id="fallback" viewBox="0 0 300 260" role="img" aria-label="A dragon head that turns toward the cursor">
+    <defs>
+      <radialGradient id="skin" cx="50%" cy="35%" r="75%">
+        <stop offset="0" stop-color="#3A4A66"/><stop offset="0.55" stop-color="#1D2738"/><stop offset="1" stop-color="#0E1116"/>
+      </radialGradient>
+      <linearGradient id="horn" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#E8E1D2"/><stop offset="1" stop-color="#8B8578"/>
+      </linearGradient>
+    </defs>
+    <g id="fb-head">
+      <path fill="url(#skin)" stroke="#3A4A66" d="M60 260 C50 210 56 150 80 110 L70 90 L92 100 L84 70 L110 90 L120 60 L150 80 L180 60 L190 90 L216 70 L208 100 L230 90 L220 110 C244 150 250 210 240 260Z"/>
+      <path fill="url(#horn)" d="M96 62 C84 34 62 18 40 12 C58 34 66 56 78 80Z"/>
+      <path fill="url(#horn)" d="M204 62 C216 34 238 18 260 12 C242 34 234 56 222 80Z"/>
+      <path fill="url(#skin)" stroke="#3A4A66" d="M150 40 C200 40 232 80 232 128 C232 170 212 204 190 220 L184 240 C176 252 124 252 116 240 L110 220 C88 204 68 170 68 128 C68 80 100 40 150 40Z"/>
+      <path fill="#0E1116" fill-opacity="0.7" stroke="#3A4A66" d="M82 106 C100 84 128 86 142 102 L142 112 C126 100 102 100 82 118Z"/>
+      <path fill="#0E1116" fill-opacity="0.7" stroke="#3A4A66" d="M218 106 C200 84 172 86 158 102 L158 112 C174 100 198 100 218 118Z"/>
+      <path fill="url(#skin)" stroke="#3A4A66" d="M126 150 C126 180 124 200 130 216 L170 216 C176 200 174 180 174 150 C160 160 140 160 126 150Z"/>
+      <ellipse cx="141" cy="201" rx="3.2" ry="4.4" fill="#0E1116"/><ellipse cx="159" cy="201" rx="3.2" ry="4.4" fill="#0E1116"/>
+      <path fill="none" stroke="#8B8578" stroke-linecap="round" d="M116 228 C136 244 164 244 184 228"/>
+      <path fill="#C8A24A" d="M92 118 C104 104 126 104 134 120 C124 130 102 130 92 118Z"/>
+      <path fill="#C8A24A" d="M208 118 C196 104 174 104 166 120 C176 130 198 130 208 118Z"/>
+      <g id="fb-pl"><ellipse cx="113" cy="118" rx="3.5" ry="8" fill="#0E1116"/></g>
+      <g id="fb-pr"><ellipse cx="187" cy="118" rx="3.5" ry="8" fill="#0E1116"/></g>
+    </g>
+  </svg>
+</div>
+
+<script type="module">
+const MODEL_URL = "./dragon-head.glb";
+const EYE_PATTERN = /eye/i;
+const IDLE_MS = 2500;
+const LERP = 0.08;
+const reduceMotion = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+const stage = document.getElementById("stage");
+const canvas = document.getElementById("gl");
+const clamp = v => Math.max(-1, Math.min(1, v));
+
+function useFallback(reason) {
+  console.warn("Dragon: using SVG fallback -", reason);
+  stage.classList.add("fallback");
+  startSvg();
+}
+
+/* ---------- 3D ---------- */
+async function start3D() {
+  let THREE, GLTFLoader;
+  try {
+    THREE = await import("three");
+    ({ GLTFLoader } = await import("three/addons/loaders/GLTFLoader.js"));
+  } catch (e) { return useFallback("Three.js failed to load"); }
+
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ canvas, alpha: true, antialias: true });
+  } catch (e) { return useFallback("WebGL unavailable"); }
+  renderer.setClearColor(0x000000, 0);          // transparent, no floor
+
+  const gltf = await new GLTFLoader().loadAsync(MODEL_URL).catch(e => null);
+  if (!gltf) { renderer.dispose(); return useFallback("model failed to load"); }
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 100);
+
+  // soft key + gold rim; no ambient light, no floor
+  const key = new THREE.DirectionalLight(0xE8E1D2, 2.2);
+  key.position.set(-2, 2.5, 4);
+  const rim = new THREE.DirectionalLight(0xC8A24A, 3.0);
+  rim.position.set(3, 1.5, -3);
+  scene.add(key, rim);
+
+  // centre the model on a pivot and frame it so horns and eyes are in view
+  const model = gltf.scene;
+  const box = new THREE.Box3().setFromObject(model);
+  const size = box.getSize(new THREE.Vector3());
+  const centre = box.getCenter(new THREE.Vector3());
+  model.position.sub(centre);
+  const pivot = new THREE.Group();
+  pivot.add(model);
+  scene.add(pivot);
+
+  const radius = Math.max(size.x, size.y, size.z) * 0.5;
+  const dist = (radius * 1.25) / Math.tan(THREE.MathUtils.degToRad(camera.fov / 2));
+  camera.position.set(0, 0, dist);
+  camera.lookAt(0, 0, 0);
+  camera.near = dist / 100; camera.far = dist * 10; camera.updateProjectionMatrix();
+
+  // eyes: clone their materials so we can pulse them without touching shared ones
+  const eyeMats = [];
+  model.traverse(o => {
+    if (!o.isMesh) return;
+    const mats = Array.isArray(o.material) ? o.material : [o.material];
+    const cloned = mats.map(m => {
+      if ((EYE_PATTERN.test(o.name) || EYE_PATTERN.test(m.name)) && "emissive" in m) {
+        const c = m.clone();
+        c.emissive = new THREE.Color(0xC8A24A);
+        c.emissiveIntensity = 0.4;
+        eyeMats.push(c);
+        return c;
+      }
+      return m;
+    });
+    o.material = Array.isArray(o.material) ? cloned : cloned[0];
+  });
+
+  function resize() {
+    const w = canvas.clientWidth, h = canvas.clientHeight;
+    renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  addEventListener("resize", resize);
+  resize();
+
+  const target = { x: 0, y: 0, z: 0 };
+  let lastMove = performance.now();
+  canvas.addEventListener("pointermove", e => {
+    const r = canvas.getBoundingClientRect();
+    const nx = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2));
+    const ny = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2));
+    target.y = nx * 0.15;     // rotation.y = ±0.15 rad
+    target.x = ny * 0.08;     // rotation.x = ±0.08 rad
+    target.z = 0;
+    lastMove = performance.now();
+  }, { passive: true });
+
+  renderer.setAnimationLoop(now => {
+    const t = now / 1000;
+    const idle = !reduceMotion && now - lastMove > IDLE_MS;
+    if (idle) {
+      const s = Math.sin(t * 0.7);          // one phase drives sway and eye pulse
+      target.y = s * 0.1;
+      target.x = 0;
+      target.z = s * 0.03;
+      const pulse = 0.4 + 0.3 * (0.5 + 0.5 * s);
+      for (const m of eyeMats) m.emissiveIntensity = pulse;
+    } else {
+      for (const m of eyeMats) m.emissiveIntensity = 0.4;
+    }
+    pivot.rotation.x += (target.x - pivot.rotation.x) * LERP;
+    pivot.rotation.y += (target.y - pivot.rotation.y) * LERP;
+    pivot.rotation.z += (target.z - pivot.rotation.z) * LERP;
+    renderer.render(scene, camera);
+  });
+}
+
+/* ---------- SVG fallback ---------- */
+function startSvg() {
+  const svg = document.getElementById("fallback");
+  const head = document.getElementById("fb-head");
+  const pl = document.getElementById("fb-pl"), pr = document.getElementById("fb-pr");
+  const tgt = { x: 0, y: 0 }, h = { x: 0, y: 0 }, p = { x: 0, y: 0 };
+  let last = performance.now();
+  svg.addEventListener("pointermove", e => {
+    const r = svg.getBoundingClientRect();
+    tgt.x = clamp((e.clientX - (r.left + r.width / 2)) / (r.width / 2));
+    tgt.y = clamp((e.clientY - (r.top + r.height / 2)) / (r.height / 2));
+    last = performance.now();
+  }, { passive: true });
+  (function frame(now) {
+    if (!reduceMotion && now - last > IDLE_MS) {
+      tgt.x = Math.sin(now / 1000 * 0.7) * 0.35;
+      tgt.y = Math.cos(now / 1000 * 0.5) * 0.18;
+    }
+    h.x += (tgt.x - h.x) * LERP; h.y += (tgt.y - h.y) * LERP;
+    p.x += (tgt.x - p.x) * 0.22; p.y += (tgt.y - p.y) * 0.22;
+    head.style.transform = `translate(${h.x * 10}px,${h.y * 10}px) rotate(${h.x * 8}deg)`;
+    const t = `translate(${p.x * 3} ${p.y * 2})`;
+    pl.setAttribute("transform", t); pr.setAttribute("transform", t);
+    requestAnimationFrame(frame);
+  })(performance.now());
+}
+
+start3D();
+</script>
+</body>
+</html>

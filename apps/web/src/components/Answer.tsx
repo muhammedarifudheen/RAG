@@ -430,7 +430,7 @@ function FactCheckPanel({
           type="button"
           disabled={state === "checking"}
           onClick={check}
-          className="rounded-full border border-line px-3 py-1 text-cyan transition-colors hover:border-cyan/60 disabled:animate-pulse disabled:opacity-60"
+          className="border border-line px-3 py-1 text-cyan transition-colors hover:border-cyan/60 disabled:animate-pulse disabled:opacity-60"
         >
           {state === "checking"
             ? "Fact-checking the answer against its sources…"
@@ -1002,7 +1002,7 @@ function CodePre({ node, children }: { node?: unknown; children?: ReactNode }) {
   }
 
   return (
-    <div className="not-prose overflow-hidden border border-line bg-[#101010]">
+    <div className="not-prose overflow-hidden border border-line bg-panel">
       <div className="flex items-center justify-between border-b border-line bg-panel px-3 py-1">
         <span className="label text-muted">{language || "text"}</span>
         <button
