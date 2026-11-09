@@ -8,6 +8,7 @@ match of an identifier in the query. Pure functions: no database, no clock but `
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Mapping, Sequence
 from datetime import UTC, datetime
@@ -77,7 +78,10 @@ def rrf_scores(chunks: Sequence[CodeChunk]) -> dict[int, float]:
 
 
 def rerank_score(chunk: CodeChunk) -> float:
-    """The relevance judge's 0-10 score as 0-1; the similarity when it did not judge."""
+    """The cross-encoder's score (a logit) as 0-1, else the relevance judge's 0-10 score as
+    0-1, else the similarity."""
+    if chunk.rerank_score is not None:
+        return 1 / (1 + math.exp(-max(min(chunk.rerank_score, 50.0), -50.0)))
     if chunk.relevance is not None:
         return max(0.0, min(chunk.relevance / 10, 1.0))
     return max(0.0, min(chunk.score, 1.0))

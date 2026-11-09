@@ -44,3 +44,21 @@ python -m evals.run_evals --mode ask --rank legacy   --out legacy.json
 
 Keep a change only if it moves a metric the right way (`hit@k`, `ndcg@k`, `mrr`,
 `citation_precision`, `degraded_rate`); `RETRIEVAL_WEIGHTED_RANK=true` turns the weighted ranking on for every request.
+
+## Cross-encoder reranker (`ATLAS_RERANK=on|off`, default off)
+
+`reranker.py` reranks the top 20 candidates of hybrid retrieval with `bge-reranker-v2-m3`,
+attaches each excerpt's `rerank_score` (the raw logit; in the response, the log line and the
+answer log) and keeps the top 5. It replaces the model-by-model relevance judge while on.
+
+- **Loaded once**, in the background at startup, only when on. Until it has loaded, or if
+  loading fails, `/ask` uses the RRF order and the answer is `degraded` with the reason.
+- **Timeout:** `ATLAS_RERANK_TIMEOUT_MS`, default 150 (the spec's, meant for a GPU). Over it,
+  the RRF order and `degraded`. On a CPU, 20 pairs take seconds, so at 150 ms it degrades on
+  every answer; raise it to see the reranker's effect.
+- **Runtime:** ONNX Runtime on the community export of the same weights
+  (`ATLAS_RERANK_ONNX_REPO`, `ATLAS_RERANK_PRECISION=fp32|int8`), not sentence-transformers:
+  torch is not in the server image.
+- **Memory:** about 2.3 GB (fp32) or 570 MB (int8). The free 512 MB server cannot hold either,
+  and an out-of-memory kill is not an exception a fallback can catch. Turn it on only
+  where the memory exists.

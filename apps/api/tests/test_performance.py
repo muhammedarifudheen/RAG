@@ -268,3 +268,38 @@ def test_files_and_lines_named_in_prose_become_citations():
     # A file the model was not shown, or prose without lines, stays as written.
     assert tidy_citations("In other.py (lines 1-2).", shown) == "In other.py (lines 1-2)."
     assert tidy_citations("The signer.py module signs.", shown) == "The signer.py module signs."
+
+
+def test_the_cross_encoder_reranks_when_on_and_degrades_when_it_fails(client, monkeypatch):
+    from app.assistant import get_assistant
+    from app.config import settings
+    from app.main import app
+    from app.retrieval import reranker
+
+    class Fake:
+        def predict(self, pairs):
+            return [float(len(pairs) - i) for i in range(len(pairs))]  # keeps the RRF order
+
+    monkeypatch.setattr(settings, "atlas_rerank", "on")
+    monkeypatch.setattr(settings, "atlas_rerank_timeout_ms", 5000)
+    app.dependency_overrides[get_assistant] = lambda: Assistant([Answerer()], min_score=0.0)
+
+    def ask():
+        return client.post(
+            "/ask", json={"question": "format name of a user", "style": "concise", "cache": False}
+        ).json()
+
+    try:
+        monkeypatch.setattr(reranker, "get", lambda: (Fake(), None))
+        scored = ask()
+        monkeypatch.setattr(reranker, "get", lambda: (None, "reranker failed to load (boom)"))
+        failed = ask()
+    finally:
+        app.dependency_overrides.pop(get_assistant, None)
+    scores = [c["rerank_score"] for c in scored["chunks"]]
+    assert scores and None not in scores and scores == sorted(scores, reverse=True)
+    assert len(scored["chunks"]) <= 5 and not scored.get("degraded")
+    assert failed["degraded"] is True
+    assert "failed to load" in failed["degraded_reasons"][0]
+    assert "[degraded:" in failed["footer"]
+    assert all(c.get("rerank_score") is None for c in failed["chunks"])

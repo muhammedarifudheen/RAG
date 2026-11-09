@@ -59,7 +59,12 @@ def log_answer(
             mode=data.get("mode"),
             latency_ms=data.get("latency_ms"),
             retrieved=[
-                {"file": c["file"], "score": c.get("score"), "relevance": c.get("relevance")}
+                {
+                    "file": c["file"],
+                    "score": c.get("score"),
+                    "relevance": c.get("relevance"),
+                    "rerank_score": c.get("rerank_score"),
+                }
                 for c in chunks
             ],
         )

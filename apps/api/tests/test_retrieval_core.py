@@ -179,3 +179,80 @@ def test_cache_entry_lifetimes():
     assert cache.get("day") == "a"
     clock[0] = 101
     assert cache.get("day") is None
+
+
+class FakeCrossEncoder:
+    """Scores each pair by the number in its passage's name, so the order is knowable."""
+
+    def predict(self, pairs):
+        return [float(p[1].split(" (")[0]) for p in pairs]
+
+
+def _numbered(n: int) -> list[CodeChunk]:
+    return [chunk(i, name=str(i)) for i in range(n)]
+
+
+def test_cross_encoder_orders_scores_and_keeps_five():
+    from app.retrieval import reranker
+
+    trace = Trace()
+    out = reranker.rerank(
+        trace, "q", _numbered(10), 5, timeout=5.0, model_source=lambda: (FakeCrossEncoder(), None)
+    )
+    assert [c.symbol_id for c in out] == [9, 8, 7, 6, 5]  # best score first, five kept
+    assert [c.rerank_score for c in out] == [9.0, 8.0, 7.0, 6.0, 5.0]
+    assert not trace.is_degraded and "rerank" in trace.timings
+
+
+def test_cross_encoder_not_loaded_uses_rrf_order_and_says_so():
+    from app.retrieval import reranker
+
+    trace = Trace()
+    out = reranker.rerank(
+        trace, "q", _numbered(8), 5, model_source=lambda: (None, "reranker failed to load (boom)")
+    )
+    assert [c.symbol_id for c in out] == [0, 1, 2, 3, 4]  # the RRF order, untouched
+    assert all(c.rerank_score is None for c in out)
+    assert trace.degraded and "failed to load" in trace.degraded[0]
+
+
+def test_cross_encoder_over_its_timeout_uses_rrf_order():
+    from app.retrieval import reranker
+
+    class Slow:
+        def predict(self, pairs):
+            time.sleep(0.5)
+            return [1.0] * len(pairs)
+
+    trace = Trace()
+    out = reranker.rerank(
+        trace, "q", _numbered(8), 5, timeout=0.05, model_source=lambda: (Slow(), None)
+    )
+    assert [c.symbol_id for c in out] == [0, 1, 2, 3, 4]
+    assert "rerank" in trace.degraded[0] and "150" not in trace.degraded[0]  # the budget used
+
+
+def test_cross_encoder_wrong_score_count_degrades():
+    from app.retrieval import reranker
+
+    class Broken:
+        def predict(self, pairs):
+            return [1.0]
+
+    trace = Trace()
+    out = reranker.rerank(
+        trace, "q", _numbered(6), 5, timeout=5.0, model_source=lambda: (Broken(), None)
+    )
+    assert [c.symbol_id for c in out] == [0, 1, 2, 3, 4] and trace.is_degraded
+
+
+def test_the_reranker_is_off_by_default_and_its_score_feeds_the_final_score():
+    from app.config import Settings
+    from app.retrieval import reranker
+
+    assert Settings.model_fields["atlas_rerank"].default == "off"
+    assert reranker.enabled() in (True, False)
+    high = chunk(1, score=0.1).model_copy(update={"rerank_score": 6.0})
+    low = chunk(2, score=0.9).model_copy(update={"rerank_score": -6.0})
+    assert scoring.rerank_score(high) > 0.99
+    assert scoring.rerank_score(low) < 0.01

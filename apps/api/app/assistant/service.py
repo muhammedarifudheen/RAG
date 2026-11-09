@@ -1789,6 +1789,7 @@ def _log_answer(question: str, options: Options | None, data: dict) -> None:
         "retrieved": [c.get("symbol_id") for c in chunks],
         "scores": [round(c.get("score", 0), 3) for c in chunks],
         "relevance": [c.get("relevance") for c in chunks],
+        "rerank_scores": [c.get("rerank_score") for c in chunks],
         "route": data.get("route"),
         "model": data.get("model"),
         "answer_chars": len(data.get("answer", "")),

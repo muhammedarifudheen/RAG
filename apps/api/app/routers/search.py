@@ -26,7 +26,7 @@ from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
 from app.models import Source
 from app.ratelimit import rate_limit
-from app.retrieval import scoring, state
+from app.retrieval import reranker, scoring, state
 from app.retrieval.budget import Trace, run_stage
 from app.retrieval.topk import adaptive_top_k
 from app.schemas import (
@@ -299,14 +299,20 @@ def ask(
                 settings.retrieval_plan_budget,
                 reason="query planner too slow; searched the question as asked",
             )
+        # ATLAS_RERANK=on: a cross-encoder replaces the model-by-model relevance judge.
+        cross = not research and body.use_sources and body.rerank and reranker.enabled()
         judging = (
             not research
+            and not cross
             and body.use_sources
             and body.rerank
             and getattr(assistant, "reranker", False)
         )
-        # The judge picks from a few more excerpts than are shown.
-        pool = min(top_k + 4, 20) if judging else top_k
+        # The judge picks from a few more excerpts than are shown; the cross-encoder reads 20.
+        if cross:
+            pool = reranker.CANDIDATES
+        else:
+            pool = min(top_k + 4, 20) if judging else top_k
         notices: list[str] = []
 
         version = state.kb_version(db) if settings.retrieval_cache else ""
@@ -335,6 +341,8 @@ def ask(
         for notice in notices:
             trace.degrade(notice.rstrip("."))
         fused_order = list(chunks)  # the retrieval order, the rank-fusion signal
+        if cross and chunks:
+            chunks = reranker.rerank(trace, query, chunks, body.top_k or reranker.KEEP)
         reranking = None
         if judging and chunks:
             cutoff = (
@@ -412,6 +420,7 @@ def ask(
                     "retrieved": [c.symbol_id for c in fused_order],
                     "chosen": [c.symbol_id for c in chunks],
                     "final_scores": [c.final_score for c in chunks],
+                    "rerank_scores": [c.rerank_score for c in chunks],
                     "relevance": [c.relevance for c in chunks],
                     "weighted": bool(weighted),
                     "timings": timings,
@@ -579,9 +588,7 @@ def _cache_key(body: AskRequest, mode: str, db: Session) -> str | None:
     version = state.kb_version(db)
     choices = body.model_dump(exclude={"question", "history", "cache", "attachments"})
     history = [(t.role, t.content) for t in body.history[-6:]]
-    return cache.key_of(
-        " ".join(body.question.lower().split()), history, choices, mode, version
-    )
+    return cache.key_of(" ".join(body.question.lower().split()), history, choices, mode, version)
 
 
 def _remember(response: dict, answers: cache.TTLCache | None, key: str | None) -> None:

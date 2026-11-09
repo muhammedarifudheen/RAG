@@ -1,4 +1,5 @@
 import logging
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,6 +8,7 @@ from sqlalchemy.exc import OperationalError
 
 from app.config import settings
 from app.middleware import log_requests
+from app.retrieval import reranker
 from app.routers import (
     analytics,
     chat,
@@ -59,9 +61,22 @@ def _configure_logging() -> None:
         logger.addHandler(handler)
 
 
+@asynccontextmanager
+async def _lifespan(_app: FastAPI):
+    # With ATLAS_RERANK=on, load the reranker once, in the background (a no-op when off).
+    reranker.start_loading()
+    yield
+
+
 def create_app() -> FastAPI:
     _configure_logging()
-    app = FastAPI(title="Atlas API", version="0.1.0", description=DESCRIPTION, openapi_tags=TAGS)
+    app = FastAPI(
+        title="Atlas API",
+        version="0.1.0",
+        description=DESCRIPTION,
+        openapi_tags=TAGS,
+        lifespan=_lifespan,
+    )
 
     app.add_middleware(
         CORSMiddleware,

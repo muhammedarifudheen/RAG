@@ -133,6 +133,16 @@ class Settings(BaseSettings):
     retrieval_plan_budget: float = 6.0
     retrieval_judge_budget: float = 12.0
     retrieval_cache: bool = True
+    # A cross-encoder reranks the top 20 candidates and keeps 5 (app/retrieval/reranker.py).
+    # ATLAS_RERANK=on|off, off until its A/B finishes. It needs about 570 MB (int8) to
+    # 2.3 GB (fp32): not the 512 MB free server. The timeout is the spec's, for a GPU; on a
+    # CPU raise it, or the stage always degrades to the RRF order.
+    atlas_rerank: str = "off"
+    atlas_rerank_model: str = "BAAI/bge-reranker-v2-m3"
+    atlas_rerank_onnx_repo: str = "onnx-community/bge-reranker-v2-m3-ONNX"
+    atlas_rerank_precision: str = "fp32"  # or int8
+    atlas_rerank_max_length: int = 512
+    atlas_rerank_timeout_ms: int = 150
     # Reuse answers to repeated questions for a day (see app/assistant/cache.py).
     assistant_answer_cache: bool = True
     # Deep research for questions that look complex, when the user has not chosen.

@@ -25,6 +25,11 @@ class CodeChunk(BaseModel):
     relevance: int | None = Field(
         default=None, description="The relevance judge's score, 0-10, when it judged this."
     )
+    rerank_score: float | None = Field(
+        default=None,
+        description="The cross-encoder reranker's raw score (a logit; higher is better), when "
+        "ATLAS_RERANK is on and it scored this excerpt.",
+    )
     final_score: float | None = Field(
         default=None,
         description="The score it was finally ranked by (rerank, rank fusion, trust, "
