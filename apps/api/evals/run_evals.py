@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 """Runs the golden questions against a running Atlas API and reports retrieval and answer
 quality. Standard library only, so it runs anywhere: against a local API, staging or the
 public server.
