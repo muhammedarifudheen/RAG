@@ -199,28 +199,32 @@ def test_a_repeated_question_is_answered_from_the_cache(client):
     assert len(calls) == 3  # the first, the fresh one and the regenerated one
 
 
-def test_the_assistant_gets_five_excerpts_unless_asked(client):
+def test_the_assistant_gets_excerpts_by_the_kind_of_question(client):
+    """3 for a short fact, 5 to explain, and the caller's own top_k when given."""
     from app.assistant import get_assistant
     from app.main import app
 
-    seen = []
-
     class Recording(Answerer):
         def stream(self, model, system, turns, outcome, *, web, temperature=None, max_tokens=None):
-            seen.append(turns[-1].content)
             yield from super().stream(
                 model, system, turns, outcome, web=web, temperature=temperature
             )
 
     app.dependency_overrides[get_assistant] = lambda: Assistant([Recording()], min_score=0.0)
+
+    def ask(**extra):
+        return client.post("/ask", json={"style": "concise", **extra}).json()
+
     try:
-        body = client.post(
-            "/ask", json={"question": "format name of a user", "style": "concise"}
-        ).json()
+        fact = ask(question="format name of a user")
+        explain = ask(question="How does the code format the name of a user?")
+        chosen = ask(question="format name of a user", top_k=4)
     finally:
         app.dependency_overrides.pop(get_assistant, None)
-    assert len(body["chunks"]) == 5
-    assert body["timings"].keys() >= {"search", "answer"}
+    assert len(fact["chunks"]) == 3
+    assert len(explain["chunks"]) == 5
+    assert len(chosen["chunks"]) == 4
+    assert fact["timings"].keys() >= {"search", "answer"}
     assert SimpleNamespace  # keeps the import for the fakes above
 
 
