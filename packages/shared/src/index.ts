@@ -364,6 +364,12 @@ export interface AskResponse {
   footer?: string | null;
   /** True if a retrieval stage was too slow or failed and the answer went on without it. */
   degraded?: boolean;
+  /** Milliseconds in each pipeline stage, summed over repeated runs. */
+  stage_ms?: Record<string, number>;
+  /** The first stage that went over its latency budget (observed or enforced), if any. */
+  budget_breached?: string | null;
+  /** A short code for the main reason: rerank_timeout or rerank_unavailable. */
+  degraded_reason?: string | null;
   /** Why it degraded, one short reason per stage. */
   degraded_reasons?: string[];
   /** How current the answer's sources are: the freshest it used. */

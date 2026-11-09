@@ -1,0 +1,41 @@
+# The weekly latency report: what share of answers went over a stage's latency budget or
+# degraded, and which stages breached most (the answer log's stats, GET /analytics?metric=budget).
+# Written to the run's summary. Needs the repository secret ATLAS_ADMIN_TOKEN and the variable
+# PUBLIC_API_URL; without them nothing runs. The free server's database starts afresh on every
+# deploy, so the report covers what it has seen since the last one.
+name: Weekly latency report
+
+on:
+  schedule:
+    - cron: "41 6 * * 1" # Mondays, 06:41 UTC
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  report:
+    if: vars.PUBLIC_API_URL != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      API: ${{ vars.PUBLIC_API_URL }}
+      TOKEN: ${{ secrets.ATLAS_ADMIN_TOKEN }}
+    steps:
+      - name: Wake the server
+        run: curl -fsS --max-time 120 --retry 3 --retry-delay 15 -o /dev/null "$API/healthz"
+      - name: Report
+        run: |
+          if [ -z "$TOKEN" ]; then
+            echo "::warning::Set the ATLAS_ADMIN_TOKEN secret to read the latency report."
+            exit 0
+          fi
+          curl -fsS --max-time 60 -H "Authorization: Bearer $TOKEN" \
+            "$API/analytics?metric=budget&window=7&limit=20" -o budget.json
+          {
+            echo "## Latency budget, last 7 days"
+            jq -r '.summary | "\(.with_stats) answers measured, \(.degraded_pct // 0)% degraded, \(.over_budget_pct // 0)% over a stage budget"' budget.json
+            echo
+            echo "| Stage | Breached | % of answers | First to breach | p50 ms | p95 ms | Budget ms |"
+            echo "| --- | --- | --- | --- | --- | --- | --- |"
+            jq -r '.rows[] | "| \(.stage) | \(.breached) | \(.breached_pct) | \(.first_breach) | \(.p50_ms) | \(.p95_ms) | \(.budget_ms) |"' budget.json
+          } >> "$GITHUB_STEP_SUMMARY"

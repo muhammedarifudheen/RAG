@@ -302,4 +302,38 @@ def test_the_cross_encoder_reranks_when_on_and_degrades_when_it_fails(client, mo
     assert failed["degraded"] is True
     assert "failed to load" in failed["degraded_reasons"][0]
     assert "[degraded:" in failed["footer"]
+    assert failed["degraded_reason"] == "rerank_unavailable"  # the model was not loaded
     assert all(c.get("rerank_score") is None for c in failed["chunks"])
+
+
+def test_the_latency_budget_observes_by_default_and_degrades_only_when_enforced(
+    client, monkeypatch
+):
+    from app.assistant import get_assistant
+    from app.config import settings
+    from app.main import app
+
+    for stage in ("embed", "vector", "bm25", "fuse", "assemble", "first_token", "full_answer"):
+        monkeypatch.setattr(settings, f"budget_{stage}_ms", 0.0001)  # every stage breaches
+    app.dependency_overrides[get_assistant] = lambda: Assistant([Answerer()], min_score=0.0)
+
+    def ask():
+        return client.post(
+            "/ask", json={"question": "format name of a user", "style": "concise", "cache": False}
+        ).json()
+
+    try:
+        monkeypatch.setattr(settings, "budget_enforce", "")
+        observed = ask()
+        monkeypatch.setattr(settings, "budget_enforce", "embed")
+        enforced = ask()
+    finally:
+        app.dependency_overrides.pop(get_assistant, None)
+    measured = {"embed", "vector", "bm25", "fuse", "assemble", "full_answer"}
+    assert measured <= set(observed["stage_ms"])
+    assert observed["budget_breached"] == "embed"
+    assert not observed.get("degraded")  # observed, not acted on
+    assert observed["answer"].strip()
+    assert enforced["degraded"] is True and enforced["degraded_reason"] == "budget_embed"
+    assert any("latency budget: embed" in r for r in enforced["degraded_reasons"])
+    assert "[degraded:" in enforced["footer"] and enforced["answer"].strip()  # still answers

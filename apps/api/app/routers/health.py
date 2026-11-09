@@ -11,7 +11,15 @@ from app.db import get_db
 from app.embedding import Embedder, get_embedder
 from app.models import KnowledgeAudit, Source
 from app.ratelimit import rate_limit
-from app.schemas import HealthAction, HealthReport, KnowledgeAuditOut, KnowledgeHealth, Liveness
+from app.retrieval import reranker
+from app.schemas import (
+    HealthAction,
+    HealthReport,
+    KnowledgeAuditOut,
+    KnowledgeHealth,
+    Liveness,
+    RerankerHealth,
+)
 from app.services.catalog import source_catalog
 from app.services.health import code_health
 from app.services.knowledge import export_log, import_log, knowledge_health
@@ -179,3 +187,17 @@ def primary_candidates(
         raise HTTPException(503, "No model answered in time; try again in a minute.")
     links, by = found
     return {"candidates": links, "found_by": by}
+
+
+@router.get(
+    "/health/reranker",
+    response_model=RerankerHealth,
+    tags=["health"],
+    summary="The cross-encoder reranker: loaded, on what, and how fast",
+    dependencies=[Depends(rate_limit("default", lambda: settings.rate_limit_per_minute))],
+)
+def reranker_health() -> RerankerHealth:
+    """Whether the reranker (ATLAS_RERANK) is loaded, the execution provider it runs on and the
+    median latency of its last 20 real queries. Off or not loaded is a normal state, not an
+    error: this always answers 200."""
+    return RerankerHealth(**reranker.status())

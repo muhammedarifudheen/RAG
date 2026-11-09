@@ -41,6 +41,9 @@ class AnswerLog(Base):
     latency_ms: Mapped[int | None] = mapped_column(Integer)
     feedback: Mapped[int | None] = mapped_column(SmallInteger)
     feedback_reason: Mapped[str | None] = mapped_column(Text)
+    # Per-query pipeline stats: {"stage_ms": {...}, "breaches": [...], "budget_breached",
+    # "degraded", "degraded_reason", "latency_ms"}. What the weekly latency report reads.
+    stats: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class KnowledgeSignal(Base):

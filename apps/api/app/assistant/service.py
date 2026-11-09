@@ -29,6 +29,7 @@ from app.analysis.repo import RepoReport, RepoTooLarge, analyse_repo, summary_fo
 from app.analysis.review import code_files, files_summary, repo_url, to_schema, wants_review
 from app.analysis.static import analyse_files
 from app.config import settings
+from app.retrieval.budget import Budget
 from app.schemas import (
     AgentDraft,
     AskResponse,
@@ -165,6 +166,8 @@ class Options:
     timings: dict | None = None  # seconds per stage before the answer: plan, search, judge
     notice: str | None = None  # something to tell the user, such as a search fallback
     degraded: Sequence[str] = ()  # retrieval stages that gave way (too slow or failed)
+    degraded_reason: str | None = None  # a short code for the main one, e.g. rerank_timeout
+    budget: Budget | None = None  # this query's stage times against the latency budget
     about_sources: bool = False  # the question names the user's sources or their code
     grounded: bool = False  # only from the knowledge base: no general knowledge, no web
     allowed_hosts: frozenset[str] | None = None  # grounded: links only to these hosts
@@ -351,7 +354,12 @@ class Assistant:
             else None
         )
         redactor = Redactor(hosts)
+        budget = options.budget if options is not None else None
+        first_token_seen = False
         for name, data in self._respond(question, chunks, history, mode, options, review):
+            if name == "delta" and budget is not None and options.started and not first_token_seen:
+                first_token_seen = True
+                budget.record("first_token", (time.monotonic() - options.started) * 1000)
             if name == "delta":
                 text = redactor.feed(data.get("text", ""))
                 if text:
@@ -399,6 +407,8 @@ class Assistant:
                 )
                 if rated is not None:
                     data = {**data, "confidence": rated.model_dump()}
+                if budget is not None and options.started:
+                    budget.record("full_answer", (time.monotonic() - options.started) * 1000)
                 data = with_footer(data, options)
                 _log_answer(question, options, data)
             if (
@@ -939,6 +949,7 @@ class Assistant:
             yield "web", {"sources": [{"title": r.title, "url": r.url} for r in found[:12]]}
         searched = [{"title": r.title, "url": r.url} for r in found]
 
+        assembling = time.monotonic()
         system = (
             strict_prompt(options.instructions)
             if options.strict
@@ -986,6 +997,8 @@ class Assistant:
             strict=options.strict and not review,
             code=code,
         )
+        if options.budget is not None:
+            options.budget.record("assemble", (time.monotonic() - assembling) * 1000)
         panel = self._candidates(order, route, images)
         size = options.council_size or self.council_size
         if size > 1 and len(panel) > 1:
@@ -1761,9 +1774,29 @@ def with_footer(data: dict, options: Options | None) -> dict:
         f" [latency: {latency}ms]" if latency is not None else ""
     )
     degraded = list(options.degraded) if options else []
+    reason_code = options.degraded_reason if options else None
+    budget = options.budget if options else None
+    if budget is not None:
+        # The query's stage times, and the first stage over its budget (observed or enforced).
+        data = {
+            **data,
+            "stage_ms": budget.snapshot(),
+            "budget_breached": budget.first_breach,
+            "budget_breaches": list(budget.breached),  # all of them, for the weekly report
+        }
+        for reason in budget.degrade_reasons():  # only the stages being enforced
+            if reason not in degraded:
+                degraded.append(reason)
+        if budget.enforced_breaches:
+            reason_code = reason_code or f"budget_{budget.enforced_breaches[0]}"
     if degraded:
         footer += f" [degraded: {'; '.join(degraded)}]"
-        data = {**data, "degraded": True, "degraded_reasons": degraded}
+        data = {
+            **data,
+            "degraded": True,
+            "degraded_reasons": degraded,
+            "degraded_reason": reason_code,
+        }
     # Licences the cited text is under (Wikipedia's CC BY-SA), which a reuse must keep.
     licences = sorted(
         {c["license"] for c in data.get("chunks") or [] if c.get("license") and c["file"] in files}
@@ -1799,6 +1832,9 @@ def _log_answer(question: str, options: Options | None, data: dict) -> None:
         "epistemic": data.get("epistemic"),
         "timings": data.get("timings"),
         "degraded": data.get("degraded_reasons") or None,
+        "degraded_reason": data.get("degraded_reason"),
+        "stage_ms": data.get("stage_ms"),
+        "budget_breached": data.get("budget_breached"),
         "final_scores": [c.get("final_score") for c in chunks if c.get("final_score") is not None]
         or None,
     }

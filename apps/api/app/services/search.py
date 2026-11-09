@@ -8,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.embedding import Embedder
 from app.models import File, Source, Symbol
+from app.retrieval.budget import Budget, stage_timer
 from app.schemas import Citation, CodeChunk
 from app.services.freshness import category, prefer_newer
 from app.services.freshness import label as freshness_label
@@ -153,6 +154,7 @@ def hybrid_search(
     limit: int,
     max_lines: int,
     as_of: datetime | None = None,
+    budget: Budget | None = None,
 ) -> tuple[list[CodeChunk], str | None]:
     """Vector and keyword search, CANDIDATES each, fused by reciprocal rank: an excerpt
     both find comes first. If vector search fails (the embedder or the index), keyword
@@ -163,8 +165,12 @@ def hybrid_search(
     pool = max(limit, CANDIDATES)
     vector: Sequence[float] | None = None
     try:
-        vector = embedder.embed(query)
-        semantic = search_symbols(db, embedder, query, pool, max_lines, vector=vector, as_of=as_of)
+        with stage_timer(budget, "embed"):
+            vector = embedder.embed(query)
+        with stage_timer(budget, "vector"):
+            semantic = search_symbols(
+                db, embedder, query, pool, max_lines, vector=vector, as_of=as_of
+            )
     except Exception:
         logger.exception("vector search failed; keyword search only")
         db.rollback()
@@ -177,14 +183,16 @@ def hybrid_search(
             db.rollback()
             raise
     try:
-        keyword = keyword_symbols(db, query, pool, max_lines, vector=vector, as_of=as_of)
+        with stage_timer(budget, "bm25"):
+            keyword = keyword_symbols(db, query, pool, max_lines, vector=vector, as_of=as_of)
     except Exception:
         logger.exception("keyword search failed; vector search only")
         db.rollback()
         return also_seen_in(db, semantic[:limit]), None
     # Twice as many fused; near-duplicates then give way to others (MMR), and of
     # near-equal ones the newer source goes first.
-    fused = prefer_newer(diversify(fuse([semantic, keyword], limit * 2), limit))
+    with stage_timer(budget, "fuse"):
+        fused = prefer_newer(diversify(fuse([semantic, keyword], limit * 2), limit))
     return also_seen_in(db, fused), None
 
 

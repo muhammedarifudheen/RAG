@@ -8,7 +8,9 @@ Metrics:
 - sources: how often each source was retrieved and cited (to prune or promote);
 - drift: week over week, the hit rate (answers with a checked citation), latency,
   faithfulness (checked / all citations) and approval (thumbs up / all feedback);
-- feedback: the thumbs, with their reasons.
+- feedback: the thumbs, with their reasons;
+- budget: the latency budget: how many answers degraded, and per stage how often it was the
+  first to breach and its median and 95th-percentile time (where to optimise first).
 `filter` narrows by mode or state ("mode:ASK", "state:absent") or by words in the
 question."""
 
@@ -26,7 +28,7 @@ from sqlalchemy.orm import Session
 
 from app.models import AnswerLog, File, Source
 
-METRICS = ("top_questions", "failing", "gaps", "slowest", "sources", "drift", "feedback")
+METRICS = ("top_questions", "failing", "gaps", "slowest", "sources", "drift", "feedback", "budget")
 
 
 def _normal(question: str) -> str:
@@ -91,6 +93,14 @@ def query(
             }
             for q, n in counts.most_common(limit)
         ]
+    elif metric == "budget":
+        return {
+            "metric": metric,
+            "window": window,
+            "filter": filter,
+            "summary": _budget_summary(rows),
+            "rows": _budget_stages(rows)[:limit],
+        }
     elif metric == "slowest":
         timed = sorted((r for r in rows if r.latency_ms), key=lambda r: -r.latency_ms)
         out = [
@@ -110,6 +120,57 @@ def query(
             for r in rated[:limit]
         ]
     return {"metric": metric, "window": window, "filter": filter, "rows": out}
+
+
+def _percentile(values: list[float], pct: float) -> float:
+    ordered = sorted(values)
+    pos = (len(ordered) - 1) * pct / 100
+    low, high = int(pos), min(int(pos) + 1, len(ordered) - 1)
+    return ordered[low] + (ordered[high] - ordered[low]) * (pos - low)
+
+
+def _budget_summary(rows: list[AnswerLog]) -> dict:
+    stats = [r.stats for r in rows if r.stats]
+    degraded = sum(1 for s in stats if s.get("degraded"))
+    breached = sum(1 for s in stats if s.get("budget_breached"))
+    return {
+        "answers": len(rows),
+        "with_stats": len(stats),
+        "degraded": degraded,
+        "degraded_pct": round(100 * degraded / len(stats), 1) if stats else None,
+        "over_budget_pct": round(100 * breached / len(stats), 1) if stats else None,
+    }
+
+
+def _budget_stages(rows: list[AnswerLog]) -> list[dict]:
+    """Per stage: answers where it breached, how often it was the first to, the median and p95
+    of its time, and its budget now. Most-breached first."""
+    from app.config import settings
+
+    stats = [r.stats for r in rows if r.stats]
+    first = Counter(s["budget_breached"] for s in stats if s.get("budget_breached"))
+    breached = Counter(b for s in stats for b in set(s.get("breaches") or []))
+    times: dict[str, list[float]] = defaultdict(list)
+    for s in stats:
+        for stage, ms in (s.get("stage_ms") or {}).items():
+            times[stage].append(float(ms))
+    out = []
+    for stage in sorted(set(breached) | set(times), key=lambda x: (-breached.get(x, 0), x)):
+        values = times.get(stage, [])
+        out.append(
+            {
+                "stage": stage,
+                "breached": breached.get(stage, 0),
+                "breached_pct": round(100 * breached.get(stage, 0) / len(stats), 1)
+                if stats
+                else None,
+                "first_breach": first.get(stage, 0),
+                "p50_ms": round(_percentile(values, 50), 1) if values else None,
+                "p95_ms": round(_percentile(values, 95), 1) if values else None,
+                "budget_ms": getattr(settings, f"budget_{stage}_ms", None),
+            }
+        )
+    return out
 
 
 def _sources(db: Session, rows: list[AnswerLog]) -> list[dict]:

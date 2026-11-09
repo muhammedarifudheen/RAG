@@ -143,6 +143,29 @@ class Settings(BaseSettings):
     atlas_rerank_precision: str = "fp32"  # or int8
     atlas_rerank_max_length: int = 512
     atlas_rerank_timeout_ms: int = 150
+    # At start the model is loaded and run this many times on dummy pairs, so the first real
+    # query does not pay for it. If the median of the last 20 real reranks stays over the limit
+    # for `slow_streak` queries in a row, ATLAS_RERANK is flipped off (until a restart) and a
+    # health webhook is sent.
+    atlas_rerank_warmup_runs: int = 5
+    # The per-query latency budget, in milliseconds per stage (app/retrieval/budget.py).
+    # Every breach is measured and logged; only the stages named in BUDGET_ENFORCE act on
+    # it ("all", or e.g. "rewrite,rerank"): then the optional stages after it are skipped and
+    # the answer is marked degraded. Empty: observe only, answers unchanged. The defaults are
+    # the spec's, set for a fast local stack: the free server's planner, search and relevance
+    # judge take seconds, so enforce stage by stage once the weekly report shows the numbers.
+    budget_rewrite_ms: float = 40
+    budget_embed_ms: float = 60
+    budget_bm25_ms: float = 30
+    budget_vector_ms: float = 80
+    budget_fuse_ms: float = 5
+    budget_rerank_ms: float = 150
+    budget_assemble_ms: float = 20
+    budget_first_token_ms: float = 600
+    budget_full_answer_ms: float = 3000
+    budget_enforce: str = ""
+    atlas_rerank_p50_limit_ms: float = 150.0
+    atlas_rerank_slow_streak: int = 10
     # Reuse answers to repeated questions for a day (see app/assistant/cache.py).
     assistant_answer_cache: bool = True
     # Deep research for questions that look complex, when the user has not chosen.

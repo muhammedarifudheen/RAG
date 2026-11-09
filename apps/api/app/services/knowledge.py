@@ -27,6 +27,22 @@ OUTDATED = timedelta(days=180)
 SHORT = ("partial", "absent")
 
 
+def query_stats(data: dict) -> dict | None:
+    """What the weekly latency report reads for one answer: its stage times, the stage that
+    breached first, and whether it degraded."""
+    stage_ms = data.get("stage_ms")
+    if not stage_ms and not data.get("degraded"):
+        return None
+    return {
+        "stage_ms": stage_ms or {},
+        "budget_breached": data.get("budget_breached"),
+        "breaches": data.get("budget_breaches") or [],
+        "degraded": bool(data.get("degraded")),
+        "degraded_reason": data.get("degraded_reason"),
+        "latency_ms": data.get("latency_ms"),
+    }
+
+
 def log_answer(
     db: Session, embedder: Embedder, data: dict, chat_id: str | None
 ) -> AnswerLog | None:
@@ -58,6 +74,7 @@ def log_answer(
             ],
             mode=data.get("mode"),
             latency_ms=data.get("latency_ms"),
+            stats=query_stats(data),
             retrieved=[
                 {
                     "file": c["file"],

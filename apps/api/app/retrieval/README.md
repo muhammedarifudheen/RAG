@@ -62,3 +62,62 @@ answer log) and keeps the top 5. It replaces the model-by-model relevance judge 
 - **Memory:** about 2.3 GB (fp32) or 570 MB (int8). The free 512 MB server cannot hold either,
   and an out-of-memory kill is not an exception a fallback can catch. Turn it on only
   where the memory exists.
+
+### The production path, in detail
+
+- **Hard timeout.** The wall-clock budget (`ATLAS_RERANK_TIMEOUT_MS`, 150) is enforced two ways:
+  the caller stops waiting at the budget, and the abandoned work stops at its next batch
+  boundary instead of finishing in the background. 20 candidates go in batches of 8, so a
+  batch that has started still runs to its end (a model call cannot be interrupted); at most
+  one batch of overrun, never all three.
+- **One at a time.** While an overrun is still finishing, the next query skips the reranker
+  (`rerank_busy`) rather than stacking a second one on the CPU.
+- **On a timeout, error or busy model:** the RRF order, `degraded: true`,
+  `degraded_reason: "rerank_timeout"` and the `[degraded: …]` chip. A model that is not loaded
+  gives `degraded_reason: "rerank_unavailable"` instead.
+- **Log line per query** (`retrieval {...}`): `rerank_ms`, `rerank_batches`,
+  `rerank_timed_out`, `rerank_scores` of the returned chunks, `degraded_reason`.
+- **The answer stream.** The excerpts must be chosen before the answer is written, so
+  reranking cannot run beside it. It cannot hold it up for long either: the budget caps the wait
+  at 150 ms, then generation and streaming start, from the reranked order or the RRF order.
+- **Start-up and health:** the model loads and warms up in the background at boot,
+  `/health/reranker` reports it, and slow reranking switches the flag off (see above).
+
+## Per-query latency budget (`BUDGET_*`)
+
+Every query's stages are timed against a budget, in milliseconds (the spec's, overridable):
+
+| Stage | Budget | What is timed |
+| --- | --- | --- |
+| `rewrite` | 40 | the query planner |
+| `embed` | 60 | embedding the query (per search) |
+| `bm25` | 30 | full-text keyword search (per search) |
+| `vector` | 80 | the vector (pgvector) search (per search) |
+| `fuse` | 5 | rank fusion, MMR and the newer-source tie-break |
+| `rerank` | 150 | the relevance judge, or the cross-encoder when `ATLAS_RERANK=on` |
+| `assemble` | 20 | building the prompt: instructions, excerpts, history |
+| `first_token` | 600 | from the request to the first streamed word |
+| `full_answer` | 3000 | from the request to the finished answer |
+
+A stage that runs more than once (each planned search embeds and searches) is summed for
+`stage_ms`, and breaches when a single run is over.
+
+- **Observe, by default** (`BUDGET_ENFORCE` empty): nothing changes. Each answer carries
+  `stage_ms` and `budget_breached` (the first stage over its budget), the `retrieval {...}` and
+  `answer {...}` log lines carry them, and the answer log keeps them (`answer_log.stats`).
+- **Enforce** (`BUDGET_ENFORCE=all`, or stages such as `rewrite,rerank`): when an enforced stage
+  breaches, the optional stages that remain (the planned searches after the first, and the
+  reranker or judge) are skipped, the planner and judge get only their budget as a timeout, the
+  answer is `degraded: true` with `degraded_reason: "budget_<stage>"` and the chip
+  `latency budget: <stage> over N ms`, and it is still answered (RRF order, top excerpts).
+  `first_token` and `full_answer` cannot skip anything, since they happen last; enforcing them
+  only marks the answer.
+- **Weekly report:** `GET /analytics?metric=budget&window=7` (admin): the share of answers
+  degraded or over a budget, and per stage how often it breached, how often first, and its
+  median and 95th percentile. The *Weekly latency report* workflow writes it to the Actions
+  summary every Monday.
+
+The defaults describe a fast local stack. The public server's planner takes about 1 s, its
+search about 5 s, its relevance judge about 8 s and a whole answer 16-19 s, so every stage
+breaches there: that is why it starts in observe mode. Read the weekly report, then enforce
+stage by stage, starting with the optional ones (`rewrite`, `rerank`).

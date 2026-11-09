@@ -27,7 +27,7 @@ from app.llm import Answerer, AnswerError, get_answerer
 from app.models import Source
 from app.ratelimit import rate_limit
 from app.retrieval import reranker, scoring, state
-from app.retrieval.budget import Trace, run_stage
+from app.retrieval.budget import Budget, Trace, run_stage, stage_timer
 from app.retrieval.topk import adaptive_top_k
 from app.schemas import (
     AskRequest,
@@ -272,6 +272,7 @@ def ask(
             )
         timings: dict[str, float] = {}
         trace = Trace(timings=timings)
+        budget = Budget()  # each stage's time against the latency budget
         # An explicit top_k stands; otherwise 3, 5 or 8 by the kind of question (never more
         # than 8), or the server's default.
         if body.top_k:
@@ -291,14 +292,18 @@ def ask(
         # planner or judge.
         planning = body.use_sources and body.plan_queries and getattr(assistant, "planner", False)
         if planning and not research:
+            plan_budget = settings.retrieval_plan_budget
+            if "rewrite" in budget.enforce:  # enforced: the planner gets only its budget
+                plan_budget = min(plan_budget, budget.limits["rewrite"] / 1000)
             queries = run_stage(
                 trace,
                 "plan",
                 lambda: assistant.plan_queries(query),
                 [query],
-                settings.retrieval_plan_budget,
+                plan_budget,
                 reason="query planner too slow; searched the question as asked",
             )
+            budget.record("rewrite", timings["plan"] * 1000)
         # ATLAS_RERANK=on: a cross-encoder replaces the model-by-model relevance judge.
         cross = not research and body.use_sources and body.rerank and reranker.enabled()
         judging = (
@@ -327,7 +332,7 @@ def ask(
                     trace.cache_hits.append("retrieval")
                 return [c.model_copy() for c in cached[0]]
             found, notice = hybrid_search(
-                db, embedder, q, limit, settings.snippet_max_lines, as_of=body.as_of
+                db, embedder, q, limit, settings.snippet_max_lines, as_of=body.as_of, budget=budget
             )
             if notice and notice not in notices:
                 notices.append(notice)
@@ -336,14 +341,32 @@ def ask(
             return found
 
         searched = time.monotonic()
-        chunks = fuse([retrieve(q, pool) for q in queries], pool) if body.use_sources else []
+        found_lists: list[list] = []
+        for q in queries if body.use_sources else []:
+            found_lists.append(retrieve(q, pool))
+            if budget.skip_optional():
+                break  # a stage is over its enforced budget: the other planned searches are optional
+        with stage_timer(budget, "fuse"):
+            chunks = fuse(found_lists, pool) if body.use_sources else []
         timings["search"] = round(time.monotonic() - searched, 2)
         for notice in notices:
             trace.degrade(notice.rstrip("."))
         fused_order = list(chunks)  # the retrieval order, the rank-fusion signal
-        if cross and chunks:
-            chunks = reranker.rerank(trace, query, chunks, body.top_k or reranker.KEEP)
         reranking = None
+        if (cross or judging) and chunks and budget.skip_optional():
+            # Over an enforced budget already: the reranker (or the judge) is the optional stage.
+            trace.degrade(f"{budget.enforced_breaches[0]} over its budget; skipped reranking")
+            trace.reason_code = trace.reason_code or f"budget_{budget.enforced_breaches[0]}"
+            chunks = chunks[: (body.top_k or reranker.KEEP) if cross else top_k]
+            cross = judging = False
+        if cross and chunks:
+            cross_timeout = None
+            if "rerank" in budget.enforce:
+                cross_timeout = min(settings.atlas_rerank_timeout_ms, budget.limits["rerank"]) / 1000
+            chunks = reranker.rerank(
+                trace, query, chunks, body.top_k or reranker.KEEP, timeout=cross_timeout
+            )
+            budget.record("rerank", (trace.extra.get("rerank") or {}).get("rerank_ms", 0.0))
         if judging and chunks:
             cutoff = (
                 settings.assistant_rerank_cutoff
@@ -360,12 +383,15 @@ def ask(
                     daemon=True,
                 ).start()
             judged = time.monotonic()
+            judge_budget = settings.retrieval_judge_budget
+            if "rerank" in budget.enforce:
+                judge_budget = min(judge_budget, budget.limits["rerank"] / 1000)
             verdicts = run_stage(
                 trace,
                 "judge_calls",
                 lambda: assistant.judge_chunks(query, candidates),
                 {},
-                settings.retrieval_judge_budget,
+                judge_budget,
                 reason="relevance judge too slow; kept the search order",
             )
             chunks = rerank(candidates, verdicts, cutoff, top_k)
@@ -381,6 +407,7 @@ def ask(
                 chunks.sort(key=lambda c: place.get(c.symbol_id, len(place)))
             timings["judge"] = round(time.monotonic() - judged, 2)
             timings.pop("judge_calls", None)
+            budget.record("rerank", (time.monotonic() - judged) * 1000)
             first = candidates[ranking[0][0]].symbol_id if ranking else None
             reranking = Reranking(
                 candidates=len(candidates),
@@ -409,6 +436,7 @@ def ask(
             timings["rank"] = round(time.monotonic() - ranked_at, 3)
         # One line per query: what each stage retrieved and chose, how long it took, what
         # the caches and the budgets did.
+        rr = trace.extra.get("rerank") or {}
         logger.info(
             "retrieval %s",
             json.dumps(
@@ -421,9 +449,15 @@ def ask(
                     "chosen": [c.symbol_id for c in chunks],
                     "final_scores": [c.final_score for c in chunks],
                     "rerank_scores": [c.rerank_score for c in chunks],
+                    "rerank_ms": rr.get("rerank_ms"),
+                    "rerank_batches": rr.get("rerank_batches"),
+                    "rerank_timed_out": rr.get("rerank_timed_out"),
+                    "degraded_reason": trace.reason_code,
                     "relevance": [c.relevance for c in chunks],
                     "weighted": bool(weighted),
                     "timings": timings,
+                    "stage_ms": budget.snapshot(),
+                    "budget_breached": budget.first_breach,
                     "cache_hits": trace.cache_hits,
                     "degraded": trace.degraded,
                 }
@@ -431,6 +465,8 @@ def ask(
         )
         options = Options(
             degraded=tuple(trace.degraded),
+            degraded_reason=trace.reason_code,
+            budget=budget,
             attachments=body.attachments,
             style=body.style,
             temperature=body.temperature,

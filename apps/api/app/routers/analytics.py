@@ -20,7 +20,9 @@ router = APIRouter(
     dependencies=[Depends(rate_limit("default", lambda: settings.rate_limit_per_minute))],
 )
 
-Metric = Literal["top_questions", "failing", "gaps", "slowest", "sources", "drift", "feedback"]
+Metric = Literal[
+    "top_questions", "failing", "gaps", "slowest", "sources", "drift", "feedback", "budget"
+]
 
 
 class Feedback(BaseModel):

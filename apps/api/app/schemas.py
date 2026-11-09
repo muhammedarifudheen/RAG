@@ -541,6 +541,21 @@ class AskResponse(BaseModel):
         description="True if a retrieval stage was too slow or failed and the answer went on "
         "without it (the planner, the relevance judge, the vector search).",
     )
+    degraded_reason: str | None = Field(
+        default=None,
+        description="A short code for the main reason it degraded: rerank_timeout (the "
+        "reranker overran its budget, failed or was busy) or rerank_unavailable (not loaded).",
+    )
+    stage_ms: dict[str, float] = Field(
+        default={},
+        description="Milliseconds in each pipeline stage (rewrite, embed, bm25, vector, fuse, "
+        "rerank, assemble, first_token, full_answer), summed over repeated runs.",
+    )
+    budget_breached: str | None = Field(
+        default=None,
+        description="The first stage that went over its latency budget, observed or enforced; "
+        "null if none did.",
+    )
     degraded_reasons: list[str] = Field(
         default=[], description="Why it degraded: one short reason per stage, for the chip."
     )
@@ -748,6 +763,24 @@ class AdminSession(BaseModel):
         "\\nSHA256(body)' with it; X-Atlas-Timestamp is the Unix time in seconds."
     )
     expires_at: float
+
+
+class RerankerHealth(BaseModel):
+    loaded: bool = Field(description="True once the model is loaded and warmed up.")
+    provider: str | None = Field(
+        default=None, description="The ONNX Runtime execution provider it runs on, when loaded."
+    )
+    p50_ms: float | None = Field(
+        default=None, description="Median latency of the last 20 real reranks; null before any."
+    )
+    enabled: bool = Field(description="Whether ATLAS_RERANK is currently on.")
+    state: Literal["off", "loading", "ready", "failed", "disabled"] = Field(
+        description="off, loading, ready, failed (could not load) or disabled (too slow)."
+    )
+    samples: int = Field(description="How many latencies the median is over, at most 20.")
+    load_ms: float | None = Field(default=None, description="Time to load the model.")
+    warmup_ms: float | None = Field(default=None, description="Time for the warm-up predictions.")
+    reason: str | None = Field(default=None, description="Why it failed or was switched off.")
 
 
 WebhookEvent = Literal["ingest", "query", "gap", "health"]
