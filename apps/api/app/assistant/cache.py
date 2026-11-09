@@ -13,6 +13,7 @@ from typing import Generic, TypeVar
 
 V = TypeVar("V")
 
+HOUR = 3600.0
 DAY = 24 * 3600.0
 
 
@@ -21,7 +22,7 @@ class TTLCache(Generic[V]):
 
     def __init__(self, size: int, ttl: float = DAY, clock: Callable[[], float] = time.monotonic):
         self.size, self.ttl, self.clock = size, ttl, clock
-        self._items: OrderedDict[str, tuple[float, V]] = OrderedDict()
+        self._items: OrderedDict[str, tuple[float, V, float]] = OrderedDict()
         self._lock = threading.Lock()
 
     def get(self, key: str) -> V | None:
@@ -29,16 +30,17 @@ class TTLCache(Generic[V]):
             found = self._items.get(key)
             if found is None:
                 return None
-            stored, value = found
-            if self.clock() - stored > self.ttl:
+            stored, value, ttl = found
+            if self.clock() - stored > ttl:
                 del self._items[key]
                 return None
             self._items.move_to_end(key)
             return value
 
-    def put(self, key: str, value: V) -> None:
+    def put(self, key: str, value: V, ttl: float | None = None) -> None:
+        """Keeps `value`, for `ttl` seconds if given, else the cache's own."""
         with self._lock:
-            self._items[key] = (self.clock(), value)
+            self._items[key] = (self.clock(), value, self.ttl if ttl is None else ttl)
             self._items.move_to_end(key)
             while len(self._items) > self.size:
                 self._items.popitem(last=False)

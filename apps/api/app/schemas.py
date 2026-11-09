@@ -25,6 +25,11 @@ class CodeChunk(BaseModel):
     relevance: int | None = Field(
         default=None, description="The relevance judge's score, 0-10, when it judged this."
     )
+    final_score: float | None = Field(
+        default=None,
+        description="The score it was finally ranked by (rerank, rank fusion, trust, "
+        "freshness and the source's record), 0-1, when the weighted ranking ran.",
+    )
     weight: int | None = Field(
         default=None,
         description="How much its source counts: 3 primary (code, specs, official docs), "
@@ -165,6 +170,12 @@ class AskRequest(BaseModel):
     )
     rerank_cutoff: int | None = Field(
         default=None, ge=0, le=10, description="Excerpts the judge scores below this are left out."
+    )
+    weighted_rank: bool | None = Field(
+        default=None,
+        description="Order the kept excerpts by one score (rerank 0.45, rank fusion 0.20, "
+        "trust 0.15, freshness 0.10, the source's record 0.10) instead of the judge's order "
+        "alone; unset, the server's setting.",
     )
     as_of: datetime | None = Field(
         default=None,
@@ -519,6 +530,14 @@ class AskResponse(BaseModel):
     footer: str | None = Field(
         default=None,
         description="[confidence: X] [freshness: F] [sources: N] [latency: Xms], for every answer.",
+    )
+    degraded: bool = Field(
+        default=False,
+        description="True if a retrieval stage was too slow or failed and the answer went on "
+        "without it (the planner, the relevance judge, the vector search).",
+    )
+    degraded_reasons: list[str] = Field(
+        default=[], description="Why it degraded: one short reason per stage, for the chip."
     )
     freshness: AnswerFreshness | None = Field(
         default=None,

@@ -192,7 +192,7 @@ def _tokens(text: str) -> set[str]:
     return set(re.findall(r"[A-Za-z_][A-Za-z0-9_]{2,}", text.lower()))
 
 
-def diversify(chunks: Sequence[CodeChunk], limit: int, weight: float = 0.75) -> list[CodeChunk]:
+def diversify(chunks: Sequence[CodeChunk], limit: int, weight: float = 0.7) -> list[CodeChunk]:
     """Maximal marginal relevance: each next excerpt scores `weight` x its relevance (by
     rank) less (1 - weight) x its likeness (word overlap) to one already chosen. The best
     stays first; only near-duplicates give way."""

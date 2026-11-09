@@ -93,6 +93,8 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
                 "plan_queries": not args.no_plan,
                 "rerank": not args.no_rerank,
             }
+            if args.rank:  # weighted | legacy: the final ranking, to compare the two
+                body["weighted_rank"] = args.rank == "weighted"
             data = call(f"{base}/ask", body=body, token=args.token, timeout=args.timeout)
             out.update(
                 answer=data.get("answer", ""),
@@ -100,6 +102,7 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
                 chunks=data.get("chunks", []),
                 epistemic=data.get("epistemic"),
                 server_ms=data.get("latency_ms"),
+                degraded=bool(data.get("degraded")),
             )
     except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError) as error:
         out["error"] = f"{type(error).__name__}: {error}"
@@ -131,6 +134,7 @@ def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
         answer = raw.get("answer", "")
         cites = raw.get("citations", [])
         row["declined"] = declined(answer, raw.get("epistemic"), len(cites))
+        row["degraded"] = 1.0 if raw.get("degraded") else 0.0
         if answerable:
             row["coverage"] = must_include_coverage(answer, item.get("must_include", []))
             row["cite_precision"] = citation_precision(cites, targets) if targets else None
@@ -154,6 +158,7 @@ def summarise(rows: list[dict], mode: str) -> dict[str, float]:
     if mode == "ask":
         answerable = [r for r in ok if r["answerable"]]
         unanswerable = [r for r in ok if not r["answerable"]]
+        summary["degraded_rate"] = mean(r.get("degraded") for r in ok)
         summary["answer_coverage"] = mean(r.get("coverage") for r in answerable)
         summary["citation_precision"] = mean(r.get("cite_precision") for r in answerable)
         summary["cited_rate"] = mean(r.get("cited") for r in answerable)
@@ -166,7 +171,13 @@ def summarise(rows: list[dict], mode: str) -> dict[str, float]:
 
 
 # Lower is better for these; every other metric is higher-is-better.
-LOWER_IS_BETTER = {"errors", "false_refusal_rate", "latency_p50_ms", "latency_p95_ms"}
+LOWER_IS_BETTER = {
+    "errors",
+    "false_refusal_rate",
+    "degraded_rate",
+    "latency_p50_ms",
+    "latency_p95_ms",
+}
 # Not compared against the baseline (counts and timings vary run to run).
 NOT_GATED = {"questions", "latency_p50_ms", "latency_p95_ms"}
 
@@ -224,6 +235,11 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--delay", type=float, default=0, help="seconds between requests")
     p.add_argument("--no-plan", action="store_true", help="ask mode: skip query planning")
     p.add_argument("--no-rerank", action="store_true", help="ask mode: skip the relevance judge")
+    p.add_argument(
+        "--rank",
+        choices=("weighted", "legacy"),
+        help="ask mode: final ranking (weighted score or the judge order)",
+    )
     p.add_argument("--out", type=Path, help="write the full report here (JSON)")
     p.add_argument("--baseline", type=Path, help="a report or summary to compare with")
     p.add_argument("--max-drop", type=float, default=0.05, help="allowed fall per metric")

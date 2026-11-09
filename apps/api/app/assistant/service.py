@@ -164,6 +164,7 @@ class Options:
     research: ResearchTools | None = None  # deep research: the agent's tools
     timings: dict | None = None  # seconds per stage before the answer: plan, search, judge
     notice: str | None = None  # something to tell the user, such as a search fallback
+    degraded: Sequence[str] = ()  # retrieval stages that gave way (too slow or failed)
     about_sources: bool = False  # the question names the user's sources or their code
     grounded: bool = False  # only from the knowledge base: no general knowledge, no web
     allowed_hosts: frozenset[str] | None = None  # grounded: links only to these hosts
@@ -1759,6 +1760,10 @@ def with_footer(data: dict, options: Options | None) -> dict:
     footer = f"[confidence: {state}] [freshness: {chip}] [sources: {len(files)}]" + (
         f" [latency: {latency}ms]" if latency is not None else ""
     )
+    degraded = list(options.degraded) if options else []
+    if degraded:
+        footer += f" [degraded: {'; '.join(degraded)}]"
+        data = {**data, "degraded": True, "degraded_reasons": degraded}
     # Licences the cited text is under (Wikipedia's CC BY-SA), which a reuse must keep.
     licences = sorted(
         {c["license"] for c in data.get("chunks") or [] if c.get("license") and c["file"] in files}
@@ -1792,6 +1797,9 @@ def _log_answer(question: str, options: Options | None, data: dict) -> None:
         "confidence": (data.get("confidence") or {}).get("level"),
         "epistemic": data.get("epistemic"),
         "timings": data.get("timings"),
+        "degraded": data.get("degraded_reasons") or None,
+        "final_scores": [c.get("final_score") for c in chunks if c.get("final_score") is not None]
+        or None,
     }
     logger.info("answer %s", json.dumps(record, default=str))
 

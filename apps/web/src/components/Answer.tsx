@@ -111,6 +111,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
   return (
     <article aria-label="Answer" className="slab bg-panel/80 py-4 pl-5 pr-4">
       {(response.epistemic ||
+        response.degraded ||
         response.freshness ||
         response.challenge?.valid ||
         response.source_basis ||
@@ -128,6 +129,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
           )}
           {response.epistemic && <EpistemicBadge state={response.epistemic} />}
           {response.freshness && <FreshnessChip freshness={response.freshness} />}
+          {response.degraded && <DegradedChip reasons={response.degraded_reasons ?? []} />}
           {response.uncertainty &&<UncertaintyMeter uncertainty={response.uncertainty} />}
           {(response.source_basis === "secondary" || response.source_basis === "derived") && (
             <span
@@ -611,6 +613,22 @@ function FreshnessChip({ freshness }: { freshness: AnswerFreshness }) {
     >
       <span aria-hidden="true">◷</span>
       {freshness.label}
+    </span>
+  );
+}
+
+/** [degraded: reason]: a retrieval stage gave way, so the answer is less well ranked. */
+function DegradedChip({ reasons }: { reasons: string[] }) {
+  const why = reasons.length ? reasons.join("; ") : "a retrieval stage gave way";
+  return (
+    <span
+      role="note"
+      aria-label={`Degraded: ${why}`}
+      title={`Retrieval carried on without a stage: ${why}.`}
+      className="label inline-flex items-center gap-1.5 border border-warn/50 px-2.5 py-0.5 text-warn"
+    >
+      <span aria-hidden="true">△</span>
+      degraded: {why}
     </span>
   );
 }

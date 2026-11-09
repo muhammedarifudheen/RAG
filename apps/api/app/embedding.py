@@ -1,3 +1,4 @@
+import hashlib
 from collections import OrderedDict
 from functools import cache
 from threading import Lock
@@ -24,13 +25,16 @@ class LocalEmbedder:
         self._cache_lock = Lock()
 
     def embed(self, text: str) -> list[float]:
+        # Keyed by the text with its spacing and case normalised (the model is uncased), so
+        # "What is X?" and "what  is x?" share one entry.
+        key = hashlib.sha256(" ".join(text.lower().split()).encode()).hexdigest()
         with self._cache_lock:
-            if text in self._cache:
-                self._cache.move_to_end(text)
-                return self._cache[text]
+            if key in self._cache:
+                self._cache.move_to_end(key)
+                return self._cache[key]
         vector = self.model.encode([text])[0].tolist()
         with self._cache_lock:
-            self._cache[text] = vector
+            self._cache[key] = vector
             if len(self._cache) > QUERY_CACHE:
                 self._cache.popitem(last=False)
         return vector

@@ -362,6 +362,10 @@ export interface AskResponse {
   latency_ms?: number | null;
   /** [confidence: X] [freshness: F] [sources: N] [latency: Xms], for every answer. */
   footer?: string | null;
+  /** True if a retrieval stage was too slow or failed and the answer went on without it. */
+  degraded?: boolean;
+  /** Why it degraded, one short reason per stage. */
+  degraded_reasons?: string[];
   /** How current the answer's sources are: the freshest it used. */
   freshness?: AnswerFreshness | null;
   /** What was redacted from the answer (kinds, never values): "API key", "email", "link"… */

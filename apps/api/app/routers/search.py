@@ -8,7 +8,7 @@ from typing import Annotated, Literal, TypeVar
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.assistant import Assistant, AssistantError, Options, cache, get_assistant
@@ -25,6 +25,9 @@ from app.db import get_db
 from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
 from app.models import Source
+from app.retrieval import scoring, state
+from app.retrieval.budget import Trace, run_stage
+from app.retrieval.topk import adaptive_top_k
 from app.ratelimit import rate_limit
 from app.schemas import (
     AskRequest,
@@ -268,8 +271,15 @@ def ask(
                 _mode_answer(atlas_mode, question, db, embedder), request, arrived, grounded
             )
         timings: dict[str, float] = {}
-        top_k = body.top_k or settings.assistant_top_k
-        started = time.monotonic()
+        trace = Trace(timings=timings)
+        # An explicit top_k stands; otherwise 3, 5 or 8 by the kind of question (never more
+        # than 8), or the server's default.
+        if body.top_k:
+            top_k = body.top_k
+        elif settings.retrieval_adaptive_top_k:
+            top_k = adaptive_top_k(question)
+        else:
+            top_k = settings.assistant_top_k
         queries = [query]
         research = body.use_sources and (
             body.research
@@ -281,8 +291,14 @@ def ask(
         # planner or judge.
         planning = body.use_sources and body.plan_queries and getattr(assistant, "planner", False)
         if planning and not research:
-            queries = assistant.plan_queries(query)
-            timings["plan"] = round(time.monotonic() - started, 2)
+            queries = run_stage(
+                trace,
+                "plan",
+                lambda: assistant.plan_queries(query),
+                [query],
+                settings.retrieval_plan_budget,
+                reason="query planner too slow; searched the question as asked",
+            )
         judging = (
             not research
             and body.use_sources
@@ -293,17 +309,32 @@ def ask(
         pool = min(top_k + 4, 20) if judging else top_k
         notices: list[str] = []
 
+        version = state.kb_version(db) if settings.retrieval_cache else ""
+
         def retrieve(q: str, limit: int) -> list:
+            # Copies in and out: later stages set scores on the excerpts, which must not
+            # leak into the cache.
+            key = state.retrieval_key(q, limit, body.as_of, version)
+            cached = state.RETRIEVALS.get(key) if settings.retrieval_cache else None
+            if cached is not None:
+                if "retrieval" not in trace.cache_hits:
+                    trace.cache_hits.append("retrieval")
+                return [c.model_copy() for c in cached[0]]
             found, notice = hybrid_search(
                 db, embedder, q, limit, settings.snippet_max_lines, as_of=body.as_of
             )
             if notice and notice not in notices:
                 notices.append(notice)
+            if settings.retrieval_cache and not notice:  # a fallback's results are not kept
+                state.RETRIEVALS.put(key, ([c.model_copy() for c in found], None))
             return found
 
         searched = time.monotonic()
         chunks = fuse([retrieve(q, pool) for q in queries], pool) if body.use_sources else []
         timings["search"] = round(time.monotonic() - searched, 2)
+        for notice in notices:
+            trace.degrade(notice.rstrip("."))
+        fused_order = list(chunks)  # the retrieval order, the rank-fusion signal
         reranking = None
         if judging and chunks:
             cutoff = (
@@ -321,7 +352,14 @@ def ask(
                     daemon=True,
                 ).start()
             judged = time.monotonic()
-            verdicts = assistant.judge_chunks(query, candidates)
+            verdicts = run_stage(
+                trace,
+                "judge_calls",
+                lambda: assistant.judge_chunks(query, candidates),
+                {},
+                settings.retrieval_judge_budget,
+                reason="relevance judge too slow; kept the search order",
+            )
             chunks = rerank(candidates, verdicts, cutoff, top_k)
             ranking = None
             if body.rank_passages:
@@ -334,6 +372,7 @@ def ask(
                 place = {candidates[i].symbol_id: p for p, i in enumerate(ranking[0])}
                 chunks.sort(key=lambda c: place.get(c.symbol_id, len(place)))
             timings["judge"] = round(time.monotonic() - judged, 2)
+            timings.pop("judge_calls", None)
             first = candidates[ranking[0][0]].symbol_id if ranking else None
             reranking = Reranking(
                 candidates=len(candidates),
@@ -346,7 +385,43 @@ def ask(
                 if applied and any(c.symbol_id == first for c in chunks)
                 else None,
             )
+        weighted = (
+            settings.retrieval_weighted_rank if body.weighted_rank is None else body.weighted_rank
+        )
+        if weighted and chunks:
+            ranked_at = time.monotonic()
+            try:
+                rates = state.source_hit_rates(db)
+            except Exception:
+                logger.exception("source hit rates unavailable; ranking without them")
+                db.rollback()
+                rates = {}
+            scored = scoring.rank(chunks, query, candidates=fused_order, hit_rates=rates)
+            chunks = [c.model_copy(update={"final_score": round(s, 4)}) for c, s in scored]
+            timings["rank"] = round(time.monotonic() - ranked_at, 3)
+        # One line per query: what each stage retrieved and chose, how long it took, what
+        # the caches and the budgets did.
+        logger.info(
+            "retrieval %s",
+            json.dumps(
+                {
+                    "query_hash": text_hash(query)[:12],
+                    "queries": queries,
+                    "kb_version": version,
+                    "top_k": top_k,
+                    "retrieved": [c.symbol_id for c in fused_order],
+                    "chosen": [c.symbol_id for c in chunks],
+                    "final_scores": [c.final_score for c in chunks],
+                    "relevance": [c.relevance for c in chunks],
+                    "weighted": bool(weighted),
+                    "timings": timings,
+                    "cache_hits": trace.cache_hits,
+                    "degraded": trace.degraded,
+                }
+            ),
+        )
         options = Options(
+            degraded=tuple(trace.degraded),
             attachments=body.attachments,
             style=body.style,
             temperature=body.temperature,
@@ -501,17 +576,20 @@ def _cache_key(body: AskRequest, mode: str, db: Session) -> str | None:
     this question is not to be cached."""
     if not body.cache or body.attachments:
         return None
-    sources = db.execute(select(func.count(Source.id), func.max(Source.created_at))).one()
+    version = state.kb_version(db)
     choices = body.model_dump(exclude={"question", "history", "cache", "attachments"})
     history = [(t.role, t.content) for t in body.history[-6:]]
     return cache.key_of(
-        " ".join(body.question.lower().split()), history, choices, mode, list(sources)
+        " ".join(body.question.lower().split()), history, choices, mode, version
     )
 
 
 def _remember(response: dict, answers: cache.TTLCache | None, key: str | None) -> None:
     if answers is not None and key and cache.answer_cacheable(response):
-        answers.put(key, response)
+        # A miss ("absent") is kept an hour, not a day: the source that answers it may be
+        # about to be added, and an ingest changes the key anyway.
+        absent = response.get("epistemic") == "absent"
+        answers.put(key, response, ttl=cache.HOUR if absent else None)
 
 
 def _remembering(

@@ -10,6 +10,7 @@ from app.config import settings
 from app.db import get_db
 from app.models import File, Source, Symbol
 from app.ratelimit import rate_limit
+from app.retrieval import state as retrieval_state
 from app.schemas import AdminCheck, AdminSession, SiteConfig, SourceItem, SourceWeight
 from app.services.audit import record
 from app.services.weights import source_weight
@@ -140,5 +141,6 @@ def delete_source(source_id: int, db: Annotated[Session, Depends(get_db)]) -> Re
     if not removed:
         raise HTTPException(404, "No such source.")
     db.commit()
+    retrieval_state.bump()
     record(db, "admin", None, {"action": "remove source", "source": source_id})
     return Response(status_code=204)

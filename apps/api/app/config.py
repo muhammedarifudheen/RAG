@@ -123,6 +123,16 @@ class Settings(BaseSettings):
     assistant_rerank_cutoff: int = 4
     # Excerpts given to the answer model when the question does not say.
     assistant_top_k: int = 5
+    # The retrieval core (app/retrieval): 3, 5 or 8 excerpts by the kind of question when
+    # the request gives no top_k (never more than 8); a final ranking by rerank, rank
+    # fusion, trust, freshness and the source's record, not similarity alone; a budget in
+    # seconds for the planner and the judge, past which retrieval carries on without them
+    # and the answer is marked degraded; and a cache of retrievals, kept an hour.
+    retrieval_adaptive_top_k: bool = True
+    retrieval_weighted_rank: bool = True
+    retrieval_plan_budget: float = 6.0
+    retrieval_judge_budget: float = 12.0
+    retrieval_cache: bool = True
     # Reuse answers to repeated questions for a day (see app/assistant/cache.py).
     assistant_answer_cache: bool = True
     # Deep research for questions that look complex, when the user has not chosen.
