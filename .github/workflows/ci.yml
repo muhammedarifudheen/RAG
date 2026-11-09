@@ -32,7 +32,10 @@ jobs:
           pip install -e packages/shared -e apps/api -e "apps/worker[dev]"
       - name: Lint
         working-directory: apps/worker
-        run: ruff check .
+        # GitHub-format output: each finding is an annotation, readable without signing in.
+        run: |
+          ruff --version
+          ruff check . --output-format=github
       - name: Test
         working-directory: apps/worker
         run: pytest
@@ -69,7 +72,10 @@ jobs:
           pip install -e packages/shared -e apps/worker -e "apps/api[dev]"
       - name: Lint
         working-directory: apps/api
-        run: ruff check .
+        # GitHub-format output: each finding is an annotation, readable without signing in.
+        run: |
+          ruff --version
+          ruff check . --output-format=github
       - name: Test
         working-directory: apps/api
         # The suite skips its database tests when Postgres is unreachable. That is
