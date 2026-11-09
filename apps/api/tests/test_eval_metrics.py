@@ -245,3 +245,38 @@ def test_rerank_pass_times_warms_up_and_falls_back_on_timeout(monkeypatch):
     assert [c["name"] for c in over["chunks"]] == ["a", "b", "c"]  # the search order kept
     assert over["timed_out"] and over["degraded"]
     assert [c["name"] for c in over["chunks_reranked"]] == ["c", "b", "a"]  # kept to score both
+
+
+def test_paired_difference_counts_and_interval():
+    from evals.ab_repeat import paired, verdict
+
+    a = {f"q{i}": [0.5, 0.5, 0.5] for i in range(10)}
+    b = {f"q{i}": [0.6, 0.6, 0.6] for i in range(10)}  # every question 0.1 better, every round
+    r = paired(a, b)
+    assert r["n"] == 10 and abs(r["mean"] - 0.1) < 1e-9
+    assert r["better"] == 10 and r["worse"] == 0 and r["tied"] == 0
+    assert r["ci95"][0] > 0.09 and r["ci95"][1] < 0.11
+    assert verdict({**r, "noise_sd": 0.02}, 0.02) == "weighted better"
+    assert verdict(r, 0.5) == "within noise"  # a gap smaller than the noise is not believed
+
+
+def test_paired_ignores_missing_values_and_flags_a_loss():
+    from evals.ab_repeat import paired, verdict
+
+    a = {"x": [1.0, None, 1.0], "y": [None, None, None], "z": [0.8, 0.8, 0.8]}
+    b = {"x": [0.0, 1.0, 0.0], "y": [1.0, 1.0, 1.0], "z": [0.6, 0.6, 0.6]}
+    r = paired(a, b)
+    assert r["n"] == 2  # y has no round where both arms have a value
+    assert r["worse"] == 2 and r["better"] == 0
+    assert verdict(r, 0.0) == "weighted worse"
+    assert paired({}, {})["n"] == 0 and verdict(paired({}, {}), 0) == "no data"
+
+
+def test_a_noisy_difference_straddling_zero_is_within_noise():
+    from evals.ab_repeat import paired, verdict
+
+    a = {f"q{i}": [0.5] for i in range(8)}
+    b = {f"q{i}": [0.5 + (0.3 if i % 2 else -0.3)] for i in range(8)}
+    r = paired(a, b)
+    assert r["better"] == 4 and r["worse"] == 4
+    assert verdict(r, 0.0) == "within noise"
