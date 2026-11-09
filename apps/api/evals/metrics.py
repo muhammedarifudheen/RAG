@@ -62,6 +62,27 @@ def found_at(hits: Sequence[Hit], target: Target) -> int | None:
     return None
 
 
+def dedupe_by_file(hits: Sequence[Hit], targets: Sequence[Target]) -> list[Hit]:
+    """`hits` with each file kept once, at its best (first) rank, so DCG is over files, not
+    chunks. A file that a target pins to lines keeps all its chunks, since which lines were
+    retrieved is then what is being judged."""
+    pinned = {t.file.replace("\\", "/") for t in targets if t.start is not None}
+
+    def is_pinned(hit: Hit) -> bool:
+        path = hit.file.replace("\\", "/")
+        return any(path == f or path.endswith("/" + f) for f in pinned)
+
+    seen: set[str] = set()
+    kept: list[Hit] = []
+    for hit in hits:
+        if not is_pinned(hit):
+            if hit.file in seen:
+                continue
+            seen.add(hit.file)
+        kept.append(hit)
+    return kept
+
+
 @dataclass
 class Retrieval:
     hit_at: dict[int, float] = field(default_factory=dict)  # 1 if any target in the top k
@@ -70,32 +91,37 @@ class Retrieval:
     ndcg_at: dict[int, float] = field(default_factory=dict)
 
 
+def _ndcg(hits: Sequence[Hit], targets: Sequence[Target], k: int) -> float:
+    """nDCG@k over files: duplicates of a file collapse to its best rank, then each target is
+    credited once to the first hit matching it, so DCG never exceeds the ideal. Works for
+    partial credit too: a hit's gain is looked up per target, not assumed to be 1."""
+    units = dedupe_by_file(hits, targets)
+    open_targets = list(targets)
+    dcg = 0.0
+    for i, hit in enumerate(units[:k]):
+        gained = next((t for t in open_targets if matches(hit, t)), None)
+        if gained is not None:
+            open_targets.remove(gained)
+            dcg += 1 / math.log2(i + 2)
+    ideal = sum(1 / math.log2(i + 2) for i in range(min(len(targets), k)))
+    return dcg / ideal if ideal else 0.0
+
+
 def score_retrieval(
     hits: Sequence[Hit], targets: Sequence[Target], ks: Iterable[int] = KS
 ) -> Retrieval:
-    """Binary-relevance metrics. A hit is relevant if it matches a target not already found by
-    a higher-ranked hit; recall counts how many distinct targets were found."""
+    """Binary-relevance metrics. Hit, recall and MRR use the chunk ranking as given; nDCG is
+    over files (see `_ndcg`). Recall counts how many distinct targets were found."""
     result = Retrieval()
     ranks = [found_at(hits, t) for t in targets]
     first = min((r for r in ranks if r is not None), default=None)
     result.reciprocal_rank = 1 / first if first else 0.0
-    # A target is credited once, to the first hit that matches it: further excerpts from the
-    # same file add nothing, so DCG can never exceed the ideal (one hit per target).
-    open_targets = list(targets)
-    relevant_flags = []
-    for hit in hits:
-        gained = next((t for t in open_targets if matches(hit, t)), None)
-        if gained is not None:
-            open_targets.remove(gained)
-        relevant_flags.append(gained is not None)
     for k in ks:
         result.hit_at[k] = 1.0 if first is not None and first <= k else 0.0
         result.recall_at[k] = (
             sum(1 for r in ranks if r is not None and r <= k) / len(targets) if targets else 0.0
         )
-        dcg = sum(1 / math.log2(i + 2) for i, rel in enumerate(relevant_flags[:k]) if rel)
-        ideal = sum(1 / math.log2(i + 2) for i in range(min(len(targets), k)))
-        result.ndcg_at[k] = dcg / ideal if ideal else 0.0
+        result.ndcg_at[k] = _ndcg(hits, targets, k)
     return result
 
 

@@ -42,6 +42,7 @@ from evals.metrics import (
     percentile,
     score_retrieval,
 )
+from evals.rerank import DEFAULT_MODEL, CrossEncoderReranker, rerank_top
 
 HERE = Path(__file__).resolve().parent
 
@@ -77,9 +78,17 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
     out: dict = {"id": item["id"], "question": item["question"], "error": None}
     try:
         if args.mode == "search":
-            query = urllib.parse.urlencode({"q": item["question"], "limit": args.k})
+            # A reranker needs its candidates: the top N of the search, not just the top k.
+            limit = max(args.k, args.rerank_top) if args.reranker else args.k
+            query = urllib.parse.urlencode({"q": item["question"], "limit": limit})
             data = call(f"{base}/search?{query}", body=None, token=args.token, timeout=args.timeout)
             out["chunks"] = data["results"]
+            if args.reranker:
+                reranked = time.perf_counter()
+                out["chunks"] = rerank_top(
+                    item["question"], out["chunks"], args.reranker_fn, args.rerank_top
+                )
+                out["rerank_ms"] = (time.perf_counter() - reranked) * 1000
         else:
             body = {
                 "question": item["question"],
@@ -121,6 +130,8 @@ def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
         "ms": round(raw["ms"]),
         "error": raw["error"],
     }
+    if "rerank_ms" in raw:
+        row["rerank_ms"] = round(raw["rerank_ms"])
     if answerable and targets and not raw["error"]:
         r = score_retrieval(hits, targets)
         row["mrr"] = r.reciprocal_rank
@@ -154,6 +165,10 @@ def summarise(rows: list[dict], mode: str) -> dict[str, float]:
     summary["mrr"] = mean(r["mrr"] for r in scored)
     summary["latency_p50_ms"] = percentile([r["ms"] for r in ok], 50)
     summary["latency_p95_ms"] = percentile([r["ms"] for r in ok], 95)
+    reranked = [r["rerank_ms"] for r in ok if "rerank_ms" in r]
+    if reranked:  # the cost of the reranker alone, already inside the latency above
+        summary["rerank_p50_ms"] = percentile(reranked, 50)
+        summary["rerank_p95_ms"] = percentile(reranked, 95)
     if mode == "ask":
         answerable = [r for r in ok if r["answerable"]]
         unanswerable = [r for r in ok if not r["answerable"]]
@@ -176,9 +191,11 @@ LOWER_IS_BETTER = {
     "degraded_rate",
     "latency_p50_ms",
     "latency_p95_ms",
+    "rerank_p50_ms",
+    "rerank_p95_ms",
 }
 # Not compared against the baseline (counts and timings vary run to run).
-NOT_GATED = {"questions", "latency_p50_ms", "latency_p95_ms"}
+NOT_GATED = {"questions", "latency_p50_ms", "latency_p95_ms", "rerank_p50_ms", "rerank_p95_ms"}
 
 
 def regressions(summary: dict, baseline: dict, max_drop: float) -> list[str]:
@@ -235,6 +252,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--no-plan", action="store_true", help="ask mode: skip query planning")
     p.add_argument("--no-rerank", action="store_true", help="ask mode: skip the relevance judge")
     p.add_argument(
+        "--reranker",
+        nargs="?",
+        const=DEFAULT_MODEL,
+        metavar="MODEL",
+        help=f"search mode: rerank the top candidates with a cross-encoder ({DEFAULT_MODEL}) "
+        "before scoring; runs on this machine and needs torch and transformers",
+    )
+    p.add_argument("--rerank-top", type=int, default=20, help="candidates the reranker reads")
+    p.add_argument("--rerank-max-length", type=int, default=512, help="tokens per pair")
+    p.add_argument(
         "--rank",
         choices=("weighted", "legacy"),
         help="ask mode: final ranking (weighted score or the judge order)",
@@ -246,6 +273,12 @@ def main(argv: list[str] | None = None) -> int:
         "--min", action="append", default=[], metavar="METRIC=VALUE", help="a floor, e.g. hit@5=0.7"
     )
     args = p.parse_args(argv)
+
+    if args.reranker and args.mode != "search":
+        p.error("--reranker works on search mode: it reorders what /search returns")
+    if args.reranker:
+        print(f"Loading {args.reranker} ...", flush=True)
+        args.reranker_fn = CrossEncoderReranker(args.reranker, args.rerank_max_length)
 
     golden = load_golden(args.golden)
     if args.limit:

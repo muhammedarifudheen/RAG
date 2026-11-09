@@ -129,7 +129,7 @@ class Settings(BaseSettings):
     # seconds for the planner and the judge, past which retrieval carries on without them
     # and the answer is marked degraded; and a cache of retrievals, kept an hour.
     retrieval_adaptive_top_k: bool = True
-    retrieval_weighted_rank: bool = True
+    retrieval_weighted_rank: bool = False  # off: it lowered top-1 hits in the eval
     retrieval_plan_budget: float = 6.0
     retrieval_judge_budget: float = 12.0
     retrieval_cache: bool = True

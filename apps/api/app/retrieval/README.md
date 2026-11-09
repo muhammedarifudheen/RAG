@@ -8,7 +8,7 @@ replace it.
 
 | Piece | Where | Behaviour |
 | --- | --- | --- |
-| Final score | `scoring.py` | `0.45 rerank + 0.20 rank-fusion + 0.15 trust + 0.10 freshness + 0.10 source record`. Ties: newer source, higher trust, shorter excerpt, exact identifier match. Never similarity alone: unjudged excerpts use it only as their rerank signal. Per request: `weighted_rank` (default `RETRIEVAL_WEIGHTED_RANK`). |
+| Final score | `scoring.py` | `0.45 rerank + 0.20 rank-fusion + 0.15 trust + 0.10 freshness + 0.10 source record`. Ties: newer source, higher trust, shorter excerpt, exact identifier match. Never similarity alone: unjudged excerpts use it only as their rerank signal. Per request: `weighted_rank`; the server default `RETRIEVAL_WEIGHTED_RANK` is **off**: on the public server's 12-question set it lowered hit@1 from 1.00 to 0.71 (legacy order vs weighted, 2-3 timeouts per run), so it stays opt-in until a larger set shows a gain. |
 | Freshness | `scoring.py` | Exponential decay, half-life 30 days for code and 90 for documents. |
 | Source record | `state.py` | From thumbs on answers that used the source (90 days, smoothed `(up+1)/(up+down+2)`); neutral 0.5 with no votes. |
 | Stage budgets | `budget.py` | The planner (`RETRIEVAL_PLAN_BUDGET`, 6 s) and the judge (`RETRIEVAL_JUDGE_BUDGET`, 12 s) give way to a fallback instead of stalling; a failed vector search falls back to keywords (already so). Each sets `degraded` and a reason; the footer reads `[degraded: reason]` and the web app shows a chip. |
@@ -43,4 +43,4 @@ python -m evals.run_evals --mode ask --rank legacy   --out legacy.json
 ```
 
 Keep a change only if it moves a metric the right way (`hit@k`, `ndcg@k`, `mrr`,
-`citation_precision`, `degraded_rate`); `RETRIEVAL_WEIGHTED_RANK=false` reverts the ranking.
+`citation_precision`, `degraded_rate`); `RETRIEVAL_WEIGHTED_RANK=true` turns the weighted ranking on for every request.
