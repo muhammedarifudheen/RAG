@@ -120,3 +120,40 @@ def test_compare_marks_better_and_worse_by_direction():
     assert rows["mrr"].rstrip().endswith("-")  # down is bad
     assert rows["latency_p95_ms"].rstrip().endswith("-")  # up is bad for latency
     assert not rows["recall@5"].rstrip().endswith(("+", "-"))  # unchanged
+
+
+def test_golden_set_spellings_are_both_read(tmp_path):
+    from evals.run_evals import load_golden
+
+    path = tmp_path / "g.jsonl"
+    path.write_text(
+        '{"id": "a", "question": "q", "relevant_paths": [{"file": "x.py", "lines": [1, 5]}],'
+        ' "expected_state": "PARTIAL"}\n'
+        '{"id": "b", "question": "q", "relevant_paths": [], "expected_state": "REFUSED"}\n'
+        '{"id": "c", "question": "q", "relevant": ["y.py"], "answerable": false}\n',
+        encoding="utf-8",
+    )
+    a, b, c = load_golden(path)
+    assert a["relevant"][0]["file"] == "x.py" and a["answerable"] is True
+    assert b["relevant"] == [] and b["answerable"] is False
+    assert c["relevant"] == ["y.py"] and c["answerable"] is False  # the old spelling stands
+
+
+def test_the_shipped_golden_set_is_well_formed():
+    import json
+    from pathlib import Path
+
+    from evals.metrics import Target
+
+    path = Path(__file__).resolve().parents[1] / "evals" / "golden" / "golden_set.jsonl"
+    items = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line]
+    assert len(items) == 40 and len({i["id"] for i in items}) == 40
+    states = {"KNOWN", "INFERRED", "PARTIAL", "ABSENT", "CONFLICTED", "REFUSED"}
+    for i in items:
+        assert i["expected_state"] in states and i["question"] and i["rationale"]
+        for target in i["relevant_paths"]:
+            Target.parse(target)  # a path, or {"file", "lines"}: never a chunk id
+        if i["expected_state"] in ("ABSENT", "REFUSED"):
+            assert i["relevant_paths"] == []
+        else:
+            assert i["relevant_paths"], i["id"]

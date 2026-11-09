@@ -52,10 +52,24 @@ def load_golden(path: Path) -> list[dict]:
     for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
         if line.strip() and not line.lstrip().startswith("#"):
             try:
-                items.append(json.loads(line))
+                items.append(normalise(json.loads(line)))
             except json.JSONDecodeError as error:
                 raise SystemExit(f"{path}:{number}: not valid JSON ({error})") from error
     return items
+
+
+# States for which the right behaviour is to decline: nothing in the knowledge base answers.
+DECLINING_STATES = {"ABSENT", "REFUSED"}
+
+
+def normalise(item: dict) -> dict:
+    """Accepts both golden-set spellings: `relevant` / `answerable`, and `relevant_paths` /
+    `expected_state` (ABSENT and REFUSED mean there is nothing to find, so not answerable)."""
+    if "relevant" not in item:
+        item["relevant"] = item.get("relevant_paths", [])
+    if "answerable" not in item and "expected_state" in item:
+        item["answerable"] = item["expected_state"].upper() not in DECLINING_STATES
+    return item
 
 
 def call(url: str, *, body: dict | None, token: str | None, timeout: float) -> dict:
