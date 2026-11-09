@@ -42,7 +42,7 @@ from evals.metrics import (
     percentile,
     score_retrieval,
 )
-from evals.rerank import DEFAULT_MODEL, CrossEncoderReranker, rerank_top
+from evals.rerank import DEFAULT_MODEL, make_reranker, rerank_top
 
 HERE = Path(__file__).resolve().parent
 
@@ -259,6 +259,12 @@ def main(argv: list[str] | None = None) -> int:
         help=f"search mode: rerank the top candidates with a cross-encoder ({DEFAULT_MODEL}) "
         "before scoring; runs on this machine and needs torch and transformers",
     )
+    p.add_argument(
+        "--reranker-backend",
+        choices=("auto", "torch", "onnx", "onnx-int8"),
+        default="auto",
+        help="auto: torch if it loads, else ONNX Runtime (fp32; onnx-int8 is quantised)",
+    )
     p.add_argument("--rerank-top", type=int, default=20, help="candidates the reranker reads")
     p.add_argument("--rerank-max-length", type=int, default=512, help="tokens per pair")
     p.add_argument(
@@ -278,7 +284,9 @@ def main(argv: list[str] | None = None) -> int:
         p.error("--reranker works on search mode: it reorders what /search returns")
     if args.reranker:
         print(f"Loading {args.reranker} ...", flush=True)
-        args.reranker_fn = CrossEncoderReranker(args.reranker, args.rerank_max_length)
+        args.reranker_fn = make_reranker(
+            args.reranker, args.rerank_max_length, args.reranker_backend
+        )
 
     golden = load_golden(args.golden)
     if args.limit:
