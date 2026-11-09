@@ -25,10 +25,10 @@ from app.db import get_db
 from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
 from app.models import Source
+from app.ratelimit import rate_limit
 from app.retrieval import scoring, state
 from app.retrieval.budget import Trace, run_stage
 from app.retrieval.topk import adaptive_top_k
-from app.ratelimit import rate_limit
 from app.schemas import (
     AskRequest,
     AskResponse,

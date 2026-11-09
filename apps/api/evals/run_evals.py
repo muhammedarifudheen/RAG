@@ -32,7 +32,7 @@ from pathlib import Path
 if __package__ in (None, ""):  # run as a script: put the API root on the path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from evals.metrics import (  # noqa: E402
+from evals.metrics import (
     KS,
     Hit,
     Target,
@@ -67,7 +67,7 @@ def call(url: str, *, body: dict | None, token: str | None, timeout: float) -> d
     if token:
         headers["Authorization"] = f"Bearer {token}"
     request = urllib.request.Request(url, data=data, headers=headers)
-    with urllib.request.urlopen(request, timeout=timeout) as response:  # noqa: S310
+    with urllib.request.urlopen(request, timeout=timeout) as response:
         return json.loads(response.read())
 
 

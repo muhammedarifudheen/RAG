@@ -6,7 +6,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from evals.metrics import (  # noqa: E402
+from evals.metrics import (
     Hit,
     Target,
     citation_precision,
@@ -16,7 +16,7 @@ from evals.metrics import (  # noqa: E402
     percentile,
     score_retrieval,
 )
-from evals.run_evals import regressions  # noqa: E402
+from evals.run_evals import regressions
 
 
 def test_path_suffix_and_line_overlap():

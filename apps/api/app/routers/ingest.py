@@ -24,8 +24,8 @@ from worker.sources import (
 
 from app.admin import ADMIN_REQUIRED, require_signed_admin
 from app.config import settings
-from app.retrieval import state as retrieval_state
 from app.ratelimit import rate_limit
+from app.retrieval import state as retrieval_state
 from app.schemas import IngestRequest
 from app.services.webhooks import emit
 

@@ -11,12 +11,12 @@ SIMPLE, SYNTHESIS, COMPARE = 3, 5, 8
 _COMPARE = re.compile(
     r"\b(compare|comparison|versus|vs\.?|differences?|differ|contrast|pros and cons|"
     r"all (?:the )?(?:ways|options|methods|types)|every)\b",
-    re.I,
+    re.IGNORECASE,
 )
 _SYNTHESIS = re.compile(
     r"\b(how|why|explain|walk me through|describe|summari[sz]e|overview|flow|works?|"
     r"architecture|design|steps|process|trade-?offs?)\b",
-    re.I,
+    re.IGNORECASE,
 )
 
 

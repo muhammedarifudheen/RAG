@@ -14,7 +14,7 @@ _DECLINES = re.compile(
     r"don['’]t have that|do not have|not in the knowledge base|no (?:information|mention)|"
     r"cannot (?:find|answer)|can['’]t (?:find|answer)|doesn['’]t (?:say|cover|contain)|"
     r"not covered",
-    re.I,
+    re.IGNORECASE,
 )
 
 
