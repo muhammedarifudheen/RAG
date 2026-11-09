@@ -313,6 +313,9 @@ def test_the_latency_budget_observes_by_default_and_degrades_only_when_enforced(
     from app.config import settings
     from app.main import app
 
+    # An earlier test asked the same question: without this the retrieval is a cache hit and
+    # nothing is embedded or searched, so there is nothing to time.
+    monkeypatch.setattr(settings, "retrieval_cache", False)
     for stage in ("embed", "vector", "bm25", "fuse", "assemble", "first_token", "full_answer"):
         monkeypatch.setattr(settings, f"budget_{stage}_ms", 0.0001)  # every stage breaches
     app.dependency_overrides[get_assistant] = lambda: Assistant([Answerer()], min_score=0.0)

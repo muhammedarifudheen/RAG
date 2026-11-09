@@ -118,6 +118,7 @@ def test_openapi_documents_every_endpoint(plain_client):
         "/graph/files",
         "/file",
         "/health",
+        "/health/reranker",
         "/healthz",
         "/keys",
         "/keys/{key_id}",
