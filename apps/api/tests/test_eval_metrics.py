@@ -170,3 +170,25 @@ def test_the_shipped_golden_set_is_well_formed():
             assert i["relevant_paths"] == []
         else:
             assert i["relevant_paths"], i["id"]
+
+
+def test_golden_validation_checks_that_need_no_network():
+    from evals.validate_golden import check_distribution, check_states, resolve
+
+    ok = [
+        {"id": f"x{i}", "category": "fail-partial", "expected_state": "PARTIAL"} for i in range(20)
+    ]
+    ok += [{"id": f"m{i}", "category": "multi-hop", "expected_state": "KNOWN"} for i in range(10)]
+    ok += [{"id": f"t{i}", "category": "code-trace", "expected_state": "KNOWN"} for i in range(5)]
+    ok += [
+        {"id": f"v{i}", "category": "adversarial", "expected_state": "REFUSED"} for i in range(5)
+    ]
+    assert check_distribution(ok).passed and check_states(ok).passed
+    assert not check_distribution(ok[:-1]).passed  # 4 adversarial, not 5
+    bad = [*ok, {"id": "z", "category": "multi-hop", "expected_state": "MAYBE"}]
+    assert not check_states(bad).passed
+    known = {"pallets/itsdangerous/src/itsdangerous/signer.py", "wikipedia/en/HMAC"}
+    assert resolve("itsdangerous/signer.py", known) == [
+        "pallets/itsdangerous/src/itsdangerous/signer.py"
+    ]
+    assert resolve("signer.p", known) == []  # a suffix of the name is not a path
