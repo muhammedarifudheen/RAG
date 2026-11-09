@@ -93,16 +93,12 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
     try:
         if args.mode == "search":
             # A reranker needs its candidates: the top N of the search, not just the top k.
+            # They are fetched here and reranked later, in `rerank_pass`, so the reranker is
+            # timed with nothing else going on.
             limit = max(args.k, args.rerank_top) if args.reranker else args.k
             query = urllib.parse.urlencode({"q": item["question"], "limit": limit})
             data = call(f"{base}/search?{query}", body=None, token=args.token, timeout=args.timeout)
             out["chunks"] = data["results"]
-            if args.reranker:
-                reranked = time.perf_counter()
-                out["chunks"] = rerank_top(
-                    item["question"], out["chunks"], args.reranker_fn, args.rerank_top
-                )
-                out["rerank_ms"] = (time.perf_counter() - reranked) * 1000
         else:
             body = {
                 "question": item["question"],
@@ -133,6 +129,55 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
     return out
 
 
+# Throwaway questions to warm the reranker (allocations, caches, any lazy initialisation)
+# before anything is timed. They are not in any golden set.
+WARMUP_QUESTIONS = (
+    "How does a signer produce a signature?",
+    "What is an HMAC?",
+    "What does the serializer do with a payload?",
+    "How are tokens encoded for a URL?",
+    "Which exceptions signal a bad signature?",
+)
+
+
+def parse_ms(text: str) -> float:
+    """'150ms', '150' or '0.15s' as milliseconds."""
+    text = text.strip().lower()
+    if text.endswith("ms"):
+        return float(text[:-2])
+    if text.endswith("s"):
+        return float(text[:-1]) * 1000
+    return float(text)
+
+
+def rerank_pass(raws: list[dict], args: argparse.Namespace) -> None:
+    """Reranks every question's candidates, one at a time and nothing else running, after
+    `--warmup` throwaway queries. Records per question: rerank_ms, the total (search plus
+    rerank), and whether it overran the budget. With --fallback-on-timeout, a question whose
+    reranking overran keeps the search (RRF) order and is marked degraded; the reranked order
+    is kept beside it to score both."""
+    base = args.api.rstrip("/")
+    for question in WARMUP_QUESTIONS[: args.warmup]:
+        query = urllib.parse.urlencode({"q": question, "limit": args.rerank_top})
+        found = call(f"{base}/search?{query}", body=None, token=args.token, timeout=args.timeout)
+        rerank_top(question, found["results"], args.reranker_fn, args.rerank_top)
+    budget = args.fallback_on_timeout or args.budget_ms
+    for raw in raws:
+        if raw["error"]:
+            continue
+        searched = list(raw["chunks"])
+        started = time.perf_counter()
+        reranked = rerank_top(raw["question"], searched, args.reranker_fn, args.rerank_top)
+        raw["rerank_ms"] = (time.perf_counter() - started) * 1000
+        raw["ms"] += raw["rerank_ms"]  # the total: search, then rerank
+        raw["timed_out"] = raw["rerank_ms"] > budget
+        raw["chunks_searched"], raw["chunks_reranked"] = searched, reranked
+        if args.fallback_on_timeout and raw["timed_out"]:
+            raw["chunks"], raw["degraded"] = searched, True
+        else:
+            raw["chunks"], raw["degraded"] = reranked, False
+
+
 def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
     """Scores one question."""
     answerable = item.get("answerable", True)
@@ -146,6 +191,9 @@ def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
     }
     if "rerank_ms" in raw:
         row["rerank_ms"] = round(raw["rerank_ms"])
+        row["total_ms"] = round(raw["ms"])
+        row["timed_out"] = raw["timed_out"]
+        row["degraded"] = raw["degraded"]
     if answerable and targets and not raw["error"]:
         r = score_retrieval(hits, targets)
         row["mrr"] = r.reciprocal_rank
@@ -155,6 +203,19 @@ def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
             row[f"ndcg@{k}"] = r.ndcg_at[k]
             row[f"ndcg_chunk@{k}"] = r.ndcg_chunk_at[k]
         row["missed"] = [t.file for t in targets if not any(h.file.endswith(t.file) for h in hits)]
+        # The same question scored on the search order (vec_) and, when a timeout can swap it,
+        # on the reranked order as if it never timed out (nofb_).
+        for prefix, key in (("vec_", "chunks_searched"), ("nofb_", "chunks_reranked")):
+            if key in raw:
+                other = [Hit(c["file"], c["start_line"], c["end_line"]) for c in raw[key]]
+                scored = score_retrieval(other, targets)
+                row[f"{prefix}mrr"] = scored.reciprocal_rank
+                for name, value in (
+                    ("ndcg@10", scored.ndcg_at[10]),
+                    ("recall@5", scored.recall_at[5]),
+                    ("hit@1", scored.hit_at[1]),
+                ):
+                    row[f"{prefix}{name}"] = value
     if args.mode == "ask" and not raw["error"]:
         answer = raw.get("answer", "")
         cites = raw.get("citations", [])
@@ -180,10 +241,24 @@ def summarise(rows: list[dict], mode: str) -> dict[str, float]:
     summary["mrr"] = mean(r["mrr"] for r in scored)
     summary["latency_p50_ms"] = percentile([r["ms"] for r in ok], 50)
     summary["latency_p95_ms"] = percentile([r["ms"] for r in ok], 95)
-    reranked = [r["rerank_ms"] for r in ok if "rerank_ms" in r]
-    if reranked:  # the cost of the reranker alone, already inside the latency above
-        summary["rerank_p50_ms"] = percentile(reranked, 50)
-        summary["rerank_p95_ms"] = percentile(reranked, 95)
+    timed = [r for r in ok if "rerank_ms" in r]
+    if timed:  # the reranker alone, and the total (search plus rerank)
+        for label, key in (("rerank", "rerank_ms"), ("total", "total_ms")):
+            values = [r[key] for r in timed]
+            summary[f"{label}_mean_ms"] = sum(values) / len(values)
+            for pct in (50, 95, 99):
+                summary[f"{label}_p{pct}_ms"] = percentile(values, pct)
+        summary["rerank_median_ms"] = summary["rerank_p50_ms"]
+        summary["rerank_over_budget_pct"] = 100 * mean(
+            1.0 if r["timed_out"] else 0.0 for r in timed
+        )
+        summary["degraded_rate"] = mean(1.0 if r["degraded"] else 0.0 for r in timed)
+        scored_timed = [r for r in timed if "vec_mrr" in r]
+        for prefix in ("vec_", "nofb_"):
+            if scored_timed and f"{prefix}mrr" in scored_timed[0]:
+                summary[f"{prefix}mrr"] = mean(r[f"{prefix}mrr"] for r in scored_timed)
+                for name in ("ndcg@10", "recall@5", "hit@1"):
+                    summary[f"{prefix}{name}"] = mean(r[f"{prefix}{name}"] for r in scored_timed)
     if mode == "ask":
         answerable = [r for r in ok if r["answerable"]]
         unanswerable = [r for r in ok if not r["answerable"]]
@@ -206,11 +281,15 @@ LOWER_IS_BETTER = {
     "degraded_rate",
     "latency_p50_ms",
     "latency_p95_ms",
-    "rerank_p50_ms",
-    "rerank_p95_ms",
+    "rerank_over_budget_pct",
 }
 # Not compared against the baseline (counts and timings vary run to run).
-NOT_GATED = {"questions", "latency_p50_ms", "latency_p95_ms", "rerank_p50_ms", "rerank_p95_ms"}
+NOT_GATED = {"questions", "latency_p50_ms", "latency_p95_ms"}
+LOWER_IS_BETTER |= {
+    f"{label}_{stat}_ms" for label in ("rerank", "total") for stat in ("mean", "p50", "p95", "p99")
+}
+LOWER_IS_BETTER.add("rerank_median_ms")
+NOT_GATED |= LOWER_IS_BETTER - {"errors", "false_refusal_rate", "degraded_rate"}
 
 
 def regressions(summary: dict, baseline: dict, max_drop: float) -> list[str]:
@@ -276,12 +355,28 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--reranker-backend",
-        choices=("auto", "torch", "onnx", "onnx-int8"),
+        choices=("auto", "torch", "onnx", "onnx-fp16", "onnx-int8", "onnx-dml", "onnx-dml-fp16"),
         default="auto",
-        help="auto: torch if it loads, else ONNX Runtime (fp32; onnx-int8 is quantised)",
+        help="auto: torch if it loads, else ONNX Runtime fp32 on the CPU; onnx-int8 is "
+        "quantised; onnx-dml uses DirectML (the GPU) and needs the onnxruntime-directml build",
+    )
+    p.add_argument("--rerank-batch-size", type=int, default=8, help="pairs per reranker call")
+    p.add_argument("--warmup", type=int, default=5, help="throwaway queries before timing")
+    p.add_argument(
+        "--fallback-on-timeout",
+        type=parse_ms,
+        metavar="MS",
+        help="reranker budget, e.g. 150ms: a question whose reranking takes longer keeps the "
+        "search (RRF) order and is marked degraded; how often is reported",
+    )
+    p.add_argument(
+        "--budget-ms",
+        type=float,
+        default=150.0,
+        help="the budget reported against, without a fallback",
     )
     p.add_argument("--rerank-top", type=int, default=20, help="candidates the reranker reads")
-    p.add_argument("--rerank-max-length", type=int, default=512, help="tokens per pair")
+    p.add_argument("--rerank-max-length", type=int, default=256, help="tokens per pair")
     p.add_argument(
         "--rank",
         choices=("weighted", "legacy"),
@@ -300,18 +395,29 @@ def main(argv: list[str] | None = None) -> int:
     if args.reranker:
         print(f"Loading {args.reranker} ...", flush=True)
         args.reranker_fn = make_reranker(
-            args.reranker, args.rerank_max_length, args.reranker_backend
+            args.reranker, args.rerank_max_length, args.reranker_backend, args.rerank_batch_size
         )
+        describe = getattr(args.reranker_fn, "describe", None)
+        if describe:
+            print(
+                f"Reranker: {describe()}, max_length {args.rerank_max_length}, "
+                f"batch {args.rerank_batch_size}",
+                flush=True,
+            )
 
     golden = load_golden(args.golden)
     if args.limit:
         golden = golden[: args.limit]
-    rows = []
+    raws = []
     for number, item in enumerate(golden, 1):
         print(f"[{number}/{len(golden)}] {item['id']}", flush=True)
-        rows.append(evaluate(item, run_one(item, args), args))
+        raws.append(run_one(item, args))
         if args.delay:
             time.sleep(args.delay)
+    if args.reranker:
+        print(f"Warming up with {args.warmup} throwaway queries, then timing ...", flush=True)
+        rerank_pass(raws, args)
+    rows = [evaluate(item, raw, args) for item, raw in zip(golden, raws, strict=True)]
 
     summary = summarise(rows, args.mode)
     print_report(summary, rows, args.mode)

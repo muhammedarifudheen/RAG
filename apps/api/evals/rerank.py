@@ -80,10 +80,17 @@ class OnnxReranker:
 
     FILES: ClassVar[dict[str, tuple[str, ...]]] = {
         "fp32": ("onnx/model.onnx", "onnx/model.onnx_data"),
+        "fp16": ("onnx/model_fp16.onnx",),
         "int8": ("onnx/model_int8.onnx",),
     }
 
-    def __init__(self, max_length: int = 512, batch_size: int = 8, precision: str = "fp32"):
+    def __init__(
+        self,
+        max_length: int = 512,
+        batch_size: int = 8,
+        precision: str = "fp32",
+        providers: list[str] | None = None,
+    ):
         import onnxruntime
         from huggingface_hub import hf_hub_download
         from tokenizers import Tokenizer
@@ -93,8 +100,15 @@ class OnnxReranker:
         self.tokenizer = Tokenizer.from_file(hf_hub_download(ONNX_REPO, "tokenizer.json"))
         self.tokenizer.enable_truncation(max_length=max_length)
         self.tokenizer.enable_padding()
-        self.session = onnxruntime.InferenceSession(paths[0], providers=["CPUExecutionProvider"])
+        self.precision = precision
+        self.session = onnxruntime.InferenceSession(
+            paths[0], providers=providers or ["CPUExecutionProvider"]
+        )
+        self.providers = self.session.get_providers()  # what was actually granted
         self.inputs = {i.name for i in self.session.get_inputs()}
+
+    def describe(self) -> str:
+        return f"{self.precision} on {'+'.join(p.replace('ExecutionProvider', '') for p in self.providers)}"
 
     def __call__(self, question: str, passages: list[str]) -> list[float]:
         import numpy as np
@@ -112,7 +126,23 @@ class OnnxReranker:
         return scores
 
 
-def make_reranker(model: str = DEFAULT_MODEL, max_length: int = 512, backend: str = "auto"):
+DML = ["DmlExecutionProvider", "CPUExecutionProvider"]
+# backend name -> (precision, execution providers); DirectML needs the onnxruntime-directml build.
+ONNX_BACKENDS: dict[str, tuple[str, list[str] | None]] = {
+    "onnx": ("fp32", None),
+    "onnx-fp16": ("fp16", None),
+    "onnx-int8": ("int8", None),
+    "onnx-dml": ("fp32", DML),
+    "onnx-dml-fp16": ("fp16", DML),
+}
+
+
+def make_reranker(
+    model: str = DEFAULT_MODEL,
+    max_length: int = 512,
+    backend: str = "auto",
+    batch_size: int = 8,
+):
     """A reranker: torch if it loads (or is asked for), else the ONNX export of the default
     model. Raises if neither can run."""
     if backend in ("auto", "torch"):
@@ -124,4 +154,5 @@ def make_reranker(model: str = DEFAULT_MODEL, max_length: int = 512, backend: st
             print(f"torch is not usable here ({type(error).__name__}); using ONNX Runtime")
     if model != DEFAULT_MODEL:
         raise SystemExit(f"Only {DEFAULT_MODEL} has an ONNX fallback; {model} needs torch.")
-    return OnnxReranker(max_length, precision="int8" if backend == "onnx-int8" else "fp32")
+    precision, providers = ONNX_BACKENDS["onnx" if backend == "auto" else backend]
+    return OnnxReranker(max_length, batch_size, precision, providers)

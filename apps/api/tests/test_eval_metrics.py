@@ -192,3 +192,56 @@ def test_golden_validation_checks_that_need_no_network():
         "pallets/itsdangerous/src/itsdangerous/signer.py"
     ]
     assert resolve("signer.p", known) == []  # a suffix of the name is not a path
+
+
+def _bench_args(**over):
+    import argparse
+
+    base = {
+        "api": "http://x",
+        "token": None,
+        "timeout": 5,
+        "rerank_top": 20,
+        "warmup": 2,
+        "budget_ms": 150.0,
+        "fallback_on_timeout": None,
+        "reranker_fn": lambda question, passages: [float(i) for i in range(len(passages))],
+    }
+    return argparse.Namespace(**{**base, **over})
+
+
+def _raw(chunks):
+    return {"id": "q", "question": "q", "error": None, "ms": 100.0, "chunks": chunks}
+
+
+def test_parse_ms_reads_units():
+    from evals.run_evals import parse_ms
+
+    assert parse_ms("150ms") == 150.0 and parse_ms("150") == 150.0 and parse_ms("0.15s") == 150.0
+
+
+def test_rerank_pass_times_warms_up_and_falls_back_on_timeout(monkeypatch):
+    import evals.run_evals as run
+
+    calls = []
+    monkeypatch.setattr(
+        run,
+        "call",
+        lambda url, **kw: (
+            calls.append(url) or {"results": [{"file": "w.py", "name": "w", "snippet": "w"}] * 3}
+        ),
+    )
+    chunks = [{"file": f"{n}.py", "name": n, "snippet": n} for n in "abc"]  # scores 0,1,2: reversed
+
+    within = _raw(list(chunks))
+    run.rerank_pass([within], _bench_args(budget_ms=1e9))
+    assert [c["name"] for c in within["chunks"]] == ["c", "b", "a"]  # reranked
+    assert within["timed_out"] is False and within["degraded"] is False
+    assert len(calls) == 2  # two warm-up searches, not timed
+    assert within["ms"] > 100.0 and within["rerank_ms"] >= 0  # total = search + rerank
+
+    over = _raw(list(chunks))
+    run.rerank_pass([over], _bench_args(fallback_on_timeout=-1.0))  # always over the budget
+    assert [c["name"] for c in over["chunks"]] == ["a", "b", "c"]  # the search order kept
+    assert over["timed_out"] and over["degraded"]
+    assert [c["name"] for c in over["chunks_reranked"]] == ["c", "b", "a"]  # kept to score both
