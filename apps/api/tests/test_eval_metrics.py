@@ -75,3 +75,48 @@ def test_percentile_and_regressions():
     found = regressions(summary, baseline, 0.05)
     assert len(found) == 2  # hit@5 fell and refusals rose; timings and counts are not gated
     assert regressions(baseline, baseline, 0.05) == []
+
+
+def test_ndcg_is_over_files_so_duplicates_do_not_push_a_file_down():
+    # a.py's three chunks collapse to one file at its best rank, so c.py (relevant) is the
+    # 2nd file for DCG, not the 4th chunk.
+    hits = [Hit("a.py", 1, 2), Hit("a.py", 5, 6), Hit("a.py", 9, 9), Hit("c.py", 1, 2)]
+    by_files = score_retrieval(hits, [Target("c.py")], ks=(4,))
+    assert math.isclose(by_files.ndcg_at[4], 1 / math.log2(3))  # c.py is the 2nd file
+    assert by_files.reciprocal_rank == 0.25  # MRR still reads the chunk ranking
+
+
+def test_file_dedupe_keeps_chunks_of_a_file_pinned_to_lines():
+    from evals.metrics import dedupe_by_file
+
+    hits = [Hit("a.py", 1, 5), Hit("a.py", 50, 60), Hit("b.py", 1, 2), Hit("b.py", 3, 4)]
+    kept = dedupe_by_file(hits, [Target("a.py", 50, 60)])
+    assert [(h.file, h.start) for h in kept] == [("a.py", 1), ("a.py", 50), ("b.py", 1)]
+
+
+def test_the_reranker_hook_reorders_the_top_candidates_only():
+    from evals.rerank import rerank_top
+
+    chunks = [{"file": f"{n}.py", "name": n, "snippet": n} for n in "abcde"]
+    seen = {}
+
+    def score(question, passages):
+        seen["n"] = len(passages)
+        return [0.1, 0.9, 0.5]  # c is middling, b best, a worst
+
+    out = rerank_top("q", chunks, score, top=3)
+    assert [c["name"] for c in out] == ["b", "c", "a", "d", "e"]  # d, e untouched, after
+    assert seen["n"] == 3
+    assert rerank_top("q", chunks[:1], score, top=3) == chunks[:1]  # nothing to reorder
+
+
+def test_compare_marks_better_and_worse_by_direction():
+    from evals.compare import table
+
+    base = {"ndcg@10": 0.8, "mrr": 0.7, "latency_p95_ms": 500, "recall@5": 0.9}
+    new = {"ndcg@10": 0.85, "mrr": 0.6, "latency_p95_ms": 1500, "recall@5": 0.9}
+    rows = {line.split()[0]: line for line in table(base, new)[1:]}
+    assert rows["ndcg@10"].rstrip().endswith("+")  # up is good
+    assert rows["mrr"].rstrip().endswith("-")  # down is bad
+    assert rows["latency_p95_ms"].rstrip().endswith("-")  # up is bad for latency
+    assert not rows["recall@5"].rstrip().endswith(("+", "-"))  # unchanged
