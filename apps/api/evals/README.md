@@ -34,7 +34,8 @@ Two question sets are included:
 | `hit@k` | A relevant file is in the top k excerpts |
 | `recall@k` | The share of a question's relevant files found in the top k |
 | `mrr` | 1 / the rank of the first relevant excerpt |
-| `ndcg@k` | Ranking quality, rewarding relevant excerpts near the top |
+| `ndcg@k` | Ranking quality over **files**: repeats of a file collapse to its best rank, each relevant file counts once (the number to gate on) |
+| `ndcg_chunk@k` | The same over **chunks** as ranked, each relevant file credited at its first chunk; reported during the transition so older runs can be compared. Neither is ever above 1 |
 | `answer_coverage` | Share of the required phrases (`must_include`) in the answer |
 | `citation_precision` | Share of the answer's citations that are verified and point at a relevant file |
 | `cited_rate`, `verified_citation_share` | Answers that cite at all; citations whose lines the model was shown |

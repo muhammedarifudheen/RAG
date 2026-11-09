@@ -44,6 +44,18 @@ def test_ndcg_never_exceeds_one_when_a_file_has_many_hits():
     assert r.ndcg_at[5] == 1.0 and r.recall_at[5] == 1.0
 
 
+def test_three_chunks_from_one_relevant_file_do_not_push_ndcg_above_one():
+    hits = [Hit("a.py", 1, 5), Hit("a.py", 10, 15), Hit("a.py", 20, 25)]
+    r = score_retrieval(hits, [Target("a.py")], ks=(1, 3, 10))
+    for k in (1, 3, 10):
+        assert r.ndcg_at[k] == 1.0 and r.ndcg_chunk_at[k] == 1.0  # one file, found at rank 1
+        assert r.ndcg_at[k] <= 1.0 and r.ndcg_chunk_at[k] <= 1.0
+    # Two relevant files, three chunks of the first then the second: still bounded by 1.
+    both = score_retrieval(hits + [Hit("b.py", 1, 2)], [Target("a.py"), Target("b.py")], ks=(10,))
+    assert 0 < both.ndcg_at[10] <= 1.0 and 0 < both.ndcg_chunk_at[10] <= 1.0
+    assert both.ndcg_at[10] > both.ndcg_chunk_at[10]  # b.py is 2nd file, but the 4th chunk
+
+
 def test_nothing_found():
     r = score_retrieval([Hit("a.py", 1, 2)], [Target("b.py")], ks=(5,))
     assert r.reciprocal_rank == 0 and r.hit_at[5] == 0 and r.ndcg_at[5] == 0
@@ -83,6 +95,7 @@ def test_ndcg_is_over_files_so_duplicates_do_not_push_a_file_down():
     hits = [Hit("a.py", 1, 2), Hit("a.py", 5, 6), Hit("a.py", 9, 9), Hit("c.py", 1, 2)]
     by_files = score_retrieval(hits, [Target("c.py")], ks=(4,))
     assert math.isclose(by_files.ndcg_at[4], 1 / math.log2(3))  # c.py is the 2nd file
+    assert math.isclose(by_files.ndcg_chunk_at[4], 1 / math.log2(5))  # but the 4th chunk
     assert by_files.reciprocal_rank == 0.25  # MRR still reads the chunk ranking
 
 

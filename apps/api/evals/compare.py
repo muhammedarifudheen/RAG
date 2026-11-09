@@ -15,7 +15,14 @@ from pathlib import Path
 from evals.run_evals import LOWER_IS_BETTER
 
 # The headline metrics first, in the order the ship decision reads them.
-HEADLINE = ("recall@5", "ndcg@10", "mrr", "latency_p50_ms", "latency_p95_ms")
+HEADLINE = (
+    "recall@5",
+    "ndcg@10",
+    "ndcg_chunk@10",
+    "mrr",
+    "latency_p50_ms",
+    "latency_p95_ms",
+)
 
 
 def load(path: str) -> dict[str, float]:

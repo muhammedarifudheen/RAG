@@ -153,6 +153,7 @@ def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
             row[f"hit@{k}"] = r.hit_at[k]
             row[f"recall@{k}"] = r.recall_at[k]
             row[f"ndcg@{k}"] = r.ndcg_at[k]
+            row[f"ndcg_chunk@{k}"] = r.ndcg_chunk_at[k]
         row["missed"] = [t.file for t in targets if not any(h.file.endswith(t.file) for h in hits)]
     if args.mode == "ask" and not raw["error"]:
         answer = raw.get("answer", "")
@@ -174,7 +175,7 @@ def summarise(rows: list[dict], mode: str) -> dict[str, float]:
     scored = [r for r in ok if "mrr" in r]
     summary: dict[str, float] = {"questions": len(rows), "errors": len(rows) - len(ok)}
     for k in KS:
-        for name in ("hit", "recall", "ndcg"):
+        for name in ("hit", "recall", "ndcg", "ndcg_chunk"):
             summary[f"{name}@{k}"] = mean(r.get(f"{name}@{k}") for r in scored)
     summary["mrr"] = mean(r["mrr"] for r in scored)
     summary["latency_p50_ms"] = percentile([r["ms"] for r in ok], 50)

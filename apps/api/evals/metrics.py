@@ -88,14 +88,18 @@ class Retrieval:
     hit_at: dict[int, float] = field(default_factory=dict)  # 1 if any target in the top k
     recall_at: dict[int, float] = field(default_factory=dict)  # share of targets in the top k
     reciprocal_rank: float = 0.0  # 1 / rank of the first relevant hit
-    ndcg_at: dict[int, float] = field(default_factory=dict)
+    ndcg_at: dict[int, float] = field(default_factory=dict)  # over files (the gating number)
+    # Over chunks, each target credited once at its first chunk. Kept for the transition, so a
+    # run can be compared with earlier chunk-ranked results; it is never above 1 either.
+    ndcg_chunk_at: dict[int, float] = field(default_factory=dict)
 
 
-def _ndcg(hits: Sequence[Hit], targets: Sequence[Target], k: int) -> float:
-    """nDCG@k over files: duplicates of a file collapse to its best rank, then each target is
-    credited once to the first hit matching it, so DCG never exceeds the ideal. Works for
-    partial credit too: a hit's gain is looked up per target, not assumed to be 1."""
-    units = dedupe_by_file(hits, targets)
+def _ndcg(hits: Sequence[Hit], targets: Sequence[Target], k: int, by_file: bool = True) -> float:
+    """nDCG@k. With `by_file`, repeats of a file collapse to its best rank first, so DCG is over
+    files; without, over the chunks as ranked. Either way each target is credited once, to the
+    first item matching it, so DCG never exceeds the ideal (one item per target). Partial credit
+    would replace the 1 below with a per-target gain."""
+    units = dedupe_by_file(hits, targets) if by_file else list(hits)
     open_targets = list(targets)
     dcg = 0.0
     for i, hit in enumerate(units[:k]):
@@ -111,7 +115,8 @@ def score_retrieval(
     hits: Sequence[Hit], targets: Sequence[Target], ks: Iterable[int] = KS
 ) -> Retrieval:
     """Binary-relevance metrics. Hit, recall and MRR use the chunk ranking as given; nDCG is
-    over files (see `_ndcg`). Recall counts how many distinct targets were found."""
+    reported over files (`ndcg_at`) and over chunks (`ndcg_chunk_at`). Recall counts how many
+    distinct targets were found."""
     result = Retrieval()
     ranks = [found_at(hits, t) for t in targets]
     first = min((r for r in ranks if r is not None), default=None)
@@ -121,7 +126,8 @@ def score_retrieval(
         result.recall_at[k] = (
             sum(1 for r in ranks if r is not None and r <= k) / len(targets) if targets else 0.0
         )
-        result.ndcg_at[k] = _ndcg(hits, targets, k)
+        result.ndcg_at[k] = _ndcg(hits, targets, k, by_file=True)
+        result.ndcg_chunk_at[k] = _ndcg(hits, targets, k, by_file=False)
     return result
 
 
