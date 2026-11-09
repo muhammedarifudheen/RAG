@@ -120,6 +120,7 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
                 chunks=data.get("chunks", []),
                 epistemic=data.get("epistemic"),
                 server_ms=data.get("latency_ms"),
+                stage_ms=data.get("stage_ms") or {},
                 degraded=bool(data.get("degraded")),
             )
     except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError) as error:
@@ -221,6 +222,9 @@ def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
         cites = raw.get("citations", [])
         row["declined"] = declined(answer, raw.get("epistemic"), len(cites))
         row["degraded"] = 1.0 if raw.get("degraded") else 0.0
+        first_token = (raw.get("stage_ms") or {}).get("first_token")
+        if first_token is not None:
+            row["first_token_ms"] = round(first_token)
         if answerable:
             row["coverage"] = must_include_coverage(answer, item.get("must_include", []))
             row["cite_precision"] = citation_precision(cites, targets) if targets else None
@@ -263,6 +267,10 @@ def summarise(rows: list[dict], mode: str) -> dict[str, float]:
         answerable = [r for r in ok if r["answerable"]]
         unanswerable = [r for r in ok if not r["answerable"]]
         summary["degraded_rate"] = mean(r.get("degraded") for r in ok)
+        first_tokens = [r["first_token_ms"] for r in ok if "first_token_ms" in r]
+        if first_tokens:
+            summary["first_token_p50_ms"] = percentile(first_tokens, 50)
+            summary["first_token_p95_ms"] = percentile(first_tokens, 95)
         summary["answer_coverage"] = mean(r.get("coverage") for r in answerable)
         summary["citation_precision"] = mean(r.get("cite_precision") for r in answerable)
         summary["cited_rate"] = mean(r.get("cited") for r in answerable)
@@ -285,6 +293,7 @@ LOWER_IS_BETTER = {
 }
 # Not compared against the baseline (counts and timings vary run to run).
 NOT_GATED = {"questions", "latency_p50_ms", "latency_p95_ms"}
+LOWER_IS_BETTER |= {"first_token_p50_ms", "first_token_p95_ms"}
 LOWER_IS_BETTER |= {
     f"{label}_{stat}_ms" for label in ("rerank", "total") for stat in ("mean", "p50", "p95", "p99")
 }
