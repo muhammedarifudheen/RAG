@@ -362,7 +362,9 @@ def ask(
         if cross and chunks:
             cross_timeout = None
             if "rerank" in budget.enforce:
-                cross_timeout = min(settings.atlas_rerank_timeout_ms, budget.limits["rerank"]) / 1000
+                cross_timeout = (
+                    min(settings.atlas_rerank_timeout_ms, budget.limits["rerank"]) / 1000
+                )
             chunks = reranker.rerank(
                 trace, query, chunks, body.top_k or reranker.KEEP, timeout=cross_timeout
             )
@@ -434,6 +436,21 @@ def ask(
             scored = scoring.rank(chunks, query, candidates=fused_order, hit_rates=rates)
             chunks = [c.model_copy(update={"final_score": round(s, 4)}) for c, s in scored]
             timings["rank"] = round(time.monotonic() - ranked_at, 3)
+        # Shadow mode: with the weighted order off, still score it and log it beside the order
+        # actually served, so the two can be compared on real traffic. It changes nothing served.
+        shadow: dict | None = None
+        if not weighted and chunks:
+            try:
+                shadow_rank = scoring.rank(
+                    chunks, query, candidates=fused_order, hit_rates=state.source_hit_rates(db)
+                )
+                shadow = {
+                    "shadow_chosen": [c.symbol_id for c, _ in shadow_rank],
+                    "shadow_final_scores": [round(s, 4) for _, s in shadow_rank],
+                }
+            except Exception:
+                logger.exception("shadow weighted score failed; skipping it")
+                db.rollback()
         # One line per query: what each stage retrieved and chose, how long it took, what
         # the caches and the budgets did.
         rr = trace.extra.get("rerank") or {}
@@ -455,6 +472,7 @@ def ask(
                     "degraded_reason": trace.reason_code,
                     "relevance": [c.relevance for c in chunks],
                     "weighted": bool(weighted),
+                    **(shadow or {}),
                     "timings": timings,
                     "stage_ms": budget.snapshot(),
                     "budget_breached": budget.first_breach,
