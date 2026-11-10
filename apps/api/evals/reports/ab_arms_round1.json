@@ -1,0 +1,310 @@
+{
+  "reranker": "fp32 on CPU",
+  "timeout_ms": 150.0,
+  "arms": {
+    "A": {
+      "questions_scored": 25,
+      "recall@5": 0.446,
+      "recall@20": 0.6050476190476191,
+      "ndcg@10": 0.41862340633136347,
+      "mrr": 0.484969696969697,
+      "hit@1": 0.28,
+      "hit@20": 0.84,
+      "total_p50_ms": 1193.4069499839097,
+      "total_p95_ms": 4712.208530050691,
+      "degraded_rate": 0.0
+    },
+    "B": {
+      "questions_scored": 25,
+      "recall@5": 0.446,
+      "recall@20": 0.6050476190476191,
+      "ndcg@10": 0.41862340633136347,
+      "mrr": 0.484969696969697,
+      "hit@1": 0.28,
+      "hit@20": 0.84,
+      "total_p50_ms": 1343.4069499839097,
+      "total_p95_ms": 4862.208530050691,
+      "degraded_rate": 1.0
+    },
+    "C": {
+      "questions_scored": 25,
+      "recall@5": 0.4393333333333333,
+      "recall@20": 0.6050476190476191,
+      "ndcg@10": 0.40528420636574636,
+      "mrr": 0.469969696969697,
+      "hit@1": 0.28,
+      "hit@20": 0.84,
+      "total_p50_ms": 1343.4069499839097,
+      "total_p95_ms": 4862.208530050691,
+      "degraded_rate": 1.0
+    },
+    "B_nt": {
+      "questions_scored": 25,
+      "recall@5": 0.4450476190476191,
+      "recall@20": 0.6050476190476191,
+      "ndcg@10": 0.48550990970110924,
+      "mrr": 0.5577435897435897,
+      "hit@1": 0.44,
+      "hit@20": 0.84,
+      "total_p50_ms": 16147.220699931495,
+      "total_p95_ms": 20875.810350023672,
+      "degraded_rate": 0.0
+    },
+    "C_nt": {
+      "questions_scored": 25,
+      "recall@5": 0.406,
+      "recall@20": 0.6050476190476191,
+      "ndcg@10": 0.46850437528589034,
+      "mrr": 0.5531587301587302,
+      "hit@1": 0.44,
+      "hit@20": 0.84,
+      "total_p50_ms": 16147.220699931495,
+      "total_p95_ms": 20875.810350023672,
+      "degraded_rate": 0.0
+    }
+  },
+  "rerank_p50_ms": 15052.429999923334,
+  "rerank_p95_ms": 15950.220400106626,
+  "per_question": [
+    {
+      "id": "F-P02",
+      "search_ms": 19470,
+      "rerank_ms": 15225,
+      "timed_out": true
+    },
+    {
+      "id": "F-P03",
+      "search_ms": 2216,
+      "rerank_ms": 14956,
+      "timed_out": true
+    },
+    {
+      "id": "F-P04",
+      "search_ms": 778,
+      "rerank_ms": 15932,
+      "timed_out": true
+    },
+    {
+      "id": "F-P05",
+      "search_ms": 803,
+      "rerank_ms": 14822,
+      "timed_out": true
+    },
+    {
+      "id": "F-P06",
+      "search_ms": 1307,
+      "rerank_ms": 15059,
+      "timed_out": true
+    },
+    {
+      "id": "F-P07",
+      "search_ms": 893,
+      "rerank_ms": 15132,
+      "timed_out": true
+    },
+    {
+      "id": "F-P08",
+      "search_ms": 1295,
+      "rerank_ms": 12579,
+      "timed_out": true
+    },
+    {
+      "id": "F-P10",
+      "search_ms": 1324,
+      "rerank_ms": 15457,
+      "timed_out": true
+    },
+    {
+      "id": "F-P11",
+      "search_ms": 1776,
+      "rerank_ms": 13309,
+      "timed_out": true
+    },
+    {
+      "id": "F-P12",
+      "search_ms": 905,
+      "rerank_ms": 15147,
+      "timed_out": true
+    },
+    {
+      "id": "F-A01",
+      "search_ms": 497,
+      "rerank_ms": 15035,
+      "timed_out": true
+    },
+    {
+      "id": "F-A02",
+      "search_ms": 628,
+      "rerank_ms": 15260,
+      "timed_out": true
+    },
+    {
+      "id": "F-A03",
+      "search_ms": 674,
+      "rerank_ms": 14879,
+      "timed_out": true
+    },
+    {
+      "id": "F-A04",
+      "search_ms": 899,
+      "rerank_ms": 14799,
+      "timed_out": true
+    },
+    {
+      "id": "F-A05",
+      "search_ms": 701,
+      "rerank_ms": 15773,
+      "timed_out": true
+    },
+    {
+      "id": "F-A06",
+      "search_ms": 1009,
+      "rerank_ms": 12455,
+      "timed_out": true
+    },
+    {
+      "id": "F-A07",
+      "search_ms": 589,
+      "rerank_ms": 15577,
+      "timed_out": true
+    },
+    {
+      "id": "F-A08",
+      "search_ms": 1109,
+      "rerank_ms": 15571,
+      "timed_out": true
+    },
+    {
+      "id": "F-A09",
+      "search_ms": 1489,
+      "rerank_ms": 14920,
+      "timed_out": true
+    },
+    {
+      "id": "F-A10",
+      "search_ms": 594,
+      "rerank_ms": 15089,
+      "timed_out": true
+    },
+    {
+      "id": "M-01",
+      "search_ms": 809,
+      "rerank_ms": 15292,
+      "timed_out": true
+    },
+    {
+      "id": "M-02",
+      "search_ms": 707,
+      "rerank_ms": 15355,
+      "timed_out": true
+    },
+    {
+      "id": "M-03",
+      "search_ms": 1204,
+      "rerank_ms": 15325,
+      "timed_out": true
+    },
+    {
+      "id": "M-04",
+      "search_ms": 1385,
+      "rerank_ms": 15502,
+      "timed_out": true
+    },
+    {
+      "id": "M-06",
+      "search_ms": 1323,
+      "rerank_ms": 16746,
+      "timed_out": true
+    },
+    {
+      "id": "M-07",
+      "search_ms": 1494,
+      "rerank_ms": 15564,
+      "timed_out": true
+    },
+    {
+      "id": "M-08",
+      "search_ms": 1183,
+      "rerank_ms": 14945,
+      "timed_out": true
+    },
+    {
+      "id": "M-10",
+      "search_ms": 699,
+      "rerank_ms": 13113,
+      "timed_out": true
+    },
+    {
+      "id": "M-11",
+      "search_ms": 1008,
+      "rerank_ms": 14198,
+      "timed_out": true
+    },
+    {
+      "id": "M-12",
+      "search_ms": 1700,
+      "rerank_ms": 15451,
+      "timed_out": true
+    },
+    {
+      "id": "T-01",
+      "search_ms": 8695,
+      "rerank_ms": 13661,
+      "timed_out": true
+    },
+    {
+      "id": "T-02",
+      "search_ms": 2796,
+      "rerank_ms": 14410,
+      "timed_out": true
+    },
+    {
+      "id": "T-04",
+      "search_ms": 2007,
+      "rerank_ms": 14570,
+      "timed_out": true
+    },
+    {
+      "id": "T-05",
+      "search_ms": 989,
+      "rerank_ms": 14745,
+      "timed_out": true
+    },
+    {
+      "id": "T-06",
+      "search_ms": 1506,
+      "rerank_ms": 13402,
+      "timed_out": true
+    },
+    {
+      "id": "V-01",
+      "search_ms": 1296,
+      "rerank_ms": 15046,
+      "timed_out": true
+    },
+    {
+      "id": "V-02",
+      "search_ms": 1010,
+      "rerank_ms": 14704,
+      "timed_out": true
+    },
+    {
+      "id": "V-03",
+      "search_ms": 1498,
+      "rerank_ms": 15108,
+      "timed_out": true
+    },
+    {
+      "id": "V-04",
+      "search_ms": 4503,
+      "rerank_ms": 16295,
+      "timed_out": true
+    },
+    {
+      "id": "V-05",
+      "search_ms": 1222,
+      "rerank_ms": 14156,
+      "timed_out": true
+    }
+  ]
+}
