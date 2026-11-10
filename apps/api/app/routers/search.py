@@ -6,10 +6,11 @@ import time
 from collections.abc import Callable, Iterator
 from typing import Annotated, Literal, TypeVar
 
-from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.background import BackgroundTask
 
 from app.assistant import Assistant, AssistantError, Options, cache, get_assistant
 from app.assistant.agent import ResearchTools
@@ -21,7 +22,7 @@ from app.assistant.rerank import rerank
 from app.assistant.router import wants_research
 from app.assistant.service import with_footer
 from app.config import settings
-from app.db import get_db
+from app.db import SessionLocal, get_db
 from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
 from app.models import Source
@@ -83,6 +84,33 @@ def search(
     return SearchResponse(query=query, results=results)
 
 
+def _shadow_score(query: str, chunks: list, candidates: list) -> None:
+    """Scores the weighted order for the log only, after the response has gone out. It opens its
+    own session (the request's is closed by then) and never raises: a failure is logged as
+    `shadow_score_errors`, apart from the retrieval line, and the caller never sees it."""
+    started = time.monotonic()
+    try:
+        with SessionLocal() as db:
+            rates = state.source_hit_rates(db)
+        ranked = scoring.rank(chunks, query, candidates=candidates, hit_rates=rates)
+        logger.info(
+            "shadow_score %s",
+            json.dumps(
+                {
+                    "query_hash": text_hash(query)[:12],
+                    "shadow_score_ms": round((time.monotonic() - started) * 1000, 2),
+                    "shadow_chosen": [c.symbol_id for c, _ in ranked],
+                    "shadow_final_scores": [round(s, 4) for _, s in ranked],
+                }
+            ),
+        )
+    except Exception:
+        logger.exception(
+            "shadow_score_errors %s",
+            json.dumps({"shadow_score_ms": round((time.monotonic() - started) * 1000, 2)}),
+        )
+
+
 @router.post(
     "/ask",
     response_model=AskResponse,
@@ -108,6 +136,7 @@ def search(
 def ask(
     body: AskRequest,
     request: Request,
+    background: BackgroundTasks,
     db: Annotated[Session, Depends(get_db)],
     embedder: Annotated[Embedder, Depends(get_embedder)],
     mode: Annotated[
@@ -436,21 +465,11 @@ def ask(
             scored = scoring.rank(chunks, query, candidates=fused_order, hit_rates=rates)
             chunks = [c.model_copy(update={"final_score": round(s, 4)}) for c, s in scored]
             timings["rank"] = round(time.monotonic() - ranked_at, 3)
-        # Shadow mode: with the weighted order off, still score it and log it beside the order
-        # actually served, so the two can be compared on real traffic. It changes nothing served.
-        shadow: dict | None = None
-        if not weighted and chunks:
-            try:
-                shadow_rank = scoring.rank(
-                    chunks, query, candidates=fused_order, hit_rates=state.source_hit_rates(db)
-                )
-                shadow = {
-                    "shadow_chosen": [c.symbol_id for c, _ in shadow_rank],
-                    "shadow_final_scores": [round(s, 4) for _, s in shadow_rank],
-                }
-            except Exception:
-                logger.exception("shadow weighted score failed; skipping it")
-                db.rollback()
+        # Shadow mode: with the weighted order off it is still scored, after the response is
+        # sent (see `_shadow_score`), so it never adds to the latency a caller sees.
+        shadow_job = (
+            (lambda: _shadow_score(query, chunks, fused_order)) if not weighted and chunks else None
+        )
         # One line per query: what each stage retrieved and chose, how long it took, what
         # the caches and the budgets did.
         rr = trace.extra.get("rerank") or {}
@@ -472,7 +491,6 @@ def ask(
                     "degraded_reason": trace.reason_code,
                     "relevance": [c.relevance for c in chunks],
                     "weighted": bool(weighted),
-                    **(shadow or {}),
                     "timings": timings,
                     "stage_ms": budget.snapshot(),
                     "budget_breached": budget.first_breach,
@@ -535,7 +553,10 @@ def ask(
                 _event_stream(events),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+                background=BackgroundTask(shadow_job) if shadow_job else None,
             )
+        if shadow_job:
+            background.add_task(shadow_job)
         try:
             response = assistant.answer(question, chunks, body.history, mode, options)
         except AssistantError as error:
