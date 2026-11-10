@@ -1,0 +1,304 @@
+{
+  "summary": {
+    "questions": 25,
+    "found_in_top20": 0.84,
+    "hit@1_given_found": 0.3333333333333333,
+    "hit@1_overall": 0.28,
+    "never_found": 0.16000000000000003,
+    "first_rank_distribution": {
+      "1": 7,
+      "2-5": 13,
+      "6-10": 0,
+      "11-20": 1
+    }
+  },
+  "rows": [
+    {
+      "id": "F-P02",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 3,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=48, end=64)",
+        "Target(file='itsdangerous/signer.py', start=129, end=173)",
+        "Target(file='itsdangerous/serializer.py', start=287, end=307)"
+      ]
+    },
+    {
+      "id": "F-P03",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 1.0,
+      "first_rank": 1,
+      "targets": [
+        "Target(file='wikipedia/en/HMAC', start=94, end=125)",
+        "Target(file='itsdangerous/signer.py', start=40, end=64)"
+      ]
+    },
+    {
+      "id": "F-P04",
+      "retrieved": 20,
+      "recall@20": 0.0,
+      "hit@1": 0.0,
+      "first_rank": null,
+      "targets": [
+        "Target(file='itsdangerous/url_safe.py', start=15, end=69)"
+      ]
+    },
+    {
+      "id": "F-P05",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 3,
+      "targets": [
+        "Target(file='itsdangerous/serializer.py', start=24, end=37)",
+        "Target(file='itsdangerous/serializer.py', start=190, end=234)"
+      ]
+    },
+    {
+      "id": "F-P06",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 2,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=182, end=213)",
+        "Target(file='wikipedia/en/HMAC', start=96, end=99)"
+      ]
+    },
+    {
+      "id": "F-P07",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 2,
+      "targets": [
+        "Target(file='wikipedia/en/HMAC', start=24, end=25)",
+        "Target(file='wikipedia/en/HMAC', start=50, end=57)"
+      ]
+    },
+    {
+      "id": "F-P08",
+      "retrieved": 20,
+      "recall@20": 0.0,
+      "hit@1": 0.0,
+      "first_rank": null,
+      "targets": [
+        "Target(file='itsdangerous/exc.py', start=66, end=89)"
+      ]
+    },
+    {
+      "id": "F-P10",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 4,
+      "targets": [
+        "Target(file='wikipedia/en/HMAC', start=24, end=28)",
+        "Target(file='itsdangerous/signer.py', start=215, end=225)"
+      ]
+    },
+    {
+      "id": "F-P11",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 2,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=182, end=213)"
+      ]
+    },
+    {
+      "id": "F-P12",
+      "retrieved": 20,
+      "recall@20": 0.0,
+      "hit@1": 0.0,
+      "first_rank": null,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=182, end=213)",
+        "Target(file='itsdangerous/timed.py', start=72, end=87)"
+      ]
+    },
+    {
+      "id": "M-01",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 5,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=182, end=213)",
+        "Target(file='wikipedia/en/HMAC', start=35, end=47)"
+      ]
+    },
+    {
+      "id": "M-02",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 1.0,
+      "first_rank": 1,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=24, end=28)",
+        "Target(file='docs.python.org/3/library/hmac.html', start=39, end=55)"
+      ]
+    },
+    {
+      "id": "M-03",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 1.0,
+      "first_rank": 1,
+      "targets": [
+        "Target(file='wikipedia/en/HMAC', start=18, end=23)",
+        "Target(file='itsdangerous/signer.py', start=182, end=213)"
+      ]
+    },
+    {
+      "id": "M-04",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 2,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=40, end=64)",
+        "Target(file='wikipedia/en/HMAC', start=50, end=57)"
+      ]
+    },
+    {
+      "id": "M-06",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 1.0,
+      "first_rank": 1,
+      "targets": [
+        "Target(file='itsdangerous/url_safe.py', start=23, end=69)",
+        "Target(file='itsdangerous/encoding.py', start=20, end=38)"
+      ]
+    },
+    {
+      "id": "M-07",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 3,
+      "targets": [
+        "Target(file='wikipedia/en/HMAC', start=35, end=47)",
+        "Target(file='itsdangerous/signer.py', start=62, end=64)"
+      ]
+    },
+    {
+      "id": "M-08",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 1.0,
+      "first_rank": 1,
+      "targets": [
+        "Target(file='itsdangerous/exc.py', start=7, end=106)",
+        "Target(file='itsdangerous/signer.py', start=244, end=256)",
+        "Target(file='itsdangerous/timed.py', start=137, end=153)",
+        "Target(file='itsdangerous/serializer.py', start=243, end=269)"
+      ]
+    },
+    {
+      "id": "M-10",
+      "retrieved": 20,
+      "recall@20": 0.0,
+      "hit@1": 0.0,
+      "first_rank": null,
+      "targets": [
+        "Target(file='wikipedia/en/HMAC', start=24, end=28)",
+        "Target(file='itsdangerous/url_safe.py', start=55, end=69)",
+        "Target(file='itsdangerous/encoding.py', start=20, end=25)"
+      ]
+    },
+    {
+      "id": "M-11",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 2,
+      "targets": [
+        "Target(file='docs.python.org/3/library/hmac.html', start=5, end=7)",
+        "Target(file='itsdangerous/signer.py', start=48, end=64)"
+      ]
+    },
+    {
+      "id": "M-12",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 3,
+      "targets": [
+        "Target(file='docs.python.org/3/library/hmac.html', start=77, end=85)",
+        "Target(file='itsdangerous/signer.py', start=24, end=28)",
+        "Target(file='itsdangerous/signer.py', start=227, end=242)"
+      ]
+    },
+    {
+      "id": "T-01",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 11,
+      "targets": [
+        "Target(file='itsdangerous/timed.py', start=185, end=220)",
+        "Target(file='itsdangerous/timed.py', start=177, end=180)",
+        "Target(file='itsdangerous/timed.py', start=72, end=158)",
+        "Target(file='itsdangerous/signer.py', start=244, end=256)",
+        "Target(file='itsdangerous/signer.py', start=227, end=242)",
+        "Target(file='itsdangerous/url_safe.py', start=23, end=53)",
+        "Target(file='itsdangerous/serializer.py', start=243, end=269)"
+      ]
+    },
+    {
+      "id": "T-02",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 2,
+      "targets": [
+        "Target(file='itsdangerous/serializer.py', start=309, end=320)",
+        "Target(file='itsdangerous/serializer.py', start=271, end=285)",
+        "Target(file='itsdangerous/signer.py', start=222, end=225)",
+        "Target(file='itsdangerous/signer.py', start=215, end=220)",
+        "Target(file='itsdangerous/signer.py', start=62, end=64)"
+      ]
+    },
+    {
+      "id": "T-04",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 1.0,
+      "first_rank": 1,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=258, end=266)",
+        "Target(file='itsdangerous/signer.py', start=244, end=256)",
+        "Target(file='itsdangerous/signer.py', start=227, end=242)"
+      ]
+    },
+    {
+      "id": "T-05",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 1.0,
+      "first_rank": 1,
+      "targets": [
+        "Target(file='itsdangerous/serializer.py', start=349, end=395)",
+        "Target(file='itsdangerous/timed.py', start=222, end=228)"
+      ]
+    },
+    {
+      "id": "T-06",
+      "retrieved": 20,
+      "recall@20": 1.0,
+      "hit@1": 0.0,
+      "first_rank": 4,
+      "targets": [
+        "Target(file='itsdangerous/signer.py', start=215, end=220)",
+        "Target(file='itsdangerous/signer.py', start=182, end=213)",
+        "Target(file='itsdangerous/signer.py', start=62, end=64)"
+      ]
+    }
+  ]
+}
