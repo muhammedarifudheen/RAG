@@ -158,7 +158,9 @@ def seed(session: Session) -> None:
     embedder = FakeEmbedder()
     session.execute(text("TRUNCATE TABLE edges, symbols, files, sources RESTART IDENTITY CASCADE"))
 
-    repo = Source(kind="repo", key="repo:acme/pkg", title="acme/pkg", url="https://github.com/acme/pkg")
+    repo = Source(
+        kind="repo", key="repo:acme/pkg", title="acme/pkg", url="https://github.com/acme/pkg"
+    )
     article = Source(
         kind="wikipedia",
         key="wikipedia:en:alan turing",
@@ -168,14 +170,21 @@ def seed(session: Session) -> None:
     session.add_all([repo, article])
     session.flush()
 
-    documents = [(repo.id, path, "python", content, symbols) for path, (content, symbols) in FILES.items()]
+    documents = [
+        (repo.id, path, "python", content, symbols) for path, (content, symbols) in FILES.items()
+    ]
     documents.append((article.id, ARTICLE_PATH, "text", ARTICLE, ARTICLE_SECTIONS))
 
     ids: dict[str, int] = {}
     for source_id, path, language, content, symbols in documents:
         loc = len(content.splitlines())
         file = File(
-            source_id=source_id, path=path, language=language, hash="0" * 64, loc=loc, content=content
+            source_id=source_id,
+            path=path,
+            language=language,
+            hash="0" * 64,
+            loc=loc,
+            content=content,
         )
         session.add(file)
         session.flush()

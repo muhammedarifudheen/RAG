@@ -155,4 +155,3 @@ def smoothed_hit_rate(up: int, down: int) -> float:
     """A source's precision from the thumbs on answers that used it, with Laplace smoothing
     so a single vote does not decide: (up + 1) / (up + down + 2)."""
     return (up + 1) / (up + down + 2)
-

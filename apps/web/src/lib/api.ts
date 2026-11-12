@@ -537,11 +537,22 @@ export function askGraph(q: string): Promise<KgGraph> {
 }
 
 /** Rates an answer: up, or down with a reason (it then counts among the failing). */
-export async function sendFeedback(question: string, rating: "up" | "down", reason?: string): Promise<void> {
+export async function sendFeedback(
+  question: string,
+  rating: "up" | "down",
+  reason?: string,
+  hashes?: { query_hash?: string | null; answer_hash?: string | null },
+): Promise<void> {
   const response = await fetch(`${API_BASE}/feedback`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ question, rating, reason: reason || null }),
+    body: JSON.stringify({
+      question,
+      rating,
+      reason: reason || null,
+      query_hash: hashes?.query_hash ?? null,
+      answer_hash: hashes?.answer_hash ?? null,
+    }),
   });
   if (!response.ok) throw await errorFrom(response);
 }

@@ -233,7 +233,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
           {response.footer}
         </p>
       )}
-      {response.complete && response.route !== "image" && <Feedback question={response.question} />}
+      {response.complete && response.route !== "image" && <Feedback question={response.question} queryHash={response.query_hash} answerHash={response.answer_hash} />}
 
       {!response.complete && (
         <p className="mt-3 text-xs text-warn">This answer was cut off at the length limit.</p>
@@ -1043,13 +1043,13 @@ function CodePre({ node, children }: { node?: unknown; children?: ReactNode }) {
 
 /** 👍 or 👎 on an answer; a 👎 asks why. Both go to the answer log, where thumbs down
  * join the failing questions on the Insights page. */
-function Feedback({ question }: { question: string }) {
+function Feedback({ question, queryHash, answerHash }: { question: string; queryHash?: string | null; answerHash?: string | null }) {
   const [state, setState] = useState<"idle" | "why" | "sent" | "failed">("idle");
   const [reason, setReason] = useState("");
 
   async function send(rating: "up" | "down", why?: string) {
     try {
-      await sendFeedback(question, rating, why);
+      await sendFeedback(question, rating, why, { query_hash: queryHash, answer_hash: answerHash });
       setState("sent");
     } catch {
       setState("failed");

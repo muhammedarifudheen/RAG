@@ -91,7 +91,9 @@ def test_unexpected_errors_do_not_leak_details(plain_client, monkeypatch):
 
     response = plain_client.post("/ingest", json={"url": REPO})
 
-    assert events(response.text) == [("error", {"message": "Ingestion failed; see the server log."})]
+    assert events(response.text) == [
+        ("error", {"message": "Ingestion failed; see the server log."})
+    ]
 
 
 def test_the_lock_is_released_after_success_and_after_failure(plain_client, pipeline, monkeypatch):
@@ -166,7 +168,8 @@ def uploads(monkeypatch):
 
 def test_an_uploaded_file_is_ingested_and_progress_streamed(plain_client, uploads):
     response = plain_client.post(
-        "/ingest/upload", files={"file": ("My Notes.md", b"# Notes\n\nSome text.\n", "text/markdown")}
+        "/ingest/upload",
+        files={"file": ("My Notes.md", b"# Notes\n\nSome text.\n", "text/markdown")},
     )
 
     assert response.status_code == 200

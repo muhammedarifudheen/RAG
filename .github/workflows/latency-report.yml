@@ -39,3 +39,17 @@ jobs:
             echo "| --- | --- | --- | --- | --- | --- | --- |"
             jq -r '.rows[] | "| \(.stage) | \(.breached) | \(.breached_pct) | \(.first_breach) | \(.p50_ms) | \(.p95_ms) | \(.budget_ms) |"' budget.json
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Shadow ranking against thumbs
+        run: |
+          if [ -z "$TOKEN" ]; then exit 0; fi
+          curl -fsS --max-time 60 -H "Authorization: Bearer $TOKEN" \
+            "$API/analytics?metric=shadow&window=7" -o shadow.json
+          {
+            echo
+            echo "## Weighted (shadow) order against thumbs, last 7 days"
+            jq -r '.summary | "\(.answers_with_shadow) answers scored in shadow, \(.orders_differ) where the order differs, \(.rated) rated.\n\n**\(.reading)**\n\n_\(.note)_"' shadow.json
+            echo
+            echo "| Group | Rated | Thumbs down | Down rate | 95% interval |"
+            echo "| --- | --- | --- | --- | --- |"
+            jq -r '.rows[] | "| \(.group) | \(.rated // "") | \(.thumbs_down // "") | \(.down_rate // "n/a") | \(.ci95 // "n/a") |"' shadow.json
+          } >> "$GITHUB_STEP_SUMMARY"

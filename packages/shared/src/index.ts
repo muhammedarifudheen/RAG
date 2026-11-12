@@ -372,6 +372,9 @@ export interface AskResponse {
   degraded_reason?: string | null;
   /** Why it degraded, one short reason per stage. */
   degraded_reasons?: string[];
+  /** Name the query and this answer's text when rating it (POST /feedback). */
+  query_hash?: string | null;
+  answer_hash?: string | null;
   /** How current the answer's sources are: the freshest it used. */
   freshness?: AnswerFreshness | null;
   /** What was redacted from the answer (kinds, never values): "API key", "email", "link"… */

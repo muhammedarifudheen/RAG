@@ -70,7 +70,9 @@ def test_top_k_defaults_to_8(client, answerer):
 
 
 def test_citations_must_fall_inside_a_chunks_lines(client, answerer):
-    answerer.reply = "Wide [pkg/models.py:1-200], narrow [pkg/models.py:21-21], bare [pkg/models.py:20]."
+    answerer.reply = (
+        "Wide [pkg/models.py:1-200], narrow [pkg/models.py:21-21], bare [pkg/models.py:20]."
+    )
 
     citations = client.post("/ask", json={"question": QUESTION, "top_k": 1}).json()["citations"]
 
@@ -114,14 +116,14 @@ def test_every_way_of_listing_several_places_is_understood(client, answerer):
 def test_a_range_across_two_shown_excerpts_is_verified(client, answerer):
     # With top_k=8, models.py is shown as several excerpts: User.label (16-17) and
     # format_name (20-21) among them, but not lines 18-19 in between.
-    answerer.reply = "Across [pkg/models.py:16-17] and [pkg/models.py:20-21]; not [pkg/models.py:16-21]."
+    answerer.reply = (
+        "Across [pkg/models.py:16-17] and [pkg/models.py:20-21]; not [pkg/models.py:16-21]."
+    )
 
     body = client.post("/ask", json={"question": "user label format name", "top_k": 8}).json()
     shown = {(c["file"], c["start_line"], c["snippet_end_line"]) for c in body["chunks"]}
     assert ("pkg/models.py", 16, 17) in shown and ("pkg/models.py", 20, 21) in shown
-    lines_18_19_shown = any(
-        f == "pkg/models.py" and s <= 18 and e >= 19 for f, s, e in shown
-    )
+    lines_18_19_shown = any(f == "pkg/models.py" and s <= 18 and e >= 19 for f, s, e in shown)
 
     verified = {c["ref"]: c["verified"] for c in body["citations"]}
     assert verified["[pkg/models.py:16-17]"] is True

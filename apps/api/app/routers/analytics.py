@@ -1,10 +1,11 @@
 """Analytics: the user's verdict on an answer, and the answer log queried."""
 
-from typing import Annotated, Literal
+from datetime import UTC, datetime
+from typing import Annotated, Literal, Self
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from fastapi.responses import PlainTextResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -21,35 +22,63 @@ router = APIRouter(
 )
 
 Metric = Literal[
-    "top_questions", "failing", "gaps", "slowest", "sources", "drift", "feedback", "budget"
+    "top_questions",
+    "failing",
+    "gaps",
+    "slowest",
+    "sources",
+    "drift",
+    "feedback",
+    "budget",
+    "shadow",
 ]
 
 
 class Feedback(BaseModel):
-    question: str = Field(min_length=1, max_length=2000)
+    """Names the answer by `answer_hash` (best), else the query by `query_hash`, else the
+    `question` text (the original contract, still accepted)."""
+
+    question: str | None = Field(default=None, min_length=1, max_length=2000)
+    query_hash: str | None = Field(default=None, max_length=64)
+    answer_hash: str | None = Field(default=None, max_length=64)
     rating: Literal["up", "down"]
     reason: str | None = Field(default=None, max_length=500)
     chat: str | None = Field(default=None, max_length=64)
+
+    @model_validator(mode="after")
+    def names_something(self) -> Self:
+        if not (self.question or self.query_hash or self.answer_hash):
+            raise ValueError("give an answer_hash, a query_hash or the question")
+        return self
 
 
 @router.post(
     "/feedback",
     status_code=204,
     summary="Rate an answer",
-    responses={404: {"description": "No logged answer to that question."}},
+    responses={404: {"description": "No logged answer matches."}},
     dependencies=[Depends(require_write_key)],
 )
 def feedback(body: Feedback, db: Annotated[Session, Depends(get_db)]) -> Response:
-    """👍 or 👎 (with a reason) on the latest answer to `question` (in `chat`, if given).
+    """👍 or 👎 (with a reason) on one answer: by `answer_hash`, else the latest answer with
+    `query_hash`, else the latest to `question` (in `chat`, if given). The rating is stored
+    with the chunk orders served and scored in shadow, so ratings can be compared by order.
     Thumbs down feed the failing-questions list."""
-    query = select(AnswerLog).where(AnswerLog.question == body.question.strip()[:2000])
+    query = select(AnswerLog)
+    if body.answer_hash:
+        query = query.where(AnswerLog.answer_hash == body.answer_hash)
+    elif body.query_hash:
+        query = query.where(AnswerLog.query_hash == body.query_hash)
+    else:
+        query = query.where(AnswerLog.question == (body.question or "").strip()[:2000])
     if body.chat:
         query = query.where(AnswerLog.chat_id == body.chat)
     row = db.scalars(query.order_by(AnswerLog.id.desc())).first()
     if row is None:
-        raise HTTPException(404, "No logged answer to that question.")
+        raise HTTPException(404, "No logged answer matches.")
     row.feedback = 1 if body.rating == "up" else -1
     row.feedback_reason = (body.reason or "").strip() or None
+    row.feedback_at = datetime.now(UTC)
     db.commit()
     return Response(status_code=204)
 

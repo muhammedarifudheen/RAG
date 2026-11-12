@@ -72,6 +72,13 @@ RATES_TTL = 600.0
 RATES_WINDOW_DAYS = 90
 
 
+def cached_hit_rates() -> dict[int, float]:
+    """The source hit rates if they are cached, else none (neutral). Never touches the database,
+    so it is safe in the request path."""
+    with _rates_lock:
+        return _rates[1] if _rates is not None else {}
+
+
 def source_hit_rates(db: Session) -> dict[int, float]:
     """Each source's historical precision, from the thumbs on answers that used it
     (smoothed; a source with no votes is absent, which ranking reads as neutral). Kept for

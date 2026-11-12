@@ -11,7 +11,9 @@ REPO = "https://github.com/pallets/itsdangerous"
 def locked(monkeypatch):
     monkeypatch.setattr(settings, "admin_token", TOKEN)
     monkeypatch.setattr(
-        ingest, "run_ingest", lambda url, kind, max_pages, progress: {"files": 1, "symbols": 1, "edges": 0}
+        ingest,
+        "run_ingest",
+        lambda url, kind, max_pages, progress: {"files": 1, "symbols": 1, "edges": 0},
     )
     monkeypatch.setattr(
         ingest, "run_upload", lambda path, name, progress: {"files": 1, "symbols": 1, "edges": 0}
@@ -38,7 +40,9 @@ def test_config_reports_whether_admin_and_chat_are_set_up(plain_client, monkeypa
     assert plain_client.get("/config").json()["chat_configured"] is False
 
 
-@pytest.mark.parametrize("headers", [{}, auth("wrong"), {"Authorization": TOKEN}, auth(TOKEN + " ")])
+@pytest.mark.parametrize(
+    "headers", [{}, auth("wrong"), {"Authorization": TOKEN}, auth(TOKEN + " ")]
+)
 def test_managing_sources_is_refused_without_the_right_token(plain_client, locked, headers):
     responses = [
         plain_client.post("/admin/check", headers=headers),

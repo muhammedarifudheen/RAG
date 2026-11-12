@@ -559,6 +559,12 @@ class AskResponse(BaseModel):
     degraded_reasons: list[str] = Field(
         default=[], description="Why it degraded: one short reason per stage, for the chip."
     )
+    query_hash: str | None = Field(
+        default=None, description="Names the query when rating it (POST /feedback)."
+    )
+    answer_hash: str | None = Field(
+        default=None, description="Names this answer's final text when rating it."
+    )
     freshness: AnswerFreshness | None = Field(
         default=None,
         description="How current the answer's sources are: the freshest it used. A stale "

@@ -44,6 +44,13 @@ class AnswerLog(Base):
     # Per-query pipeline stats: {"stage_ms": {...}, "breaches": [...], "budget_breached",
     # "degraded", "degraded_reason", "latency_ms"}. What the weekly latency report reads.
     stats: Mapped[dict | None] = mapped_column(JSONB)
+    # Names the query and the answer text, so a thumb can say which one it rates, and the chunk
+    # orders served (legacy) and scored in shadow (weighted): {"legacy_chosen", "shadow_chosen",
+    # "shadow_final_scores", "differs", "shadow_score_ms"}. When the thumb was given.
+    query_hash: Mapped[str | None] = mapped_column(Text, index=True)
+    answer_hash: Mapped[str | None] = mapped_column(Text, index=True)
+    ranking: Mapped[dict | None] = mapped_column(JSONB)
+    feedback_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class KnowledgeSignal(Base):

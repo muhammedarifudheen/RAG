@@ -44,6 +44,7 @@ from app.schemas import (
     WebSource,
 )
 from app.security import Redactor, injection, redact
+from app.services.audit import text_hash
 from app.services.freshness import answer_freshness, stale_warning
 from app.services.search import extract_citations, tidy_citations
 
@@ -168,6 +169,7 @@ class Options:
     degraded: Sequence[str] = ()  # retrieval stages that gave way (too slow or failed)
     degraded_reason: str | None = None  # a short code for the main one, e.g. rerank_timeout
     budget: Budget | None = None  # this query's stage times against the latency budget
+    ranking: dict | None = None  # served and shadow (weighted) chunk orders, for feedback
     about_sources: bool = False  # the question names the user's sources or their code
     grounded: bool = False  # only from the knowledge base: no general knowledge, no web
     allowed_hosts: frozenset[str] | None = None  # grounded: links only to these hosts
@@ -1803,11 +1805,16 @@ def with_footer(data: dict, options: Options | None) -> dict:
     )
     if licences:
         footer += f" [license: {', '.join(licences)}]"
+    ranking = options.ranking if options else None
     return {
         **data,
         "mode": options.mode if options else "ASK",
         "latency_ms": latency,
         "footer": footer,
+        # What a 👍/👎 names: the query and the final answer text, and the two chunk orders.
+        "query_hash": (ranking or {}).get("query_hash") or text_hash(data.get("question")),
+        "answer_hash": text_hash(data.get("answer")),
+        **({"ranking": ranking} if ranking else {}),
     }
 
 

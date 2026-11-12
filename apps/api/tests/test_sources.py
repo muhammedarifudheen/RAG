@@ -27,7 +27,11 @@ def test_removing_a_source_removes_only_that_source(client, db):
     db.add(source)
     db.flush()
     file = File(
-        source_id=source.id, path="uploads/scratch.txt", language="text", hash="0" * 64, loc=1,
+        source_id=source.id,
+        path="uploads/scratch.txt",
+        language="text",
+        hash="0" * 64,
+        loc=1,
         content="Scratch text.\n",
     )
     db.add(file)

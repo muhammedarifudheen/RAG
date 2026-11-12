@@ -383,7 +383,9 @@ and what to do about it.
 knowledge base; cite it like any excerpt."""
 
 
-def research_protocol(external: Sequence[str] = (), graph: bool = False, system: bool = False) -> str:
+def research_protocol(
+    external: Sequence[str] = (), graph: bool = False, system: bool = False
+) -> str:
     """The tool protocol, with the knowledge graph, Atlas's own analytics, health and
     fetch, and the external MCP tools the agent may also call."""
     protocol = f"{RESEARCH_PROTOCOL}\n{GRAPH_TOOL}" if graph else RESEARCH_PROTOCOL

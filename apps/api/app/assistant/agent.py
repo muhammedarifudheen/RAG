@@ -58,7 +58,9 @@ class Action:
         if self.tool == "mcp":
             return f"{self.name} {json.dumps(self.arguments)[:200]}"
         if self.tool in ("analytics", "fetch"):
-            return f"{self.name} {json.dumps(self.arguments)[:200]}" if self.arguments else self.name
+            return (
+                f"{self.name} {json.dumps(self.arguments)[:200]}" if self.arguments else self.name
+            )
         if self.tool == "health":
             return "the knowledge base"
         if self.tool == "graph":
@@ -100,7 +102,9 @@ def parse_action(reply: str) -> Action | None:
             except (TypeError, ValueError):
                 window = 7
             found = str(data.get("filter") or "").strip() or None
-            return Action("analytics", name=metric[:40], arguments={"window": window, "filter": found})
+            return Action(
+                "analytics", name=metric[:40], arguments={"window": window, "filter": found}
+            )
         elif tool == "health":
             return Action("health")
         elif tool == "fetch":

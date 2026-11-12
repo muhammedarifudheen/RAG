@@ -9,6 +9,8 @@ Metrics:
 - drift: week over week, the hit rate (answers with a checked citation), latency,
   faithfulness (checked / all citations) and approval (thumbs up / all feedback);
 - feedback: the thumbs, with their reasons;
+- shadow: for answers whose served (legacy) chunk order differs from the shadow (weighted) one,
+  whether thumbs down are more common than where the two agree (see `shadow_report`);
 - budget: the latency budget: how many answers degraded, and per stage how often it was the
   first to breach and its median and 95th-percentile time (where to optimise first).
 `filter` narrows by mode or state ("mode:ASK", "state:absent") or by words in the
@@ -101,6 +103,8 @@ def query(
             "summary": _budget_summary(rows),
             "rows": _budget_stages(rows)[:limit],
         }
+    elif metric == "shadow":
+        return {"metric": metric, "window": window, "filter": filter, **shadow_report(rows)}
     elif metric == "slowest":
         timed = sorted((r for r in rows if r.latency_ms), key=lambda r: -r.latency_ms)
         out = [
@@ -120,6 +124,82 @@ def query(
             for r in rated[:limit]
         ]
     return {"metric": metric, "window": window, "filter": filter, "rows": out}
+
+
+# Fewest rated answers in each group before a difference in thumbs down is worth reading.
+MIN_RATED_PER_GROUP = 30
+
+
+def _wilson(down: int, n: int, z: float = 1.96) -> tuple[float, float]:
+    if n == 0:
+        return 0.0, 0.0
+    p = down / n
+    centre = (p + z * z / (2 * n)) / (1 + z * z / n)
+    half = z * ((p * (1 - p) / n + z * z / (4 * n * n)) ** 0.5) / (1 + z * z / n)
+    return centre - half, centre + half
+
+
+def shadow_report(rows: list[AnswerLog]) -> dict:
+    """Do thumbs down differ between answers where the shadow (weighted) chunk order differs from
+    the one served and answers where they agree? Both groups were served the legacy order, so this
+    says whether disagreement goes with worse ratings (room for ranking to matter), not that the
+    shadow order would have been better. The difference is a Newcombe 95% interval; below
+    `MIN_RATED_PER_GROUP` rated answers in a group, it says there is too little to read."""
+    with_shadow = [r for r in rows if r.ranking and "differs" in r.ranking]
+    groups = {"differs": [], "agrees": []}
+    for r in with_shadow:
+        if r.feedback:
+            groups["differs" if r.ranking["differs"] else "agrees"].append(r)
+    stats = {}
+    for name, members in groups.items():
+        down = sum(1 for r in members if r.feedback < 0)
+        low, high = _wilson(down, len(members))
+        stats[name] = {
+            "rated": len(members),
+            "thumbs_down": down,
+            "down_rate": round(down / len(members), 3) if members else None,
+            "ci95": [round(low, 3), round(high, 3)] if members else None,
+        }
+    d, a = stats["differs"], stats["agrees"]
+    delta = interval = None
+    if d["rated"] and a["rated"]:
+        pd_, pa = d["down_rate"], a["down_rate"]
+        dl, dh = _wilson(d["thumbs_down"], d["rated"])
+        al, ah = _wilson(a["thumbs_down"], a["rated"])
+        delta = round(pd_ - pa, 3)
+        interval = [
+            round(delta - ((pd_ - dl) ** 2 + (ah - pa) ** 2) ** 0.5, 3),
+            round(delta + ((dh - pd_) ** 2 + (pa - al) ** 2) ** 0.5, 3),
+        ]
+    enough = d["rated"] >= MIN_RATED_PER_GROUP and a["rated"] >= MIN_RATED_PER_GROUP
+    if not enough:
+        reading = (
+            f"Too few rated answers to read (need {MIN_RATED_PER_GROUP} in each group; have "
+            f"{d['rated']} where the orders differ and {a['rated']} where they agree). "
+            "Do not draw a conclusion."
+        )
+    elif interval[0] > 0:
+        reading = "Thumbs down are more common where the orders differ: ranking matters there."
+    elif interval[1] < 0:
+        reading = "Thumbs down are less common where the orders differ."
+    else:
+        reading = "No difference in thumbs down that the data can tell from chance."
+    return {
+        "summary": {
+            "answers_with_shadow": len(with_shadow),
+            "orders_differ": sum(1 for r in with_shadow if r.ranking["differs"]),
+            "rated": d["rated"] + a["rated"],
+            "enough_to_read": enough,
+            "reading": reading,
+            "note": "All of these were served the legacy order. This does not show the shadow "
+            "order would have been rated better.",
+        },
+        "rows": [
+            {"group": "orders differ", **d},
+            {"group": "orders agree", **a},
+            {"group": "difference (differs minus agrees)", "down_rate": delta, "ci95": interval},
+        ],
+    }
 
 
 def _percentile(values: list[float], pct: float) -> float:

@@ -166,7 +166,9 @@ def test_truncation_and_thought_parts():
         {
             "candidates": [
                 {
-                    "content": {"parts": [{"text": "planning", "thought": True}, {"text": "Answer."}]},
+                    "content": {
+                        "parts": [{"text": "planning", "thought": True}, {"text": "Answer."}]
+                    },
                     "finishReason": "STOP",
                 }
             ]

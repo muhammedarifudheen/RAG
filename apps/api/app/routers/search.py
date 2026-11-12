@@ -84,31 +84,43 @@ def search(
     return SearchResponse(query=query, results=results)
 
 
-def _shadow_score(query: str, chunks: list, candidates: list) -> None:
-    """Scores the weighted order for the log only, after the response has gone out. It opens its
-    own session (the request's is closed by then) and never raises: a failure is logged as
-    `shadow_score_errors`, apart from the retrieval line, and the caller never sees it."""
+def _shadow_rank(query: str, chunks: list, candidates: list) -> dict | None:
+    """The weighted order of the chunks being served, for the log and the feedback link only.
+    It reads the cached source hit rates (no database), takes well under a millisecond, and
+    never raises: a failure is logged as `shadow_score_errors`, apart from the retrieval line."""
     started = time.monotonic()
     try:
-        with SessionLocal() as db:
-            rates = state.source_hit_rates(db)
-        ranked = scoring.rank(chunks, query, candidates=candidates, hit_rates=rates)
-        logger.info(
-            "shadow_score %s",
-            json.dumps(
-                {
-                    "query_hash": text_hash(query)[:12],
-                    "shadow_score_ms": round((time.monotonic() - started) * 1000, 2),
-                    "shadow_chosen": [c.symbol_id for c, _ in ranked],
-                    "shadow_final_scores": [round(s, 4) for _, s in ranked],
-                }
-            ),
+        ranked = scoring.rank(
+            chunks, query, candidates=candidates, hit_rates=state.cached_hit_rates()
         )
     except Exception:
-        logger.exception(
-            "shadow_score_errors %s",
-            json.dumps({"shadow_score_ms": round((time.monotonic() - started) * 1000, 2)}),
-        )
+        logger.exception("shadow_score_errors")
+        return None
+    elapsed = round((time.monotonic() - started) * 1000, 3)
+    legacy = [c.symbol_id for c in chunks]
+    shadow = [c.symbol_id for c, _ in ranked]
+    logger.info(
+        "shadow_score %s",
+        json.dumps({"query_hash": text_hash(query)[:12], "shadow_score_ms": elapsed}),
+    )
+    return {
+        "query_hash": text_hash(query)[:12],
+        "legacy_chosen": legacy,
+        "shadow_chosen": shadow,
+        "shadow_final_scores": [round(s, 4) for _, s in ranked],
+        "differs": legacy != shadow,
+        "shadow_score_ms": elapsed,
+    }
+
+
+def _warm_hit_rates() -> None:
+    """After the response: refreshes the cached source hit rates with a session of its own
+    (the request's is closed by then). A failure is logged apart and never raised."""
+    try:
+        with SessionLocal() as db:
+            state.source_hit_rates(db)
+    except Exception:
+        logger.exception("shadow_score_errors (hit rates)")
 
 
 @router.post(
@@ -465,11 +477,10 @@ def ask(
             scored = scoring.rank(chunks, query, candidates=fused_order, hit_rates=rates)
             chunks = [c.model_copy(update={"final_score": round(s, 4)}) for c, s in scored]
             timings["rank"] = round(time.monotonic() - ranked_at, 3)
-        # Shadow mode: with the weighted order off it is still scored, after the response is
-        # sent (see `_shadow_score`), so it never adds to the latency a caller sees.
-        shadow_job = (
-            (lambda: _shadow_score(query, chunks, fused_order)) if not weighted and chunks else None
-        )
+        # Shadow mode: with the weighted order off it is still scored (in memory, well under a
+        # millisecond) so the feedback link can compare it with the order served. Only the
+        # database refresh of its source rates waits until after the response.
+        ranking = _shadow_rank(query, chunks, fused_order) if not weighted and chunks else None
         # One line per query: what each stage retrieved and chose, how long it took, what
         # the caches and the budgets did.
         rr = trace.extra.get("rerank") or {}
@@ -503,6 +514,7 @@ def ask(
             degraded=tuple(trace.degraded),
             degraded_reason=trace.reason_code,
             budget=budget,
+            ranking=ranking,
             attachments=body.attachments,
             style=body.style,
             temperature=body.temperature,
@@ -553,10 +565,9 @@ def ask(
                 _event_stream(events),
                 media_type="text/event-stream",
                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
-                background=BackgroundTask(shadow_job) if shadow_job else None,
+                background=BackgroundTask(_warm_hit_rates),
             )
-        if shadow_job:
-            background.add_task(shadow_job)
+        background.add_task(_warm_hit_rates)
         try:
             response = assistant.answer(question, chunks, body.history, mode, options)
         except AssistantError as error:

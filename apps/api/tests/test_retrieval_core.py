@@ -689,15 +689,3 @@ def test_the_weekly_budget_metric_counts_degraded_and_the_top_breached_stages():
     assert stages[0]["breached"] == 2 and stages[1]["breached"] == 1
     assert stages[1]["first_breach"] == 1
     assert stages[0]["p50_ms"] == 500 and stages[0]["budget_ms"] == 80
-
-
-def test_a_shadow_scoring_failure_is_logged_apart_and_never_raised(monkeypatch, caplog):
-    from app.routers import search as search_router
-
-    def broken():
-        raise RuntimeError("no database")
-
-    monkeypatch.setattr(search_router, "SessionLocal", broken)
-    with caplog.at_level("ERROR"):
-        search_router._shadow_score("q", [], [])  # must not raise
-    assert any("shadow_score_errors" in r.getMessage() for r in caplog.records)

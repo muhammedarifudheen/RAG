@@ -75,6 +75,9 @@ def log_answer(
             mode=data.get("mode"),
             latency_ms=data.get("latency_ms"),
             stats=query_stats(data),
+            query_hash=data.get("query_hash"),
+            answer_hash=data.get("answer_hash"),
+            ranking=data.get("ranking"),
             retrieved=[
                 {
                     "file": c["file"],
