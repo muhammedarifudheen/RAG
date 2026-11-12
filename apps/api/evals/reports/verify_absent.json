@@ -1,0 +1,1091 @@
+{
+  "F-A01": {
+    "question": "How do I revoke a signed token before it expires?",
+    "max_cosine": 0.545,
+    "any_over_0.80": false,
+    "grep_matches": 0,
+    "grep": [],
+    "variants": [
+      {
+        "variant": "How do I revoke a signed token before it expires?",
+        "best_cosine": 0.486,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/timed.py:205",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:349 (9.2)",
+          "serializer.py:355 (7.7)",
+          "HMAC:49 (7.5)"
+        ],
+        "search_top3": [
+          "exc.py:41 (0.44)",
+          "timed.py:160 (0.40)",
+          "test_timed.py:78 (0.40)"
+        ]
+      },
+      {
+        "variant": "invalidate a signed token before expiry",
+        "best_cosine": 0.545,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/timed.py:133",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_signer.py:91 (4.5)",
+          "signer.py:37 (4.4)",
+          "exc.py:55 (4.4)"
+        ],
+        "search_top3": [
+          "timed.py:160 (0.51)",
+          "exc.py:41 (0.50)",
+          "timed.py:185 (0.47)"
+        ]
+      },
+      {
+        "variant": "token revocation blacklist itsdangerous",
+        "best_cosine": 0.42,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_timed.py:7 (4.5)",
+          "test_signer.py:1 (4.4)",
+          "test_serializer.py:13 (4.4)"
+        ],
+        "search_top3": [
+          "serializer.py:287 (0.40)",
+          "test_serializer.py:101 (0.39)",
+          "serializer.py:174 (0.38)"
+        ]
+      },
+      {
+        "variant": "cancel a previously issued signature",
+        "best_cosine": 0.495,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/timed.py:49",
+        "over_0.80": false,
+        "bm25_top3": [
+          "exc.py:61 (4.1)",
+          "test_signer.py:109 (4.1)",
+          "test_signer.py:103 (3.6)"
+        ],
+        "search_top3": [
+          "signer.py:20 (0.42)",
+          "signer.py:244 (0.41)",
+          "timed.py:72 (0.39)"
+        ]
+      },
+      {
+        "variant": "make a signed value stop working early",
+        "best_cosine": 0.517,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/timed.py:145",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_serializer.py:91 (7.7)",
+          "test_serializer.py:97 (7.0)",
+          "serializer.py:307 (6.4)"
+        ],
+        "search_top3": [
+          "timed.py:160 (0.45)",
+          "timed.py:185 (0.44)",
+          "timed.py:72 (0.43)"
+        ]
+      }
+    ]
+  },
+  "F-A02": {
+    "question": "How do I use itsdangerous with Flask sessions?",
+    "max_cosine": 0.584,
+    "any_over_0.80": false,
+    "grep_matches": 1,
+    "grep": [
+      "'flask' conf.py:35: html_theme = \"flask\""
+    ],
+    "variants": [
+      {
+        "variant": "How do I use itsdangerous with Flask sessions?",
+        "best_cosine": 0.555,
+        "best_window": "pallets/itsdangerous/docs/conf.py:25",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:349 (9.7)",
+          "conf.py:25 (9.1)",
+          "conf.py:31 (9.1)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.49)",
+          "signer.py:56 (0.47)",
+          "test_timed.py:18 (0.42)"
+        ]
+      },
+      {
+        "variant": "itsdangerous flask session cookie signing",
+        "best_cosine": 0.46,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:97",
+        "over_0.80": false,
+        "bm25_top3": [
+          "conf.py:25 (9.1)",
+          "conf.py:31 (9.1)",
+          "signer.py:121 (4.8)"
+        ],
+        "search_top3": [
+          "signer.py:222 (0.50)",
+          "timed.py:45 (0.49)",
+          "test_signer.py:27 (0.49)"
+        ]
+      },
+      {
+        "variant": "flask secure cookie session serializer",
+        "best_cosine": 0.397,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:97",
+        "over_0.80": false,
+        "bm25_top3": [
+          "hmac.html:85 (7.0)",
+          "conf.py:25 (5.7)",
+          "conf.py:31 (5.4)"
+        ],
+        "search_top3": [
+          "serializer.py:40 (0.46)",
+          "serializer.py:278 (0.41)",
+          "test_serializer.py:155 (0.40)"
+        ]
+      },
+      {
+        "variant": "use signer with flask app secret key",
+        "best_cosine": 0.584,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:205",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_timed.py:25 (7.4)",
+          "signer.py:85 (7.3)",
+          "signer.py:121 (7.2)"
+        ],
+        "search_top3": [
+          "signer.py:175 (0.58)",
+          "signer.py:182 (0.57)",
+          "test_signer.py:94 (0.57)"
+        ]
+      },
+      {
+        "variant": "flask session",
+        "best_cosine": 0.469,
+        "best_window": "pallets/itsdangerous/docs/conf.py:25",
+        "over_0.80": false,
+        "bm25_top3": [
+          "conf.py:25 (5.7)",
+          "conf.py:31 (5.4)",
+          "conf.py:1 (0.0)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.31)",
+          "test_timed.py:18 (0.28)",
+          "test_timed.py:29 (0.28)"
+        ]
+      }
+    ]
+  },
+  "F-A03": {
+    "question": "Which library should I use to encrypt the payload of a signed token?",
+    "max_cosine": 0.459,
+    "any_over_0.80": false,
+    "grep_matches": 6,
+    "grep": [
+      "'encrypt' HMAC:26: respectively), although it can be truncated if desired. HMAC does not encrypt the message. Instead,",
+      "'encrypt' HMAC:27: the message (encrypted or not) must be sent alongside the HMAC hash. Parties with the secret key",
+      "'cryptography' HMAC:1: In cryptography, an HMAC (sometimes expanded as hash-based message authentication code or keyed-hash",
+      "'cryptography' HMAC:7: asymmetric cryptography. It trades off the need for a complex public key infrastructure by",
+      "'cryptography' hmac.html:81: cryptography. *a* and *b* must both be of the same type: either `str` (ASCII only, as e.g. returned",
+      "'cipher' HMAC:123: design, a ciphersuite with HMAC-MD5 should not be included\". In May 2011, RFC 6234 was published"
+    ],
+    "variants": [
+      {
+        "variant": "Which library should I use to encrypt the payload of a signed token?",
+        "best_cosine": 0.428,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/timed.py:205",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:49 (12.6)",
+          "signer.py:91 (12.4)",
+          "HMAC:55 (11.5)"
+        ],
+        "search_top3": [
+          "signer.py:222 (0.42)",
+          "signer.py:215 (0.41)",
+          "signer.py:1 (0.41)"
+        ]
+      },
+      {
+        "variant": "encrypt the payload of a token library",
+        "best_cosine": 0.431,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:241",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:25 (7.2)",
+          "HMAC:19 (7.1)",
+          "serializer.py:307 (6.1)"
+        ],
+        "search_top3": [
+          "encoding.py:1 (0.35)",
+          "url_safe.py:15 (0.34)",
+          "url_safe.py:55 (0.33)"
+        ]
+      },
+      {
+        "variant": "fernet encryption signed payload confidentiality",
+        "best_cosine": 0.459,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/signer.py:73",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_serializer.py:91 (6.1)",
+          "test_serializer.py:97 (5.9)",
+          "test_timed.py:109 (5.8)"
+        ],
+        "search_top3": [
+          "signer.py:215 (0.42)",
+          "signer.py:227 (0.42)",
+          "signer.py:36 (0.41)"
+        ]
+      },
+      {
+        "variant": "keep token contents secret not just signed",
+        "best_cosine": 0.402,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:205",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:205 (8.0)",
+          "serializer.py:199 (7.6)",
+          "signer.py:139 (7.0)"
+        ],
+        "search_top3": [
+          "test_signer.py:94 (0.37)",
+          "signer.py:244 (0.34)",
+          "test_signer.py:19 (0.33)"
+        ]
+      },
+      {
+        "variant": "authenticated encryption of data in a token",
+        "best_cosine": 0.278,
+        "best_window": "wikipedia/en/HMAC:1",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:43 (6.8)",
+          "HMAC:1 (6.7)",
+          "serializer.py:49 (6.4)"
+        ],
+        "search_top3": [
+          "HMAC:1 (0.26)",
+          "HMAC:1 (0.23)",
+          "timed.py:45 (0.23)"
+        ]
+      }
+    ]
+  },
+  "F-A04": {
+    "question": "How do I compute an HMAC in Java with javax.crypto?",
+    "max_cosine": 0.7,
+    "any_over_0.80": false,
+    "grep_matches": 1,
+    "grep": [
+      "'java' HMAC:152: implementation Java implementation Rust HMAC implementation"
+    ],
+    "variants": [
+      {
+        "variant": "How do I compute an HMAC in Java with javax.crypto?",
+        "best_cosine": 0.562,
+        "best_window": "wikipedia/en/HMAC:151",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:109 (13.3)",
+          "HMAC:49 (12.2)",
+          "HMAC:115 (11.4)"
+        ],
+        "search_top3": [
+          "HMAC:24 (0.59)",
+          "HMAC:1 (0.55)",
+          "HMAC:148 (0.52)"
+        ]
+      },
+      {
+        "variant": "HMAC in Java javax.crypto Mac",
+        "best_cosine": 0.591,
+        "best_window": "wikipedia/en/HMAC:151",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:151 (10.6)",
+          "HMAC:145 (9.3)",
+          "signer.py:205 (7.7)"
+        ],
+        "search_top3": [
+          "HMAC:24 (0.62)",
+          "HMAC:1 (0.59)",
+          "HMAC:1 (0.58)"
+        ]
+      },
+      {
+        "variant": "Java example computing keyed hash",
+        "best_cosine": 0.536,
+        "best_window": "wikipedia/en/HMAC:55",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:145 (13.5)",
+          "HMAC:139 (7.7)",
+          "HMAC:1 (7.5)"
+        ],
+        "search_top3": [
+          "HMAC:48 (0.45)",
+          "hmac.html:1 (0.44)",
+          "hmac.html:1 (0.42)"
+        ]
+      },
+      {
+        "variant": "javax.crypto.Mac getInstance HmacSHA256",
+        "best_cosine": 0.552,
+        "best_window": "wikipedia/en/HMAC:121",
+        "over_0.80": false,
+        "bm25_top3": [
+          "hmac.html:85 (7.0)",
+          "signer.py:205 (5.1)",
+          "signer.py:199 (4.9)"
+        ],
+        "search_top3": [
+          "HMAC:24 (0.57)",
+          "HMAC:1 (0.54)",
+          "HMAC:148 (0.52)"
+        ]
+      },
+      {
+        "variant": "java hmac",
+        "best_cosine": 0.7,
+        "best_window": "wikipedia/en/HMAC:151",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:151 (10.6)",
+          "HMAC:145 (9.3)",
+          "hmac.html:61 (3.6)"
+        ],
+        "search_top3": [
+          "HMAC:148 (0.63)",
+          "HMAC:1 (0.58)",
+          "HMAC:24 (0.57)"
+        ]
+      }
+    ]
+  },
+  "F-A05": {
+    "question": "What is the HMAC-SHA256 of the string 'hello' with the key 'secret'?",
+    "max_cosine": 0.688,
+    "any_over_0.80": false,
+    "grep_matches": 0,
+    "grep": [],
+    "variants": [
+      {
+        "variant": "What is the HMAC-SHA256 of the string 'hello' with the key 'secret'?",
+        "best_cosine": 0.688,
+        "best_window": "wikipedia/en/HMAC:139",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:13 (12.1)",
+          "HMAC:7 (12.0)",
+          "hmac.html:19 (11.7)"
+        ],
+        "search_top3": [
+          "HMAC:126 (0.68)",
+          "HMAC:1 (0.65)",
+          "HMAC:24 (0.62)"
+        ]
+      },
+      {
+        "variant": "HMAC-SHA256 of hello with key secret",
+        "best_cosine": 0.668,
+        "best_window": "wikipedia/en/HMAC:139",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_serializer.py:169 (9.9)",
+          "test_serializer.py:163 (9.8)",
+          "HMAC:7 (9.5)"
+        ],
+        "search_top3": [
+          "HMAC:1 (0.64)",
+          "HMAC:24 (0.64)",
+          "HMAC:1 (0.61)"
+        ]
+      },
+      {
+        "variant": "hex digest for message hello and key secret",
+        "best_cosine": 0.547,
+        "best_window": "web/docs.python.org/3/library/hmac.html:43",
+        "over_0.80": false,
+        "bm25_top3": [
+          "hmac.html:19 (10.8)",
+          "HMAC:1 (10.1)",
+          "signer.py:103 (10.0)"
+        ],
+        "search_top3": [
+          "hmac.html:42 (0.54)",
+          "hmac.html:20 (0.49)",
+          "hmac.html:1 (0.47)"
+        ]
+      },
+      {
+        "variant": "compute hmac sha256 hello secret value",
+        "best_cosine": 0.602,
+        "best_window": "wikipedia/en/HMAC:139",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_serializer.py:163 (9.2)",
+          "test_serializer.py:169 (8.0)",
+          "hmac.html:55 (7.4)"
+        ],
+        "search_top3": [
+          "HMAC:24 (0.64)",
+          "HMAC:126 (0.62)",
+          "HMAC:1 (0.61)"
+        ]
+      },
+      {
+        "variant": "hmac sha256 test vector hello secret",
+        "best_cosine": 0.591,
+        "best_window": "wikipedia/en/HMAC:139",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_serializer.py:163 (9.9)",
+          "test_serializer.py:169 (8.0)",
+          "HMAC:133 (7.0)"
+        ],
+        "search_top3": [
+          "HMAC:24 (0.54)",
+          "HMAC:1 (0.54)",
+          "hmac.html:42 (0.52)"
+        ]
+      }
+    ]
+  },
+  "F-A06": {
+    "question": "Which companies run itsdangerous in production?",
+    "max_cosine": 0.486,
+    "any_over_0.80": false,
+    "grep_matches": 1,
+    "grep": [
+      "'used by' encoding.py:41: # The alphabet used by base64.urlsafe_*"
+    ],
+    "variants": [
+      {
+        "variant": "Which companies run itsdangerous in production?",
+        "best_cosine": 0.247,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:55 (6.1)",
+          "hmac.html:19 (4.9)",
+          "timed.py:91 (4.7)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.28)",
+          "timed.py:177 (0.23)",
+          "serializer.py:29 (0.23)"
+        ]
+      },
+      {
+        "variant": "companies using itsdangerous in production",
+        "best_cosine": 0.335,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:1 (5.2)",
+          "signer.py:43 (4.7)",
+          "test_timed.py:7 (4.5)"
+        ],
+        "search_top3": [
+          "timed.py:177 (0.30)",
+          "test_serializer.py:20 (0.29)",
+          "serializer.py:29 (0.29)"
+        ]
+      },
+      {
+        "variant": "who uses itsdangerous",
+        "best_cosine": 0.486,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:37 (4.8)",
+          "test_timed.py:7 (4.5)",
+          "test_signer.py:1 (4.4)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.42)",
+          "serializer.py:25 (0.40)",
+          "serializer.py:29 (0.40)"
+        ]
+      },
+      {
+        "variant": "itsdangerous adopters customers users",
+        "best_cosine": 0.308,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:73 (5.1)",
+          "serializer.py:79 (4.9)",
+          "test_timed.py:7 (4.5)"
+        ],
+        "search_top3": [
+          "serializer.py:287 (0.25)",
+          "serializer.py:123 (0.24)",
+          "serializer.py:174 (0.24)"
+        ]
+      },
+      {
+        "variant": "organisations that deploy itsdangerous",
+        "best_cosine": 0.313,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "exc.py:1 (4.6)",
+          "test_timed.py:7 (4.5)",
+          "exc.py:7 (4.5)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.33)",
+          "serializer.py:25 (0.29)",
+          "serializer.py:29 (0.28)"
+        ]
+      }
+    ]
+  },
+  "F-A07": {
+    "question": "How do I install itsdangerous with conda on Windows?",
+    "max_cosine": 0.395,
+    "any_over_0.80": false,
+    "grep_matches": 1,
+    "grep": [
+      "'windows' timed.py:124: # Windows raises OSError"
+    ],
+    "variants": [
+      {
+        "variant": "How do I install itsdangerous with conda on Windows?",
+        "best_cosine": 0.332,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_signer.py:1",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:109 (8.6)",
+          "serializer.py:349 (8.5)",
+          "HMAC:49 (7.5)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.41)",
+          "conf.py:1 (0.39)",
+          "serializer.py:29 (0.32)"
+        ]
+      },
+      {
+        "variant": "install itsdangerous conda",
+        "best_cosine": 0.308,
+        "best_window": "pallets/itsdangerous/docs/conf.py:19",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_timed.py:7 (4.5)",
+          "test_signer.py:1 (4.4)",
+          "test_serializer.py:13 (4.4)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.44)",
+          "exc.py:14 (0.37)",
+          "conf.py:1 (0.36)"
+        ]
+      },
+      {
+        "variant": "conda install itsdangerous windows",
+        "best_cosine": 0.256,
+        "best_window": "pallets/itsdangerous/docs/conf.py:19",
+        "over_0.80": false,
+        "bm25_top3": [
+          "timed.py:121 (5.1)",
+          "timed.py:115 (5.0)",
+          "test_timed.py:7 (4.5)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.36)",
+          "conf.py:1 (0.31)",
+          "exc.py:14 (0.29)"
+        ]
+      },
+      {
+        "variant": "itsdangerous installation instructions windows",
+        "best_cosine": 0.233,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "timed.py:121 (5.1)",
+          "timed.py:115 (5.0)",
+          "test_timed.py:7 (4.5)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.25)",
+          "signer.py:56 (0.21)",
+          "conf.py:1 (0.21)"
+        ]
+      },
+      {
+        "variant": "pip or conda to install itsdangerous",
+        "best_cosine": 0.395,
+        "best_window": "pallets/itsdangerous/docs/conf.py:19",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_encoding.py:1 (5.9)",
+          "serializer.py:31 (5.8)",
+          "serializer.py:61 (5.4)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.49)",
+          "conf.py:1 (0.41)",
+          "serializer.py:123 (0.38)"
+        ]
+      }
+    ]
+  },
+  "F-A08": {
+    "question": "How does HMAC-SHA256 performance compare with BLAKE2 keyed hashing?",
+    "max_cosine": 0.586,
+    "any_over_0.80": false,
+    "grep_matches": 1,
+    "grep": [
+      "'faster' hmac.html:24: implementation, which is faster for messages that fit into memory. The parameters *key*, *msg*, and"
+    ],
+    "variants": [
+      {
+        "variant": "How does HMAC-SHA256 performance compare with BLAKE2 keyed hashing?",
+        "best_cosine": 0.586,
+        "best_window": "wikipedia/en/HMAC:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "hmac.html:1 (11.2)",
+          "signer.py:25 (9.9)",
+          "HMAC:43 (8.8)"
+        ],
+        "search_top3": [
+          "HMAC:11 (0.53)",
+          "HMAC:24 (0.51)",
+          "HMAC:94 (0.50)"
+        ]
+      },
+      {
+        "variant": "HMAC SHA256 versus BLAKE2 speed",
+        "best_cosine": 0.524,
+        "best_window": "wikipedia/en/HMAC:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:133 (7.0)",
+          "HMAC:127 (6.6)",
+          "test_serializer.py:163 (6.0)"
+        ],
+        "search_top3": [
+          "HMAC:24 (0.50)",
+          "HMAC:94 (0.46)",
+          "HMAC:11 (0.45)"
+        ]
+      },
+      {
+        "variant": "blake2 keyed hashing performance comparison",
+        "best_cosine": 0.449,
+        "best_window": "wikipedia/en/HMAC:55",
+        "over_0.80": false,
+        "bm25_top3": [
+          "hmac.html:1 (6.4)",
+          "HMAC:139 (5.1)",
+          "HMAC:145 (5.1)"
+        ],
+        "search_top3": [
+          "hmac.html:57 (0.37)",
+          "hmac.html:20 (0.37)",
+          "hmac.html:80 (0.35)"
+        ]
+      },
+      {
+        "variant": "benchmark hmac against blake2b keyed mode",
+        "best_cosine": 0.486,
+        "best_window": "wikipedia/en/HMAC:145",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:145 (8.7)",
+          "HMAC:139 (8.3)",
+          "hmac.html:1 (6.7)"
+        ],
+        "search_top3": [
+          "HMAC:84 (0.49)",
+          "HMAC:48 (0.47)",
+          "HMAC:71 (0.45)"
+        ]
+      },
+      {
+        "variant": "which is faster hmac or blake2",
+        "best_cosine": 0.471,
+        "best_window": "wikipedia/en/HMAC:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "hmac.html:19 (13.2)",
+          "hmac.html:13 (10.7)",
+          "signer.py:91 (7.8)"
+        ],
+        "search_top3": [
+          "HMAC:11 (0.47)",
+          "HMAC:84 (0.44)",
+          "HMAC:24 (0.43)"
+        ]
+      }
+    ]
+  },
+  "F-A09": {
+    "question": "What open-source licence is itsdangerous released under?",
+    "max_cosine": 0.393,
+    "any_over_0.80": false,
+    "grep_matches": 0,
+    "grep": [],
+    "variants": [
+      {
+        "variant": "What open-source licence is itsdangerous released under?",
+        "best_cosine": 0.312,
+        "best_window": "pallets/itsdangerous/docs/conf.py:1",
+        "over_0.80": false,
+        "bm25_top3": [
+          "conf.py:31 (8.2)",
+          "conf.py:37 (7.5)",
+          "serializer.py:313 (5.2)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.28)",
+          "serializer.py:397 (0.27)",
+          "conf.py:1 (0.26)"
+        ]
+      },
+      {
+        "variant": "itsdangerous license",
+        "best_cosine": 0.393,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_timed.py:7 (4.5)",
+          "test_signer.py:1 (4.4)",
+          "test_serializer.py:13 (4.4)"
+        ],
+        "search_top3": [
+          "serializer.py:174 (0.33)",
+          "__init__.py:1 (0.33)",
+          "serializer.py:139 (0.32)"
+        ]
+      },
+      {
+        "variant": "software licence terms of itsdangerous",
+        "best_cosine": 0.214,
+        "best_window": "pallets/itsdangerous/docs/conf.py:1",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_timed.py:7 (4.5)",
+          "test_signer.py:1 (4.4)",
+          "test_serializer.py:13 (4.4)"
+        ],
+        "search_top3": [
+          "exc.py:1 (0.20)",
+          "__init__.py:1 (0.20)",
+          "conf.py:1 (0.20)"
+        ]
+      },
+      {
+        "variant": "is itsdangerous BSD or MIT licensed",
+        "best_cosine": 0.203,
+        "best_window": "pallets/itsdangerous/docs/conf.py:1",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:31 (5.7)",
+          "serializer.py:97 (5.1)",
+          "serializer.py:103 (4.6)"
+        ],
+        "search_top3": [
+          "__init__.py:1 (0.23)",
+          "serializer.py:33 (0.19)",
+          "signer.py:56 (0.19)"
+        ]
+      },
+      {
+        "variant": "open source license of the library",
+        "best_cosine": 0.225,
+        "best_window": "web/docs.python.org/3/library/hmac.html:85",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:115 (4.8)",
+          "conf.py:31 (4.5)",
+          "hmac.html:1 (4.5)"
+        ],
+        "search_top3": [
+          "signer.py:1 (0.10)",
+          "conf.py:1 (0.10)",
+          "HMAC:148 (0.09)"
+        ]
+      }
+    ]
+  },
+  "F-A10": {
+    "question": "How do I use itsdangerous inside an asyncio application?",
+    "max_cosine": 0.469,
+    "any_over_0.80": false,
+    "grep_matches": 0,
+    "grep": [],
+    "variants": [
+      {
+        "variant": "How do I use itsdangerous inside an asyncio application?",
+        "best_cosine": 0.469,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:49 (9.0)",
+          "serializer.py:349 (8.7)",
+          "HMAC:55 (6.9)"
+        ],
+        "search_top3": [
+          "serializer.py:25 (0.47)",
+          "__init__.py:1 (0.45)",
+          "exc.py:101 (0.44)"
+        ]
+      },
+      {
+        "variant": "itsdangerous asyncio async await",
+        "best_cosine": 0.318,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_timed.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_timed.py:7 (4.5)",
+          "test_signer.py:1 (4.4)",
+          "test_serializer.py:13 (4.4)"
+        ],
+        "search_top3": [
+          "test_timed.py:23 (0.37)",
+          "test_timed.py:1 (0.36)",
+          "test_timed.py:18 (0.33)"
+        ]
+      },
+      {
+        "variant": "use signer in an async application",
+        "best_cosine": 0.448,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/__init__.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "signer.py:31 (6.2)",
+          "signer.py:97 (5.6)",
+          "serializer.py:259 (5.6)"
+        ],
+        "search_top3": [
+          "test_signer.py:27 (0.51)",
+          "test_signer.py:23 (0.48)",
+          "test_signer.py:19 (0.46)"
+        ]
+      },
+      {
+        "variant": "async serializer coroutine itsdangerous",
+        "best_cosine": 0.45,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_serializer.py:13 (6.2)",
+          "test_serializer.py:7 (6.1)",
+          "test_timed.py:7 (5.8)"
+        ],
+        "search_top3": [
+          "serializer.py:25 (0.51)",
+          "serializer.py:29 (0.50)",
+          "serializer.py:123 (0.47)"
+        ]
+      },
+      {
+        "variant": "is itsdangerous thread safe or async safe",
+        "best_cosine": 0.273,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:13",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_url_safe.py:1 (9.9)",
+          "encoding.py:19 (8.8)",
+          "encoding.py:25 (7.0)"
+        ],
+        "search_top3": [
+          "timed.py:177 (0.32)",
+          "timed.py:222 (0.30)",
+          "serializer.py:397 (0.30)"
+        ]
+      }
+    ]
+  },
+  "V-03": {
+    "question": "Who won the 2022 FIFA World Cup?",
+    "max_cosine": 0.2,
+    "any_over_0.80": false,
+    "grep_matches": 0,
+    "grep": [],
+    "variants": [
+      {
+        "variant": "Who won the 2022 FIFA World Cup?",
+        "best_cosine": 0.142,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/timed.py:1",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:79 (5.1)",
+          "serializer.py:73 (5.1)",
+          "HMAC:7 (3.7)"
+        ],
+        "search_top3": [
+          "url_safe.py:55 (0.10)",
+          "test_timed.py:18 (0.09)",
+          "url_safe.py:79 (0.08)"
+        ]
+      },
+      {
+        "variant": "FIFA World Cup 2022 winner",
+        "best_cosine": 0.16,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/timed.py:1",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:85 (2.8)",
+          "HMAC:79 (2.4)",
+          "conf.py:1 (0.0)"
+        ],
+        "search_top3": [
+          "encoding.py:1 (0.09)",
+          "serializer.py:236 (0.08)",
+          "signer.py:1 (0.08)"
+        ]
+      },
+      {
+        "variant": "who won the 2022 world cup",
+        "best_cosine": 0.114,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:193",
+        "over_0.80": false,
+        "bm25_top3": [
+          "serializer.py:79 (5.1)",
+          "serializer.py:73 (5.1)",
+          "HMAC:7 (3.7)"
+        ],
+        "search_top3": [
+          "url_safe.py:55 (0.10)",
+          "url_safe.py:23 (0.09)",
+          "conf.py:1 (0.09)"
+        ]
+      },
+      {
+        "variant": "football world cup 2022 champion",
+        "best_cosine": 0.166,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/timed.py:1",
+        "over_0.80": false,
+        "bm25_top3": [
+          "conf.py:1 (0.0)",
+          "conf.py:7 (0.0)",
+          "conf.py:13 (0.0)"
+        ],
+        "search_top3": [
+          "encoding.py:1 (0.14)",
+          "url_safe.py:72 (0.12)",
+          "encoding.py:20 (0.11)"
+        ]
+      },
+      {
+        "variant": "world cup final 2022 Qatar",
+        "best_cosine": 0.2,
+        "best_window": "pallets/itsdangerous/tests/test_itsdangerous/test_serializer.py:193",
+        "over_0.80": false,
+        "bm25_top3": [
+          "HMAC:73 (2.2)",
+          "HMAC:19 (2.1)",
+          "HMAC:79 (2.1)"
+        ],
+        "search_top3": [
+          "test_url_safe.py:1 (0.17)",
+          "test_encoding.py:11 (0.16)",
+          "test_url_safe.py:11 (0.16)"
+        ]
+      }
+    ]
+  },
+  "V-05": {
+    "question": "Why does Signer.sign encrypt the payload with AES?",
+    "max_cosine": 0.662,
+    "any_over_0.80": false,
+    "grep_matches": 3,
+    "grep": [
+      "'encrypt' HMAC:26: respectively), although it can be truncated if desired. HMAC does not encrypt the message. Instead,",
+      "'encrypt' HMAC:27: the message (encrypted or not) must be sent alongside the HMAC hash. Parties with the secret key",
+      "'cipher' HMAC:123: design, a ciphersuite with HMAC-MD5 should not be included\". In May 2011, RFC 6234 was published"
+    ],
+    "variants": [
+      {
+        "variant": "Why does Signer.sign encrypt the payload with AES?",
+        "best_cosine": 0.542,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:271",
+        "over_0.80": false,
+        "bm25_top3": [
+          "exc.py:103 (9.3)",
+          "exc.py:19 (8.2)",
+          "test_signer.py:43 (8.2)"
+        ],
+        "search_top3": [
+          "signer.py:222 (0.49)",
+          "test_signer.py:27 (0.46)",
+          "serializer.py:278 (0.45)"
+        ]
+      },
+      {
+        "variant": "Signer.sign encrypts payload AES",
+        "best_cosine": 0.603,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:271",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_signer.py:43 (6.8)",
+          "test_serializer.py:97 (6.8)",
+          "test_serializer.py:73 (6.6)"
+        ],
+        "search_top3": [
+          "signer.py:222 (0.57)",
+          "serializer.py:278 (0.53)",
+          "test_signer.py:27 (0.53)"
+        ]
+      },
+      {
+        "variant": "does sign use AES encryption",
+        "best_cosine": 0.399,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:193",
+        "over_0.80": false,
+        "bm25_top3": [
+          "signer.py:31 (5.2)",
+          "exc.py:13 (4.3)",
+          "serializer.py:253 (4.1)"
+        ],
+        "search_top3": [
+          "signer.py:222 (0.41)",
+          "timed.py:45 (0.38)",
+          "signer.py:215 (0.36)"
+        ]
+      },
+      {
+        "variant": "itsdangerous sign function encryption algorithm",
+        "best_cosine": 0.593,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:193",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_signer.py:85 (8.2)",
+          "test_signer.py:79 (7.9)",
+          "test_signer.py:91 (6.0)"
+        ],
+        "search_top3": [
+          "signer.py:227 (0.56)",
+          "signer.py:129 (0.54)",
+          "signer.py:215 (0.52)"
+        ]
+      },
+      {
+        "variant": "Signer.sign cipher",
+        "best_cosine": 0.662,
+        "best_window": "pallets/itsdangerous/src/itsdangerous/serializer.py:193",
+        "over_0.80": false,
+        "bm25_top3": [
+          "test_signer.py:25 (5.6)",
+          "test_signer.py:79 (5.5)",
+          "test_signer.py:85 (5.5)"
+        ],
+        "search_top3": [
+          "signer.py:222 (0.56)",
+          "test_signer.py:27 (0.55)",
+          "test_signer.py:94 (0.52)"
+        ]
+      }
+    ]
+  }
+}
