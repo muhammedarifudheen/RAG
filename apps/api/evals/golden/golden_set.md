@@ -63,3 +63,11 @@ Run it (after the A/B decision):
 python -m evals.run_evals --mode search --golden evals/golden/golden_set.jsonl
 python -m evals.run_evals --mode ask --golden evals/golden/golden_set.jsonl --delay 2
 ```
+
+## Which questions are scored on retrieval
+
+A question is scored on retrieval only if it has relevant paths: 25 of 40 (11 KNOWN, 4 INFERRED,
+10 PARTIAL). The other 15 have none, by design, and are scored on refusal instead: 12 ABSENT
+(nothing in the corpus answers them) and 3 REFUSED (adversarial: prompt injection, secrets).
+Every PARTIAL question has relevant paths and is scored. The set has no CONFLICTED questions; if
+one is added, give it paths for each side of the conflict and score it on retrieval like KNOWN.
