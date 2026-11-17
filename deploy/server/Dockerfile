@@ -50,7 +50,7 @@ ENV HF_HUB_OFFLINE=1 \
 
 # The starter sources, added now so the image ships with them (see bake.sh).
 # Render passes the service's SEED_SOURCES setting here; this is the default.
-ARG SEED_SOURCES="https://en.wikipedia.org/wiki/HMAC https://docs.python.org/3/library/hmac.html https://github.com/pallets/itsdangerous"
+ARG SEED_SOURCES="https://en.wikipedia.org/wiki/HMAC https://docs.python.org/3/library/hmac.html https://github.com/pallets/itsdangerous https://docs.python.org/3/library/hashlib.html https://docs.python.org/3/library/secrets.html https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html https://www.rfc-editor.org/rfc/rfc2104 https://itsdangerous.palletsprojects.com/en/stable/concepts/ https://itsdangerous.palletsprojects.com/en/stable/signer/ https://itsdangerous.palletsprojects.com/en/stable/serializer/ https://itsdangerous.palletsprojects.com/en/stable/timed/ https://itsdangerous.palletsprojects.com/en/stable/changes/"
 RUN EMBEDDING_BATCH_SIZE=16 SEED_SOURCES="$SEED_SOURCES" bash /srv/bake.sh
 
 EXPOSE 7860

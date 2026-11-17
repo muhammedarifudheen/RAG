@@ -1,0 +1,14 @@
+# One line per source: its link, and a phrase that is on that page (checked against the text the
+# ingest extracts). `python -m evals.verify_sources` searches for the phrase and looks for the source.
+{"url": "https://en.wikipedia.org/wiki/HMAC", "phrase": "keyed-hash message authentication code"}
+{"url": "https://docs.python.org/3/library/hmac.html", "phrase": "hmac.new"}
+{"url": "https://github.com/pallets/itsdangerous", "phrase": "derive_key"}
+{"url": "https://docs.python.org/3/library/hashlib.html", "phrase": "pbkdf2_hmac"}
+{"url": "https://docs.python.org/3/library/secrets.html", "phrase": "token_urlsafe"}
+{"url": "https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html", "phrase": "envelope encryption"}
+{"url": "https://www.rfc-editor.org/rfc/rfc2104", "phrase": "opad"}
+{"url": "https://itsdangerous.palletsprojects.com/en/stable/concepts/", "phrase": "salt"}
+{"url": "https://itsdangerous.palletsprojects.com/en/stable/signer/", "phrase": "digest_method"}
+{"url": "https://itsdangerous.palletsprojects.com/en/stable/serializer/", "phrase": "loads_unsafe"}
+{"url": "https://itsdangerous.palletsprojects.com/en/stable/timed/", "phrase": "SignatureExpired"}
+{"url": "https://itsdangerous.palletsprojects.com/en/stable/changes/", "phrase": "Released"}

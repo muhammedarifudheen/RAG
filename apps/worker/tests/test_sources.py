@@ -377,3 +377,36 @@ def test_upload_names_cannot_escape_the_uploads_folder(tmp_path):
     note.write_text("Some text that is long enough to keep.", encoding="utf-8")
     loaded = load_upload(note, "..\\..\\secret/../../etc/passwd.txt")
     assert loaded.documents[0].path == "uploads/passwd.txt"
+
+
+SPHINX_PAGE = """<!doctype html><html><head><title>mylib &mdash; Helpers</title></head><body>
+<nav><a href="/">Home</a></nav>
+<main><article><h1>mylib</h1>
+<p>The mylib module offers helpers for deriving keys and hashing files, written for readers who
+want a stable interface across platforms and releases.</p>
+<h2>Functions</h2>
+<dl class="py function"><dt class="sig" id="mylib.derive_key"><span>mylib.derive_key</span>(password, salt, iterations)</dt>
+<dd><p>Derive a key from a password with PBKDF2. The salt should be random and the iteration count
+as large as your latency budget allows, because that is what slows a guesser down.</p></dd></dl>
+<dl class="py function"><dt class="sig" id="mylib.file_digest"><span>mylib.file_digest</span>(fileobj, digest)</dt>
+<dd><p>Return a digest object that has been updated with the contents of the file object.</p></dd></dl>
+</article></main><footer>Copyright</footer></body></html>"""
+
+
+def test_documented_functions_survive_html_extraction():
+    """Sphinx writes each API entry as a definition list; the extractor must not drop them."""
+    document = html_to_document(SPHINX_PAGE, "web/example.com/mylib", "https://example.com/mylib", "x")
+    assert document is not None
+    text = document.text.replace("\\", "")  # Markdown escapes the underscores
+    assert "mylib.derive_key" in text
+    assert "mylib.file_digest" in text
+    assert "iteration count" in text
+
+
+def test_flattening_leaves_other_pages_and_encodings_alone():
+    from worker.sources import flatten_definitions
+
+    plain = b"<p>No definitions here, just a caf\xe9 in latin-1.</p>"
+    assert flatten_definitions(plain) == plain
+    flattened = flatten_definitions(b"<dl><dt>term</dt><dd>caf\xe9</dd></dl>")
+    assert flattened == b"<h5>term</h5><div>caf\xe9</div>"  # bytes preserved

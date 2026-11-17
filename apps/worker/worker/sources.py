@@ -71,10 +71,41 @@ def detect_kind(url: str) -> str:
 # --- HTML ---------------------------------------------------------------------
 
 
+_DT_OPEN = re.compile(r"<dt\b[^>]*>", re.IGNORECASE)
+_DT_CLOSE = re.compile(r"</dt\s*>", re.IGNORECASE)
+_DD_OPEN = re.compile(r"<dd\b[^>]*>", re.IGNORECASE)
+_DD_CLOSE = re.compile(r"</dd\s*>", re.IGNORECASE)
+_DL_TAG = re.compile(r"</?dl\b[^>]*>", re.IGNORECASE)
+
+
+def flatten_definitions(html: bytes | str) -> bytes | str:
+    """Definition lists as headings and blocks. Sphinx writes every documented function and
+    class as a <dl> whose <dt> is the signature, and the article extractor drops those, which
+    leaves a library's reference page with its prose but without its API (hashlib without
+    `pbkdf2_hmac`, secrets without `token_hex`). As a heading and a block they are kept.
+
+    Bytes go through latin-1, which maps every byte to one character and back, so a page in
+    any encoding comes out byte for byte the same apart from these tags."""
+    if isinstance(html, bytes):
+        return _flatten(html.decode("latin-1")).encode("latin-1")
+    return _flatten(html)
+
+
+def _flatten(text: str) -> str:
+    if "<dt" not in text.lower():
+        return text
+    text = _DT_OPEN.sub("<h5>", text)
+    text = _DT_CLOSE.sub("</h5>", text)
+    text = _DD_OPEN.sub("<div>", text)
+    text = _DD_CLOSE.sub("</div>", text)
+    return _DL_TAG.sub("", text)
+
+
 def html_to_document(html: bytes | str, path: str, url: str | None, fallback_title: str) -> Document | None:
     """Extracts the readable article text of a page as Markdown, without navigation or ads."""
     import trafilatura  # imported here: it is slow to load and only needed for HTML
 
+    html = flatten_definitions(html)
     text = trafilatura.extract(
         html,
         output_format="markdown",

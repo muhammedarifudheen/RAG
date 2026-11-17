@@ -29,4 +29,4 @@ services:
       - key: CORS_ORIGINS
         value: '["https://muhammedarifudheen.github.io"]'
       - key: SEED_SOURCES
-        value: https://en.wikipedia.org/wiki/HMAC https://docs.python.org/3/library/hmac.html https://github.com/pallets/itsdangerous
+        value: https://en.wikipedia.org/wiki/HMAC https://docs.python.org/3/library/hmac.html https://github.com/pallets/itsdangerous https://docs.python.org/3/library/hashlib.html https://docs.python.org/3/library/secrets.html https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html https://www.rfc-editor.org/rfc/rfc2104 https://itsdangerous.palletsprojects.com/en/stable/concepts/ https://itsdangerous.palletsprojects.com/en/stable/signer/ https://itsdangerous.palletsprojects.com/en/stable/serializer/ https://itsdangerous.palletsprojects.com/en/stable/timed/ https://itsdangerous.palletsprojects.com/en/stable/changes/
