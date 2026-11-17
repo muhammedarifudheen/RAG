@@ -501,6 +501,8 @@ def ask(
             search_queries=tuple(queries) if len(queries) > 1 else (),
             reranking=reranking,
             about_sources=bool(body.use_sources and mentions_sources(db, question)),
+            # The nearest passage retrieval found, for the evidence-gap report.
+            closest=max(fused_order, key=lambda c: c.score, default=None),
             grounded=grounded,
             mode="AGENT" if research else atlas_mode,
             started=arrived,

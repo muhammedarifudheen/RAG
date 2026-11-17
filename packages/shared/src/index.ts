@@ -172,6 +172,26 @@ export interface Intent {
   reframe?: string | null;
 }
 
+/** Where an answer stands, and none is a bare refusal: VERIFIED (from the sources, cited),
+ * REPORTED (from the web, with URLs and a date), INFERRED (derived, reasoning shown),
+ * UNVERIFIED (the model's own knowledge, labelled) or EVIDENCE_GAP (nothing found: what was
+ * tried, the closest passage, the next step). */
+export type AnswerState = "VERIFIED" | "REPORTED" | "INFERRED" | "UNVERIFIED" | "EVIDENCE_GAP";
+
+/** What an EVIDENCE_GAP answer reports. */
+export interface EvidenceGap {
+  tools_tried: string[];
+  closest?: {
+    file?: string | null;
+    start_line?: number | null;
+    end_line?: number | null;
+    score: number;
+    citation?: string | null;
+    snippet: string;
+  } | null;
+  next_steps: string[];
+}
+
 export type EpistemicState =
   | "known"
   | "inferred"
@@ -352,6 +372,12 @@ export interface AskResponse {
   /** Where the answer stands: for a question about the sources, as the model classified
    * it (known, inferred, partial, absent, conflicted); otherwise general or web. */
   epistemic?: EpistemicState | null;
+  /** Where the answer stands: see AnswerState. Unset for chat and pictures. */
+  answer_state?: AnswerState | null;
+  /** For an EVIDENCE_GAP answer: the structured report. */
+  evidence_gap?: EvidenceGap | null;
+  /** For a REPORTED answer: the date its web results were read. */
+  as_of?: string | null;
   /** What the user is trying to achieve, reconstructed before answering. */
   intent?: Intent | null;
   /** True if answered only from the knowledge base. */

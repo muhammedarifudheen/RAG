@@ -112,7 +112,7 @@ def test_after_each_services_first_models_fail_their_other_models_are_tried():
     groq = Provider("groq", [ProviderError("quota")], models=("q1",))
     done = run(Assistant([gemini, groq], models_per_provider=2), "What is HMAC?")[-1][1]
 
-    assert done["answer"] == "From the third model."
+    assert done["answer"].endswith("From the third model.")
     # g1 and g2, then the other service, then the model held back.
     assert [c.model for c in gemini.calls] == ["g1", "g2", "g3"]
     assert [c.model for c in groq.calls] == ["q1"]

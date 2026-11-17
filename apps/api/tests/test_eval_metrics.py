@@ -66,6 +66,7 @@ def test_answer_checks():
     assert must_include_coverage("anything", []) == 1.0
     assert declined("I don't have that in the knowledge base.")
     assert declined("Some text.", epistemic="absent")
+    assert declined("**Evidence gap.** Nothing found.", answer_state="EVIDENCE_GAP")
     assert not declined("I don't have that, but see [a.py:1-2].", citations=1)
 
 

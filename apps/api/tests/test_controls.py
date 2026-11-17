@@ -54,7 +54,8 @@ def test_only_the_chosen_services_answer():
     events = ask(Assistant([gemini, groq], council_size=12, council_grace=0.2), services=("groq",))
     assert events[0][1]["providers"] == ["groq"]
     assert gemini.calls == []
-    assert events[-1][1]["answer"] == "Q."
+    assert events[-1][1]["answer"].endswith("Q.")  # after its "unverified" note
+    assert events[-1][1]["answer_state"] == "UNVERIFIED"
 
 
 def test_choosing_only_unavailable_services_is_refused():
@@ -209,7 +210,9 @@ def test_strict_mode_with_nothing_retrieved_says_so_without_asking_a_model():
     )
     assert gemini.calls == []
     done = events[-1][1]
-    assert done["answer"] == "I don't have that in the knowledge base."
+    assert done["answer_state"] == "EVIDENCE_GAP"
+    assert "I don't have that in the knowledge base" not in done["answer"]
+    assert "Strict sources only is on" in done["answer"]  # says why the web was not tried
     assert done["chunks"] == []
 
 

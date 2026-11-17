@@ -219,7 +219,7 @@ def test_a_service_failing_mid_answer_is_reset_and_the_next_starts_over():
     assert "reset" in names
     after_reset = names[names.index("reset") + 1 :]
     assert after_reset[-1] == "done"
-    assert events[-1][1]["answer"] == "Whole answer."
+    assert events[-1][1]["answer"].endswith("Whole answer.")
 
 
 def test_when_every_service_fails_the_last_reason_is_reported():
@@ -268,7 +268,7 @@ def test_best_mode_starts_with_the_strongest_service():
 def test_an_empty_reply_counts_as_a_failure():
     gemini = FakeProvider("gemini", [[f"{FOLLOW_UPS}\nq?"]], models=["m1"])
     groq = FakeProvider("groq", [["Real answer."]])
-    assert run(Assistant([gemini, groq]))[-1][1]["answer"] == "Real answer."
+    assert run(Assistant([gemini, groq]))[-1][1]["answer"].endswith("Real answer.")
 
 
 # --- The services' wire formats -------------------------------------------------
@@ -592,7 +592,7 @@ def test_recent_events_go_first_to_a_service_that_can_search():
     groq = FakeProvider("groq", [["Fresh news."]], web_search=True)
     events = run(Assistant([gemini, groq]), question="what is in the news today?")
     assert events[0][1]["providers"] == ["groq", "gemini"]
-    assert events[-1][1]["answer"] == "Fresh news."
+    assert events[-1][1]["answer"].endswith("Fresh news.")
     assert groq.calls[0].web is True
 
 

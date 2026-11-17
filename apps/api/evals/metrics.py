@@ -139,9 +139,15 @@ def must_include_coverage(answer: str, phrases: Sequence[str]) -> float:
     return sum(1 for p in phrases if p.lower() in text) / len(phrases)
 
 
-def declined(answer: str, epistemic: str | None = None, citations: int = 0) -> bool:
-    """Whether the answer declines to answer from the sources."""
-    if epistemic == "absent":
+def declined(
+    answer: str,
+    epistemic: str | None = None,
+    citations: int = 0,
+    answer_state: str | None = None,
+) -> bool:
+    """Whether the answer declines to answer from the sources: an evidence gap (the answer
+    contract's report, which has no refusal sentence) or, from an older server, the sentence."""
+    if answer_state == "EVIDENCE_GAP" or epistemic == "absent":
         return True
     return bool(_DECLINES.search(answer)) and citations == 0
 

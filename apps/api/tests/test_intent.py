@@ -42,7 +42,7 @@ def test_the_goal_is_reconstructed_folded_away_and_the_reframe_kept():
     streamed = "".join(data["text"] for name, data in events if name == "delta")
     assert streamed.startswith("Use a signed serializer")
     done = events[-1][1]
-    assert done["answer"] == "Use a signed serializer for the cookie value."
+    assert done["answer"].endswith("Use a signed serializer for the cookie value.")
     assert done["intent"] == {
         "literal": "how do I sign a cookie?",
         "goal": "keep a session cookie from being tampered with",

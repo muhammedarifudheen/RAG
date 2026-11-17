@@ -2,6 +2,7 @@
 
 import type {
   AnswerFreshness,
+  AnswerState,
   AskResponse,
   CodeChunk,
   Confidence,
@@ -111,6 +112,7 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
   return (
     <article aria-label="Answer" className="slab bg-panel/80 py-4 pl-5 pr-4">
       {(response.epistemic ||
+        response.answer_state ||
         response.degraded ||
         response.freshness ||
         response.challenge?.valid ||
@@ -126,6 +128,9 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
             >
               {response.mode}
             </span>
+          )}
+          {response.answer_state && (
+            <AnswerStateBadge state={response.answer_state} asOf={response.as_of} />
           )}
           {response.epistemic && <EpistemicBadge state={response.epistemic} />}
           {response.freshness && <FreshnessChip freshness={response.freshness} />}
@@ -543,6 +548,46 @@ const STATE: Record<EpistemicState, { label: string; hint: string; tone: string 
   },
 };
 
+const ANSWER_STATE: Record<AnswerState, { hint: string; tone: string }> = {
+  VERIFIED: {
+    hint: "From your sources or a primary source, with citations you can open.",
+    tone: "border-signal/60 text-signal",
+  },
+  REPORTED: {
+    hint: "From the web, attributed with its links and the date they were read.",
+    tone: "border-cyan/50 text-cyan",
+  },
+  INFERRED: {
+    hint: "Derived from the evidence, not stated by it: the reasoning is shown.",
+    tone: "border-warn/50 text-warn",
+  },
+  UNVERIFIED: {
+    hint: "The model's own knowledge, with no source to check it against.",
+    tone: "border-warn/70 text-warn",
+  },
+  EVIDENCE_GAP: {
+    hint: "Nothing was found: what was tried, the closest passage and the next step are below.",
+    tone: "border-line-strong text-muted",
+  },
+};
+
+/** VERIFIED, REPORTED, INFERRED, UNVERIFIED or EVIDENCE_GAP: what the answer rests on. */
+function AnswerStateBadge({ state, asOf }: { state: AnswerState; asOf?: string | null }) {
+  const { hint, tone } = ANSWER_STATE[state];
+  const label = state.replace("_", " ");
+  return (
+    <span
+      role="note"
+      aria-label={`Answer state: ${label}${asOf ? `, as of ${asOf}` : ""}. ${hint}`}
+      title={hint}
+      className={`label inline-flex items-center gap-1.5 border px-2.5 py-0.5 ${tone}`}
+    >
+      {label}
+      {asOf ? <span aria-hidden="true">· {asOf}</span> : null}
+    </span>
+  );
+}
+
 /** Where the answer stands: known, inferred, partial, absent, conflicted, or not from the
  * sources at all. Never blurred. */
 function EpistemicBadge({ state }: { state: EpistemicState }) {
@@ -839,6 +884,7 @@ function GapsPanel({
   const started = useRef(false);
   const short =
     response.epistemic === "absent" ||
+    response.answer_state === "EVIDENCE_GAP" ||
     Boolean(response.uncertainty?.exceeded) ||
     response.answer.trim() === NOT_IN_SOURCES ||
     (response.fact_check?.unsupported.length ?? 0) > 0;

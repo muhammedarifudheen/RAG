@@ -140,7 +140,7 @@ def test_one_draft_is_the_answer_without_a_merge():
     groq = Agent("groq", {"q1": ProviderError("down")})
     events = events_of(council(gemini, groq))
     assert "merging" not in [name for name, _ in events]
-    assert events[-1][1]["answer"] == "The only answer."
+    assert events[-1][1]["answer"].endswith("The only answer.")
     assert events[-1][1]["provider"] == "Gemini"
 
 
@@ -158,7 +158,7 @@ def test_when_no_model_can_merge_the_best_suited_draft_stands():
 
         agent.stream = stream
     done = events_of(assistant)[-1][1]
-    assert done["answer"] == "Gemini's draft."  # Gemini comes first for a general question
+    assert done["answer"].endswith("Gemini's draft.")  # Gemini comes first for a general question
 
 
 def test_when_every_agent_fails_the_reason_is_given():
@@ -191,7 +191,7 @@ def test_a_council_of_one_is_the_single_model_path():
     gemini = Agent("gemini", {"g1": "Alone."})
     events = events_of(Assistant([gemini], council_size=1))
     assert not any(name == "agent" for name, _ in events)
-    assert events[-1][1]["answer"] == "Alone."
+    assert events[-1][1]["answer"].endswith("Alone.")
 
 
 # --- AI Horde -----------------------------------------------------------------------------
@@ -479,5 +479,5 @@ def test_a_busy_model_gets_one_more_try():
     finally:
         service.RETRY_PAUSE = saved
     assert done[0] == "done"
-    assert done[1]["answer"] == "Second try worked."
+    assert done[1]["answer"].endswith("Second try worked.")
     assert tries["n"] == 2

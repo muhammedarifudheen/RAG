@@ -117,7 +117,8 @@ def test_open_a_general_question_is_answered():
     done = list(
         Assistant([agent]).respond("What is the capital of Australia?", [], (), "auto", Options())
     )[-1][1]
-    assert done["answer"] == "Canberra." and done["grounded"] is False
+    assert done["answer"].endswith("Canberra.") and done["grounded"] is False
+    assert done["answer_state"] == "UNVERIFIED"
 
 
 def test_secrets_in_an_answer_never_reach_the_reader():

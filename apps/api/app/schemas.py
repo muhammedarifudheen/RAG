@@ -483,6 +483,25 @@ class AnswerFreshness(BaseModel):
     ingested_at: datetime = Field(description="When that source was last ingested.")
 
 
+class EvidenceClosest(BaseModel):
+    file: str | None = None
+    start_line: int | None = None
+    end_line: int | None = None
+    score: float = 0.0
+    citation: str | None = None
+    snippet: str = ""
+
+
+class EvidenceGap(BaseModel):
+    """What an EVIDENCE_GAP answer reports instead of a bare refusal."""
+
+    tools_tried: list[str] = Field(description="Each tool that was used, and what it returned.")
+    closest: EvidenceClosest | None = Field(
+        default=None, description="The nearest passage found, even if not good enough."
+    )
+    next_steps: list[str] = Field(description="What to do next, most useful first.")
+
+
 class AskResponse(BaseModel):
     question: str
     answer: str = Field(description="Claude's answer with inline [path:start-end] citations.")
@@ -535,6 +554,22 @@ class AskResponse(BaseModel):
     footer: str | None = Field(
         default=None,
         description="[confidence: X] [freshness: F] [sources: N] [latency: Xms], for every answer.",
+    )
+    answer_state: Literal["VERIFIED", "REPORTED", "INFERRED", "UNVERIFIED", "EVIDENCE_GAP"] | None = (
+        Field(
+            default=None,
+            description="Where the answer stands, and none is a bare refusal: VERIFIED (from "
+            "the sources, cited), REPORTED (from the web, with URLs and `as_of`), INFERRED "
+            "(derived, reasoning shown), UNVERIFIED (the model's own knowledge, labelled), "
+            "EVIDENCE_GAP (nothing found: tools tried, closest passage, next step). Strict "
+            "sources only is never UNVERIFIED or REPORTED. Unset for chat and pictures.",
+        )
+    )
+    evidence_gap: EvidenceGap | None = Field(
+        default=None, description="For an EVIDENCE_GAP answer: the structured report."
+    )
+    as_of: str | None = Field(
+        default=None, description="For a REPORTED answer: the date its web results were read."
     )
     degraded: bool = Field(
         default=False,

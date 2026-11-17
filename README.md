@@ -123,6 +123,14 @@ The chat page answers any question, not only questions about your sources:
   knowledge base, reads the spans it needs and takes notes, up to six tool calls, and the
   answer is written from its notes and what it read. Its steps show as they happen and
   under the answer (`research: true` or `false` on `/ask`; unset, Atlas decides).
+- **Every answer says what it rests on, and none is a refusal.** `answer_state` is one of
+  VERIFIED (from the sources, cited), REPORTED (from the web, with URLs and an `as_of` date),
+  INFERRED (derived, reasoning shown), UNVERIFIED (the model's own knowledge, labelled) or
+  EVIDENCE_GAP (nothing found: the tools tried, the closest passage and the next step). Strict
+  sources only is never UNVERIFIED or REPORTED. The sentence "I don't have that in the knowledge
+  base" is banned from every output: streamed text is held back until it is checked, an answer
+  that holds it is regenerated twice, then replaced by the evidence-gap report
+  (`apps/api/app/assistant/contract.py`; the older `epistemic` field is unchanged).
 - **Code-aware answers.** A code question answered from code excerpts names the file,
   function and class, shows the call chain and the line that does it.
 - **Checked against the sources.** Strict answers are fact-checked as soon as they show

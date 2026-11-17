@@ -119,6 +119,7 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
                 citations=data.get("citations", []),
                 chunks=data.get("chunks", []),
                 epistemic=data.get("epistemic"),
+                answer_state=data.get("answer_state"),
                 server_ms=data.get("latency_ms"),
                 stage_ms=data.get("stage_ms") or {},
                 degraded=bool(data.get("degraded")),
@@ -220,7 +221,9 @@ def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
     if args.mode == "ask" and not raw["error"]:
         answer = raw.get("answer", "")
         cites = raw.get("citations", [])
-        row["declined"] = declined(answer, raw.get("epistemic"), len(cites))
+        row["declined"] = declined(
+            answer, raw.get("epistemic"), len(cites), raw.get("answer_state")
+        )
         row["degraded"] = 1.0 if raw.get("degraded") else 0.0
         first_token = (raw.get("stage_ms") or {}).get("first_token")
         if first_token is not None:

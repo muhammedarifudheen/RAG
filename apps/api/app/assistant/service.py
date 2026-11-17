@@ -9,6 +9,7 @@ for. Without one, a single model answers, and the next takes over if it fails.
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import logging
 import queue
@@ -47,6 +48,7 @@ from app.security import Redactor, injection, redact
 from app.services.freshness import answer_freshness, stale_warning
 from app.services.search import extract_citations, tidy_citations
 
+from . import contract
 from .agent import (
     MAX_TOOL_CALLS,
     ResearchTools,
@@ -169,6 +171,7 @@ class Options:
     degraded_reason: str | None = None  # a short code for the main one, e.g. rerank_timeout
     budget: Budget | None = None  # this query's stage times against the latency budget
     about_sources: bool = False  # the question names the user's sources or their code
+    closest: CodeChunk | None = None  # the nearest passage found, even if not good enough
     grounded: bool = False  # only from the knowledge base: no general knowledge, no web
     allowed_hosts: frozenset[str] | None = None  # grounded: links only to these hosts
     mode: str = "ASK"  # the Atlas mode: ASK, COMPARE, BUILD, TEACH, AGENT…
@@ -330,6 +333,67 @@ class Assistant:
         mode: Mode = "auto",
         options: Options | None = None,
     ) -> Iterator[Event]:
+        """The events of `_answer_events`, under the answer contract (app/assistant/
+        contract.py): the banned refusal sentence never leaves, an answer that holds it is
+        asked for again (twice), and after that the evidence-gap report replaces it."""
+        attempt = 0
+        while True:
+            guard = contract.BannedGuard()
+            held: dict | None = None
+            for name, data in self._answer_events(question, chunks, history, mode, options):
+                if name == "delta":
+                    text = guard.feed(data.get("text", ""))
+                    if text:
+                        yield name, {**data, "text": text}
+                    continue
+                if name == "reset":
+                    guard = contract.BannedGuard()
+                if name == "done":
+                    tail = guard.flush()
+                    if tail:
+                        yield "delta", {"text": tail}
+                    data = contract.clean_drafts(data)
+                    if guard.hit or contract.has_banned(data.get("answer")):
+                        held = data
+                        break
+                yield name, data
+            if held is None:
+                return
+            yield "reset", {}
+            if attempt < contract.MAX_REGENERATIONS and options is not None:
+                attempt += 1
+                options = dataclasses.replace(
+                    options,
+                    instructions=(options.instructions + "\n" + contract.REGENERATE_INSTRUCTION).strip(),
+                )
+                continue
+            # Still there after regenerating: the report replaces it, as for any gap.
+            gap = self._gap(options, {**held, "answer_state": None, "epistemic": "absent"})
+            yield "delta", {"text": gap["answer"]}
+            yield "done", gap
+            return
+
+    def _gap(self, options: Options | None, data: dict) -> dict:
+        """`data` as an EVIDENCE_GAP: the report in place of its answer."""
+        return contract.apply(
+            {**data, "epistemic": "absent", "evidence_gap": None},
+            strict=bool(options and options.strict),
+            grounded=bool(options and options.grounded),
+            web_enabled=bool(options and options.web_search),
+            queries=list((options.search_queries if options else ()) or ()),
+            reranking=options.reranking.model_dump() if options and options.reranking else None,
+            closest=options.closest.model_dump() if options and options.closest else None,
+            floor=self.min_score if options is None or options.min_score is None else options.min_score,
+        )
+
+    def _answer_events(
+        self,
+        question: str,
+        chunks: Sequence[CodeChunk],
+        history: Sequence[ChatTurn] = (),
+        mode: Mode = "auto",
+        options: Options | None = None,
+    ) -> Iterator[Event]:
         """Events: `route`, then `delta` pieces of text (a `reset` drops what came so far
         when a service fails mid-answer and the next one starts over), then `done` with
         the whole response, or `error`. A code review first sends `analysing` progress and
@@ -383,6 +447,16 @@ class Assistant:
                 data = {**data, "reranking": reranking.model_dump()}
             if name == "done":
                 data = _with_state(data, options)
+                data = contract.clean_drafts(contract.apply(
+                    data,
+                    strict=bool(options and options.strict),
+                    grounded=bool(options and options.grounded),
+                    web_enabled=bool(options and options.web_search),
+                    queries=planned,
+                    reranking=reranking.model_dump() if reranking is not None else None,
+                    closest=options.closest.model_dump() if options and options.closest else None,
+                    floor=self.min_score if options is None or options.min_score is None else options.min_score,
+                ))
                 answer, found = redact(data.get("answer", ""), hosts)
                 drafts = [
                     {**d, "answer": redact(d.get("answer", ""), hosts)[0]}
@@ -417,7 +491,7 @@ class Assistant:
                 and options.strict
                 and not review
                 and data.get("chunks")
-                and data.get("answer", "").strip() != NOT_IN_SOURCES
+                and data.get("answer_state") != contract.EVIDENCE_GAP
             ):
                 # A check takes a reasoning model 15-30 s: the page asks for it (task
                 # "check") once the answer is shown, rather than holding the answer back.
@@ -923,11 +997,17 @@ class Assistant:
             and not shown
             and not any(a.kind == "text" and a.text for a in options.attachments)
         ):
-            # Nothing retrieved: the rules' answer, without asking a model to invent one.
-            yield "delta", {"text": NOT_IN_SOURCES}
+            # Nothing retrieved for a question the sources must answer (strict, grounded, or
+            # about the user's own sources and code): the evidence-gap report (what was
+            # tried, the closest passage, the next step), without asking a model to invent
+            # anything. Other questions go on, to the web or the model, and say which.
+            report = self._gap(options, {"answer": "", "chunks": [], "citations": []})
+            yield "delta", {"text": report["answer"]}
             response = AskResponse(
                 question=question,
-                answer=NOT_IN_SOURCES,
+                answer=report["answer"],
+                answer_state=contract.EVIDENCE_GAP,
+                evidence_gap=report["evidence_gap"],
                 citations=[],
                 chunks=[],
                 model="none",
@@ -1705,7 +1785,7 @@ def _with_state(data: dict, options: Options | None) -> dict:
     data = {**data, "answer": answer, "drafts": drafts, "intent": intent or None}
     route = data.get("route")
     about = route == "sources" or bool(options and (options.strict or options.about_sources))
-    if answer.strip() == NOT_IN_SOURCES:
+    if answer.strip() == NOT_IN_SOURCES or data.get("answer_state") == contract.EVIDENCE_GAP:
         state = "absent"
     elif state is None and about and route != "review":
         # The model gave none: what its citations show.

@@ -57,7 +57,9 @@ def test_a_sources_answer_declares_its_state_which_is_shown_not_written():
     assert "STATE" not in streamed and streamed.startswith("It splits")
     done = events[-1][1]
     assert done["epistemic"] == "partial"
-    assert done["answer"].startswith("It splits")
+    assert "It splits" in done["answer"]
+    assert done["answer_state"] == "INFERRED"  # a partial answer is an inference, labelled
+    assert done["answer"].startswith("**Inference:**")
     assert done["citations"][0]["verified"] is True
     assert done["confidence"]["level"] != "high"  # a partial answer is never rated high
 
@@ -73,7 +75,11 @@ def test_a_question_about_the_sources_with_nothing_found_is_absent_without_a_mod
     assert agent.calls == []  # never answered from memory
     done = events[-1][1]
     assert done["epistemic"] == "absent"
-    assert done["answer"] == "I don't have that in the knowledge base."
+    assert done["answer_state"] == "EVIDENCE_GAP"
+    assert "I don't have that in the knowledge base" not in done["answer"]
+    for part in ("Tools tried", "Closest match", "Next step"):
+        assert part in done["answer"]  # never a one-line refusal
+    assert done["evidence_gap"]["tools_tried"] and done["evidence_gap"]["next_steps"]
 
 
 def test_other_questions_say_they_come_from_general_knowledge():
