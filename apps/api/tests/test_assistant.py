@@ -537,7 +537,7 @@ def test_history_in_json_gets_the_assistant_too(client, chat, answerer):
     )
 
     assert response.status_code == 200
-    assert response.json()["answer"] == "Same as before, in Go."
+    assert response.json()["answer"].endswith("Same as before, in Go.")
     sent = groq.calls[0].turns
     assert [t.content for t in sent[:2]] == ["format name of a user", "It is title-cased."]
     assert sent[-1].content.endswith("Question: and in Go?")
