@@ -31,6 +31,7 @@ from pathlib import Path
 if __package__ in (None, ""):  # run as a script: put the API root on the path
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
+from evals import contract_metrics
 from evals.metrics import (
     KS,
     Hit,
@@ -120,6 +121,7 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
                 chunks=data.get("chunks", []),
                 epistemic=data.get("epistemic"),
                 answer_state=data.get("answer_state"),
+                evidence_gap=data.get("evidence_gap"),
                 server_ms=data.get("latency_ms"),
                 stage_ms=data.get("stage_ms") or {},
                 degraded=bool(data.get("degraded")),
@@ -225,6 +227,8 @@ def evaluate(item: dict, raw: dict, args: argparse.Namespace) -> dict:
             answer, raw.get("epistemic"), len(cites), raw.get("answer_state")
         )
         row["degraded"] = 1.0 if raw.get("degraded") else 0.0
+        # The answer contract's two gates: a bare refusal, and claims nothing backs.
+        row.update(contract_metrics.evaluate_response(item, raw))
         first_token = (raw.get("stage_ms") or {}).get("first_token")
         if first_token is not None:
             row["first_token_ms"] = round(first_token)
@@ -282,6 +286,7 @@ def summarise(rows: list[dict], mode: str) -> dict[str, float]:
         summary["correct_refusal_rate"] = mean(
             1.0 if r.get("declined") else 0.0 for r in unanswerable
         )
+        summary.update(contract_metrics.summarise(ok))
     return summary
 
 
@@ -301,7 +306,17 @@ LOWER_IS_BETTER |= {
     f"{label}_{stat}_ms" for label in ("rerank", "total") for stat in ("mean", "p50", "p95", "p99")
 }
 LOWER_IS_BETTER.add("rerank_median_ms")
-NOT_GATED |= LOWER_IS_BETTER - {"errors", "false_refusal_rate", "degraded_rate"}
+# The answer contract's gates: both must be 0, so a rise is a regression.
+CONTRACT_GATES = ("dead_end_rate", "unsupported_claim_rate")
+LOWER_IS_BETTER |= {*CONTRACT_GATES, "unsupported_answer_rate"}
+NOT_GATED |= LOWER_IS_BETTER - {
+    "errors",
+    "false_refusal_rate",
+    "degraded_rate",
+    *CONTRACT_GATES,
+    "unsupported_answer_rate",
+}
+NOT_GATED |= {"claims_judged", "unsupported_claims", "answers_judged"}  # counts, not rates
 
 
 def regressions(summary: dict, baseline: dict, max_drop: float) -> list[str]:
@@ -327,6 +342,43 @@ def floors(summary: dict, minimums: list[str]) -> list[str]:
     return problems
 
 
+def ceilings(summary: dict, maxima: list[str]) -> list[str]:
+    """Metrics over a ceiling (lower is better): `--max dead_end_rate=0`."""
+    problems = []
+    for spec in maxima:
+        name, _, value = spec.partition("=")
+        if name not in summary:
+            problems.append(f"{name}: not measured in this mode")
+        elif summary[name] > float(value):
+            problems.append(f"{name}: {summary[name]:.3f} is over the ceiling {value}")
+    return problems
+
+
+def contract_verdict(summary: dict) -> list[str]:
+    """The pass condition: dead_end_rate = 0 AND unsupported_claim_rate = 0, and what a failure
+    means. If refusals are gone but unsupported claims rose, the model is making things up to
+    satisfy "never refuse": the fix is retrieval, not a looser contract."""
+    dead, unsupported = summary.get("dead_end_rate"), summary.get("unsupported_claim_rate")
+    if dead is None or unsupported is None:
+        return ["contract gate: dead_end_rate and unsupported_claim_rate need --mode ask"]
+    problems = []
+    if dead > 0:
+        problems.append(f"contract gate: dead_end_rate {dead:.3f} (target 0): bare refusals")
+    if unsupported > 0:
+        problems.append(f"contract gate: unsupported_claim_rate {unsupported:.3f} (target 0)")
+        if dead == 0:
+            problems.append(
+                "  refusals are gone but unsupported claims rose: the model is fabricating to "
+                "satisfy 'never refuse'. Revert and fix retrieval; do not loosen the contract."
+            )
+    if summary.get("claims_judged", 0) == 0 and not problems:
+        problems.append(
+            "contract gate: no factual claims were judged, so a 0 rate proves nothing "
+            "(every answer was an evidence gap or nothing was answered)"
+        )
+    return problems
+
+
 def print_report(summary: dict, rows: list[dict], mode: str) -> None:
     print(f"\n{summary['questions']} questions, {summary['errors']} errors  (mode: {mode})\n")
     for name, value in summary.items():
@@ -334,11 +386,26 @@ def print_report(summary: dict, rows: list[dict], mode: str) -> None:
             continue
         shown = f"{value:,.0f} ms" if name.endswith("_ms") else f"{value:.3f}"
         print(f"  {name:<26}{shown}")
-    weak = [r for r in rows if r.get("missed") or r["error"]]
+    weak = [
+        r
+        for r in rows
+        if r.get("missed") or r["error"] or r.get("dead_end") or r.get("unsupported_claims")
+    ]
     if weak:
         print("\nWhere it fell short:")
         for r in weak:
-            why = r["error"] or "did not retrieve " + ", ".join(r["missed"])
+            why = r["error"] or "; ".join(
+                part
+                for part in (
+                    "did not retrieve " + ", ".join(r["missed"]) if r.get("missed") else "",
+                    "a bare refusal (dead end)" if r.get("dead_end") else "",
+                    f"{r['unsupported_claims']} of {r['claims']} claims unsupported "
+                    f"({r.get('answer_state')})"
+                    if r.get("unsupported_claims")
+                    else "",
+                )
+                if part
+            )
             print(f"  - {r['id']}: {why}")
     print()
 
@@ -349,7 +416,14 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--api", default="http://localhost:8000", help="the API's address")
     p.add_argument("--mode", choices=("search", "ask"), default="search")
-    p.add_argument("--golden", type=Path, default=HERE / "golden" / "atlas.jsonl")
+    p.add_argument(
+        "--golden",
+        type=Path,
+        nargs="+",
+        default=None,
+        help="question files (default atlas.jsonl; with --contract-gate, the golden set and "
+        "the out-of-corpus questions)",
+    )
     p.add_argument("-k", type=int, default=10, help="excerpts to retrieve (default 10)")
     p.add_argument("--limit", type=int, help="only the first N questions")
     p.add_argument("--token", help="a bearer token, if the API needs one")
@@ -400,6 +474,19 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument(
         "--min", action="append", default=[], metavar="METRIC=VALUE", help="a floor, e.g. hit@5=0.7"
     )
+    p.add_argument(
+        "--max",
+        action="append",
+        default=[],
+        metavar="METRIC=VALUE",
+        help="a ceiling, e.g. dead_end_rate=0",
+    )
+    p.add_argument(
+        "--contract-gate",
+        action="store_true",
+        help="ask mode on golden_set.jsonl + out_of_corpus.jsonl; fail unless dead_end_rate = 0 "
+        "AND unsupported_claim_rate = 0",
+    )
     args = p.parse_args(argv)
 
     if args.reranker and args.mode != "search":
@@ -417,7 +504,17 @@ def main(argv: list[str] | None = None) -> int:
                 flush=True,
             )
 
-    golden = load_golden(args.golden)
+    if args.contract_gate:
+        if args.mode != "ask":
+            p.error("--contract-gate needs --mode ask: it judges the answers")
+        args.max += [f"{name}=0" for name in CONTRACT_GATES]
+        if args.golden is None:
+            args.golden = [
+                HERE / "golden" / "golden_set.jsonl",
+                HERE / "golden" / "out_of_corpus.jsonl",
+            ]
+    paths = args.golden or [HERE / "golden" / "atlas.jsonl"]
+    golden = [item for path in paths for item in load_golden(path)]
     if args.limit:
         golden = golden[: args.limit]
     raws = []
@@ -438,7 +535,14 @@ def main(argv: list[str] | None = None) -> int:
         args.out.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8")
         print(f"Report written to {args.out}")
 
-    problems = floors(summary, args.min)
+    problems = floors(summary, args.min) + ceilings(summary, args.max)
+    if args.contract_gate:
+        verdict = contract_verdict(summary)
+        problems += [v for v in verdict if v not in problems]
+        print(
+            "CONTRACT GATE: "
+            + ("PASS (dead_end_rate = 0 and unsupported_claim_rate = 0)" if not verdict else "FAIL")
+        )
     if args.baseline:
         saved = json.loads(args.baseline.read_text(encoding="utf-8"))
         problems += regressions(summary, saved.get("summary", saved), args.max_drop)

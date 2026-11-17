@@ -89,3 +89,30 @@ fails), note the file that answers each, and add them. Thirty to fifty varied qu
   would be the next step.
 - Ask-mode results vary run to run (the models are not deterministic); compare averages, and
   use a generous `--max-drop`.
+
+## The answer contract's gates
+
+`dead_end_rate` and `unsupported_claim_rate` (ask mode) keep "never refuse" from becoming "always
+make something up". Both must be 0:
+
+```sh
+python -m evals.run_evals --api <server> --mode ask --contract-gate --delay 2
+```
+
+`--contract-gate` runs `golden/golden_set.jsonl` (40) plus `golden/out_of_corpus.jsonl` (10 questions
+in other domains) and fails unless both rates are 0. A **dead end** is a bare refusal: empty, a short
+"I don't know", or an evidence gap without its report (tools tried, closest match, next step). A
+**factual claim** is a sentence of six or more words that asserts something (not a question, heading,
+quoted passage or the contract's own notes); it is **supported** when it carries a citation the server
+verified, or when the answer is UNVERIFIED or REPORTED and carries that label, or INFERRED, labelled,
+with something cited to infer from. For an out-of-corpus question no citation can back a claim, so a
+confident answer that is not labelled is unsupported.
+
+If `dead_end_rate` is 0 but `unsupported_claim_rate` rises, the model is making things up to avoid
+refusing: revert and fix retrieval; do not loosen the contract. `.github/workflows/contract-eval.yml`
+runs this against the public server weekly and on demand (it needs the real models, so not on every
+push); the gate's logic is tested against a fake server in `tests/test_contract_metrics.py`.
+
+Limits: sentences are split by punctuation, not parsed; "factual" is a shape test; a verified
+citation means the lines were shown to the model, not that they say the claim. A model-graded check of
+each claim against its cited lines is the next step.

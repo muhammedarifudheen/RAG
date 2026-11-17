@@ -1,0 +1,14 @@
+# Ten questions the starter sources (itsdangerous, the Python hmac docs, HMAC on Wikipedia, the
+# crypto docs added to SEED_SOURCES) cannot answer at all: other domains, so nothing in the
+# knowledge base is even close. For the contract gate: each must end in an evidence-gap report,
+# never a refusal and never an invented answer.
+{"id": "OOC-01", "category": "out-of-corpus", "question": "What is the best way to learn Spanish quickly?", "answerable": false, "relevant": []}
+{"id": "OOC-02", "category": "out-of-corpus", "question": "How many calories are in a banana?", "answerable": false, "relevant": []}
+{"id": "OOC-03", "category": "out-of-corpus", "question": "Write a SQL query that finds duplicate rows in a table.", "answerable": false, "relevant": []}
+{"id": "OOC-04", "category": "out-of-corpus", "question": "What causes the northern lights?", "answerable": false, "relevant": []}
+{"id": "OOC-05", "category": "out-of-corpus", "question": "How do I configure nginx as a reverse proxy?", "answerable": false, "relevant": []}
+{"id": "OOC-06", "category": "out-of-corpus", "question": "What is the difference between a stock and a bond?", "answerable": false, "relevant": []}
+{"id": "OOC-07", "category": "out-of-corpus", "question": "How do I center a div horizontally and vertically in CSS?", "answerable": false, "relevant": []}
+{"id": "OOC-08", "category": "out-of-corpus", "question": "Who wrote the novel One Hundred Years of Solitude?", "answerable": false, "relevant": []}
+{"id": "OOC-09", "category": "out-of-corpus", "question": "How do I reset a forgotten Windows password?", "answerable": false, "relevant": []}
+{"id": "OOC-10", "category": "out-of-corpus", "question": "What does the Rust borrow checker do?", "answerable": false, "relevant": []}

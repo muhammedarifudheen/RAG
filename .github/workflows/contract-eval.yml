@@ -1,0 +1,62 @@
+name: Contract eval
+
+# The answer contract's gate, run against the public server: the 40-question golden set and 10
+# out-of-corpus questions, with the real models. It fails unless
+#   dead_end_rate = 0           (no bare refusal), AND
+#   unsupported_claim_rate = 0  (no factual claim without a verified citation or an honest label).
+# If refusals are gone but unsupported claims rise, the model is making things up to satisfy
+# "never refuse": revert and fix retrieval, do not loosen the contract.
+#
+# It is not part of every push because it asks the free server's models 50 questions (about an
+# hour) and their free quotas decide how it goes; it runs weekly and on demand. The gate's own
+# logic, against a fake server, is tested on every push (tests/test_contract_metrics.py).
+# Needs the repository variable PUBLIC_API_URL (the same one that publishes the website).
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "37 5 * * 1" # Mondays
+
+permissions:
+  contents: read
+
+jobs:
+  gate:
+    if: ${{ vars.PUBLIC_API_URL != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 240
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Contract gate
+        working-directory: apps/api
+        # The harness uses only the standard library: nothing to install. The free server
+        # sleeps when idle, so the first request can take a minute (hence the long timeout).
+        run: >
+          python -m evals.run_evals --api "${{ vars.PUBLIC_API_URL }}" --mode ask
+          --contract-gate --delay 2 --timeout 300 --out contract-report.json
+      - name: Say what failed
+        if: failure()
+        working-directory: apps/api
+        run: |
+          python - <<'EOF'
+          import json, pathlib
+          path = pathlib.Path("contract-report.json")
+          if not path.exists():
+              print("::error title=Contract gate::the run did not finish; no report")
+          else:
+              report = json.loads(path.read_text())
+              s = report["summary"]
+              bad = [q for q in report["questions"] if q.get("dead_end") or q.get("unsupported_claims")]
+              ids = ", ".join(q["id"] for q in bad[:20])
+              print(f"::error title=Contract gate failed::dead_end_rate={s.get('dead_end_rate')} unsupported_claim_rate={s.get('unsupported_claim_rate')} ({s.get('unsupported_claims')} of {s.get('claims_judged')} claims). Questions: {ids}")
+          EOF
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: contract-report
+          path: apps/api/contract-report.json
+          if-no-files-found: ignore
+          retention-days: 30
