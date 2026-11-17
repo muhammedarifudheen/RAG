@@ -521,6 +521,13 @@ def main(argv: list[str] | None = None) -> int:
     for number, item in enumerate(golden, 1):
         print(f"[{number}/{len(golden)}] {item['id']}", flush=True)
         raws.append(run_one(item, args))
+        done = raws[-1]
+        # One line per question as it finishes, so a slow or failing run can be read live.
+        print(
+            f"    {done['ms'] / 1000:.0f}s  {done.get('answer_state') or '-'}"
+            f"{'  ERROR ' + done['error'] if done['error'] else ''}",
+            flush=True,
+        )
         if args.delay:
             time.sleep(args.delay)
     if args.reranker:
