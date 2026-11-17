@@ -26,6 +26,7 @@ from app.embedding import Embedder, get_embedder
 from app.llm import Answerer, AnswerError, get_answerer
 from app.models import Source
 from app.ratelimit import rate_limit
+from app.retrieval import gate as gating
 from app.retrieval import reranker, scoring, state
 from app.retrieval.budget import Budget, Trace, run_stage, stage_timer
 from app.retrieval.topk import adaptive_top_k
@@ -353,6 +354,22 @@ def ask(
             trace.degrade(notice.rstrip("."))
         fused_order = list(chunks)  # the retrieval order, the rank-fusion signal
         reranking = None
+        # The relevance gate: the judge's best score under it flags the answer low confidence;
+        # with the low-confidence path on, a question whose every excerpt was turned down still
+        # gets the best three, labelled, not an empty context.
+        gate_value = (
+            settings.retrieval_confidence_gate
+            if body.confidence_gate is None
+            else body.confidence_gate
+        )
+        use_low_path = (
+            settings.retrieval_low_confidence
+            if body.low_confidence_path is None
+            else body.low_confidence_path
+        )
+        low_confidence = False
+        top_score = top_similarity = None
+        scores: list[int] = []
         if (cross or judging) and chunks and budget.skip_optional():
             # Over an enforced budget already: the reranker (or the judge) is the optional stage.
             trace.degrade(f"{budget.enforced_breaches[0]} over its budget; skipped reranking")
@@ -397,6 +414,10 @@ def ask(
                 reason="relevance judge too slow; kept the search order",
             )
             chunks = rerank(candidates, verdicts, cutoff, top_k)
+            top_score, top_similarity, scores = gating.summarise(verdicts, candidates)
+            low_confidence = gating.is_low(top_score, gate_value)
+            if use_low_path and low_confidence and not chunks:
+                chunks = gating.low_confidence_pick(candidates, verdicts)
             ranking = None
             if body.rank_passages:
                 try:
@@ -417,11 +438,19 @@ def ask(
                 kept=len(chunks),
                 cutoff=cutoff,
                 ranked=applied,
+                scores=scores,
+                top_score=top_score,
+                top_similarity=top_similarity,
+                gate=gate_value,
+                low_confidence=low_confidence,
                 # Its reason, when its first choice is one the judge kept.
                 top_pick=(ranking[1] or None)
                 if applied and any(c.symbol_id == first for c in chunks)
                 else None,
             )
+        if not judging and chunks:  # no judge: the similarity floor is the only gate
+            floor = settings.assistant_min_score if body.min_score is None else body.min_score
+            low_confidence = chunks[0].score < floor
         weighted = (
             settings.retrieval_weighted_rank if body.weighted_rank is None else body.weighted_rank
         )
@@ -478,10 +507,35 @@ def ask(
                     "budget_breached": budget.first_breach,
                     "cache_hits": trace.cache_hits,
                     "degraded": trace.degraded,
+                    "gate": gate_value,
+                    "rerank_cutoff": settings.assistant_rerank_cutoff
+                    if body.rerank_cutoff is None
+                    else body.rerank_cutoff,
+                    "top_score": top_score,
+                    "top_similarity": top_similarity,
+                    "judge_scores": scores,
+                    "low_confidence": low_confidence,
+                    "low_confidence_path": use_low_path,
                 }
             ),
         )
+        if body.retrieval_only:  # measuring the gate: no answer is written
+            return AskResponse(
+                question=question,
+                answer="",
+                citations=[],
+                chunks=chunks,
+                model="none",
+                complete=True,
+                provider="Atlas",
+                reranking=reranking,
+                timings=timings,
+                low_confidence=low_confidence and use_low_path,
+                degraded=trace.is_degraded,
+                degraded_reasons=list(trace.degraded),
+            )
         options = Options(
+            low_confidence=low_confidence and use_low_path,
             degraded=tuple(trace.degraded),
             degraded_reason=trace.reason_code,
             budget=budget,

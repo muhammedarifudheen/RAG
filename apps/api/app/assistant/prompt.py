@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from datetime import UTC, date, datetime
 
 from app.llm import build_prompt
+from app.retrieval.gate import LOW_CONFIDENCE_NOTE
 from app.schemas import Attachment, ChatTurn, CodeChunk
 
 from .providers import Image, Turn
@@ -526,6 +527,7 @@ def conversation(
     analysis: str = "",
     strict: bool = False,
     code: bool = False,
+    low_confidence: bool = False,
 ) -> list[Turn]:
     """The earlier messages (the most recent `keep`), then the question with any attached
     files, excerpts, web results and the code analyser's findings. Strict, the question
@@ -536,6 +538,8 @@ def conversation(
         turns.pop(0)
     images = [Image(a.mime, a.data) for a in attachments if a.kind == "image" and a.mime and a.data]
     weighed = weights_block(chunks)
+    if low_confidence and chunks:
+        weighed = f"{LOW_CONFIDENCE_NOTE}\n\n{weighed}" if weighed else LOW_CONFIDENCE_NOTE
     if strict:
         message = strict_message(question, chunks, attachments)
         return [*turns, Turn("user", f"{weighed}\n\n{message}" if weighed else message, images)]

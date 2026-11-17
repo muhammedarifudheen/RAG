@@ -31,6 +31,7 @@ from app.analysis.review import code_files, files_summary, repo_url, to_schema, 
 from app.analysis.static import analyse_files
 from app.config import settings
 from app.retrieval.budget import Budget
+from app.retrieval.gate import LOW_CONFIDENCE_CHUNKS
 from app.schemas import (
     AgentDraft,
     AskResponse,
@@ -172,6 +173,7 @@ class Options:
     budget: Budget | None = None  # this query's stage times against the latency budget
     about_sources: bool = False  # the question names the user's sources or their code
     closest: CodeChunk | None = None  # the nearest passage found, even if not good enough
+    low_confidence: bool = False  # the excerpts scored under the gate: given, but labelled
     grounded: bool = False  # only from the knowledge base: no general knowledge, no web
     allowed_hosts: frozenset[str] | None = None  # grounded: links only to these hosts
     mode: str = "ASK"  # the Atlas mode: ASK, COMPARE, BUILD, TEACH, AGENT…
@@ -447,6 +449,8 @@ class Assistant:
                 data = {**data, "reranking": reranking.model_dump()}
             if name == "done":
                 data = _with_state(data, options)
+                if options and options.low_confidence:
+                    data = {**data, "low_confidence": True}
                 data = contract.clean_drafts(contract.apply(
                     data,
                     strict=bool(options and options.strict),
@@ -952,7 +956,11 @@ class Assistant:
         if options.strict and not review:
             route = "sources"
         min_score = self.min_score if options.min_score is None else options.min_score
-        shown = [c for c in chunks if c.score >= min_score]
+        shown = (
+            list(chunks)[:LOW_CONFIDENCE_CHUNKS]  # given although weak, and labelled
+            if options.low_confidence
+            else [c for c in chunks if c.score >= min_score]
+        )
         available = set(self.providers)
         if options.services:
             available &= set(options.services)
@@ -1076,6 +1084,7 @@ class Assistant:
             analysis=findings,
             strict=options.strict and not review,
             code=code,
+            low_confidence=options.low_confidence,
         )
         if options.budget is not None:
             options.budget.record("assemble", (time.monotonic() - assembling) * 1000)
@@ -1093,6 +1102,7 @@ class Assistant:
                 analysis=findings,
                 strict=options.strict and not review,
                 code=code,
+                low_confidence=options.low_confidence,
             )
             yield from self._council(
                 question,

@@ -176,6 +176,23 @@ class AskRequest(BaseModel):
     rerank_cutoff: int | None = Field(
         default=None, ge=0, le=10, description="Excerpts the judge scores below this are left out."
     )
+    confidence_gate: int | None = Field(
+        default=None,
+        ge=0,
+        le=10,
+        description="The best judge score must reach this, or the answer is flagged low "
+        "confidence; unset, the server's gate.",
+    )
+    low_confidence_path: bool | None = Field(
+        default=None,
+        description="When every excerpt is turned down, still give the model the best three, "
+        "labelled LOW_CONFIDENCE, instead of an empty context; unset, the server's setting.",
+    )
+    retrieval_only: bool = Field(
+        default=False,
+        description="Stop after retrieval and judging: no answer is written. The response has "
+        "the excerpts and `reranking` (every judge score, the gate), for measuring the gate.",
+    )
     weighted_rank: bool | None = Field(
         default=None,
         description="Order the kept excerpts by one score (rerank 0.45, rank fusion 0.20, "
@@ -270,6 +287,9 @@ class AskRequest(BaseModel):
             or not self.rerank
             or not self.rank_passages
             or self.rerank_cutoff is not None
+            or self.confidence_gate is not None
+            or self.low_confidence_path is not None
+            or self.retrieval_only
             or self.strict
             or self.research is not None
             or not self.cache
@@ -316,6 +336,19 @@ class Reranking(BaseModel):
         default=False, description="True if the listwise ranker then ordered the kept excerpts."
     )
     top_pick: str | None = Field(default=None, description="The ranker's reason for its first.")
+    scores: list[int] = Field(
+        default=[], description="Every score the judge gave, high to low (kept or not)."
+    )
+    top_score: int | None = Field(default=None, description="The best of them, 0-10.")
+    top_similarity: float | None = Field(
+        default=None, description="The best cosine similarity among the candidates."
+    )
+    gate: int | None = Field(
+        default=None, description="The best score had to reach this, or the answer is flagged."
+    )
+    low_confidence: bool = Field(
+        default=False, description="True if the best score was under the gate."
+    )
 
 
 class ResearchStep(BaseModel):
@@ -554,6 +587,11 @@ class AskResponse(BaseModel):
     footer: str | None = Field(
         default=None,
         description="[confidence: X] [freshness: F] [sources: N] [latency: Xms], for every answer.",
+    )
+    low_confidence: bool = Field(
+        default=False,
+        description="True if the excerpts scored under the relevance gate and were given to "
+        "the model labelled LOW_CONFIDENCE; such an answer is never VERIFIED.",
     )
     answer_state: Literal["VERIFIED", "REPORTED", "INFERRED", "UNVERIFIED", "EVIDENCE_GAP"] | None = (
         Field(

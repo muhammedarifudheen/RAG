@@ -129,6 +129,11 @@ class Settings(BaseSettings):
     # seconds for the planner and the judge, past which retrieval carries on without them
     # and the answer is marked degraded; and a cache of retrievals, kept an hour.
     retrieval_adaptive_top_k: bool = True
+    # The relevance gate: when the judge's best score is under `retrieval_confidence_gate`
+    # the answer is flagged low confidence, and, with the low-confidence path on, a question
+    # whose every excerpt was turned down still gets the best three, labelled, not nothing.
+    retrieval_confidence_gate: int = 4
+    retrieval_low_confidence: bool = False
     retrieval_weighted_rank: bool = False  # off: it lowered top-1 hits in the eval
     retrieval_plan_budget: float = 6.0
     retrieval_judge_budget: float = 12.0

@@ -143,6 +143,9 @@ def derive_state(data: Mapping, *, strict: bool = False) -> str | None:
             state = VERIFIED
         else:
             state = UNVERIFIED
+    # Excerpts that scored under the relevance gate cannot make an answer verified.
+    if state == VERIFIED and data.get("low_confidence"):
+        state = INFERRED
     # Strict keeps its promise: nothing but the sources.
     if strict and state in (UNVERIFIED, REPORTED):
         return EVIDENCE_GAP

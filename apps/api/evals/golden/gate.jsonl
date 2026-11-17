@@ -1,0 +1,27 @@
+# Questions for calibrating the relevance gate against the public server's starter sources
+# (pallets/itsdangerous, the Python hmac docs, HMAC on Wikipedia, and the sources added to
+# SEED_SOURCES). `answerable` says whether those sources can answer it.
+{"id": "verify-signature", "question": "How does itsdangerous verify a signature?", "answerable": true}
+{"id": "dumps", "question": "What does Serializer.dumps do?", "answerable": true}
+{"id": "expired-token", "question": "How does the timestamp signer reject an expired token?", "answerable": true}
+{"id": "derive-key", "question": "How is the signing key derived from the secret key?", "answerable": true}
+{"id": "bad-signature", "question": "Which exception is raised when a signature does not match?", "answerable": true}
+{"id": "base64", "question": "How are bytes encoded to and from URL-safe base64?", "answerable": true}
+{"id": "default-hash", "question": "Which hash algorithm does the signer use by default?", "answerable": true}
+{"id": "url-safe", "question": "How does the URL-safe serializer compress its payload?", "answerable": true}
+{"id": "what-is-hmac", "question": "What is HMAC?", "answerable": true}
+{"id": "hmac-compute", "question": "How is an HMAC computed from a key and a message?", "answerable": true}
+{"id": "hmac-security", "question": "What are the security properties of HMAC?", "answerable": true}
+{"id": "python-hmac", "question": "How do I compute an HMAC with Python's hmac module?", "answerable": true}
+{"id": "timing-attack", "question": "How can two digests be compared without a timing attack?", "answerable": true}
+{"id": "ipad-opad", "question": "What are the inner and outer padding constants in HMAC?", "answerable": true}
+{"id": "rotate-keys", "question": "How do I rotate secret keys in itsdangerous?", "answerable": true}
+{"id": "max-age", "question": "How do I load a signed value only if it is younger than some age?", "answerable": true}
+{"id": "price", "question": "What is the price of the enterprise subscription plan?", "answerable": false}
+{"id": "oauth-django", "question": "How do I set up OAuth login with Google in Django?", "answerable": false}
+{"id": "billing", "question": "How does the billing service retry failed charges?", "answerable": false}
+{"id": "capital", "question": "What is the capital of Australia?", "answerable": false}
+{"id": "world-cup", "question": "Who won the 2022 football world cup?", "answerable": false}
+{"id": "kubernetes", "question": "How do I deploy a Kubernetes cluster?", "answerable": false}
+{"id": "pytorch", "question": "How do I train a neural network in PyTorch?", "answerable": false}
+{"id": "pandas", "question": "What does the pandas groupby function return?", "answerable": false}
