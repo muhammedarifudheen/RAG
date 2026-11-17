@@ -134,6 +134,12 @@ class Settings(BaseSettings):
     # whose every excerpt was turned down still gets the best three, labelled, not nothing.
     retrieval_confidence_gate: int = 4
     retrieval_low_confidence: bool = False
+    # The zero-retrieval detector (app/retrieval/monitor.py): more than `threshold` of the last
+    # `window` queries retrieving nothing is a broken index, and a `health` webhook says so.
+    # Below `min_samples` queries it stays quiet, so a fresh server does not alarm.
+    retrieval_alert_threshold: float = 0.20
+    retrieval_alert_window: int = 100
+    retrieval_alert_min_samples: int = 10
     retrieval_weighted_rank: bool = False  # off: it lowered top-1 hits in the eval
     retrieval_plan_budget: float = 6.0
     retrieval_judge_budget: float = 12.0

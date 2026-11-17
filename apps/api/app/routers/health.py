@@ -1,6 +1,6 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -12,6 +12,7 @@ from app.embedding import Embedder, get_embedder
 from app.models import KnowledgeAudit, Source
 from app.ratelimit import rate_limit
 from app.retrieval import reranker
+from app.retrieval.monitor import get_monitor
 from app.schemas import (
     HealthAction,
     HealthReport,
@@ -19,6 +20,7 @@ from app.schemas import (
     KnowledgeHealth,
     Liveness,
     RerankerHealth,
+    RetrievalHealth,
 )
 from app.services.catalog import source_catalog
 from app.services.health import code_health
@@ -187,6 +189,31 @@ def primary_candidates(
         raise HTTPException(503, "No model answered in time; try again in a minute.")
     links, by = found
     return {"candidates": links, "found_by": by}
+
+
+@router.get(
+    "/health/retrieval",
+    response_model=RetrievalHealth,
+    tags=["health"],
+    summary="Zero-retrieval detector: how many recent queries retrieved nothing",
+    responses={503: {"description": "`fail=true` and the empty rate is over the threshold."}},
+    dependencies=[Depends(rate_limit("default", lambda: settings.rate_limit_per_minute))],
+)
+def retrieval_health(
+    response: Response,
+    fail: Annotated[
+        bool, Query(description="Answer 503 while alerting, for an uptime monitor.")
+    ] = False,
+) -> RetrievalHealth:
+    """The share of the last 100 queries that retrieved no excerpt at all, the median best
+    rerank score, and an alert when the empty rate is over 20%: vector search returns the
+    nearest excerpts however poor they are, so an empty retrieval is a broken index (empty,
+    unembedded or failing), not a hard question. A webhook (event `health`) says so when the
+    rate crosses the threshold. In memory, per process: a restart starts the window afresh."""
+    status = get_monitor().status()
+    if fail and status["alert"]:
+        response.status_code = 503
+    return RetrievalHealth(**status)
 
 
 @router.get(

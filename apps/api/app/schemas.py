@@ -838,6 +838,29 @@ class AdminSession(BaseModel):
     expires_at: float
 
 
+class RetrievalHealth(BaseModel):
+    """The zero-retrieval detector: how many recent queries retrieved nothing."""
+
+    window: int = Field(description="How many recent queries it keeps.")
+    queries: int = Field(description="How many it holds now (at most `window`).")
+    empty: int = Field(description="Of them, how many retrieved no excerpt at all.")
+    empty_rate: float | None = Field(default=None, description="empty / queries; null before any.")
+    p50_top_rerank_score: float | None = Field(
+        default=None,
+        description="Median of each query's best rerank score (the judge's 0-10); null if none.",
+    )
+    threshold: float = Field(description="The empty rate above which it alerts.")
+    min_samples: int = Field(description="It stays quiet below this many queries.")
+    alert: bool = Field(description="True if the empty rate is over the threshold.")
+    state: Literal["ok", "alert", "insufficient_data"]
+    last_alert_at: str | None = Field(
+        default=None, description="When the alert last fired (this process)."
+    )
+    answer_states: dict[str, int] = Field(
+        description="The recent queries by answer state (pending: not finished)."
+    )
+
+
 class RerankerHealth(BaseModel):
     loaded: bool = Field(description="True once the model is loaded and warmed up.")
     provider: str | None = Field(

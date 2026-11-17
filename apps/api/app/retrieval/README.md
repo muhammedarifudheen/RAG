@@ -121,3 +121,27 @@ The defaults describe a fast local stack. The public server's planner takes abou
 search about 5 s, its relevance judge about 8 s and a whole answer 16-19 s, so every stage
 breaches there: that is why it starts in observe mode. Read the weekly report, then enforce
 stage by stage, starting with the optional ones (`rewrite`, `rerank`).
+
+## Zero-retrieval detector
+
+`monitor.py` keeps one record per query that searches the knowledge base, in memory, for the last
+100: `chunks_retrieved` (what search found, before judging), `top_rerank_score` (the judge's best
+0-10), `final_chunk_count` (what reached the model) and `answer_state`. Each is logged when the
+answer is done (`retrieval_summary {...}`).
+
+Vector search returns the nearest excerpts however poor, so an empty retrieval is not a hard
+question: it is an empty index, a failed embedding or a failed search (a search that raises
+counts as empty). More than 20% of the last 100 queries empty is a broken index.
+
+- `GET /health/retrieval` (public, like `/health/reranker`): `empty_rate`, `p50_top_rerank_score`,
+  `alert`, `state` (`ok`, `alert`, `insufficient_data`) and the recent answer states. Always 200;
+  `?fail=true` answers 503 while alerting, for an uptime monitor.
+- A `health` webhook (`{"check": "retrieval", "state": "alert" | "recovered", ...}`, signed like
+  the others) fires when the rate crosses the threshold, once, and again on recovery; the next
+  one waits 5 minutes so a rate at the line does not flap. Below 10 queries it stays quiet.
+- Settings: `RETRIEVAL_ALERT_THRESHOLD` (0.20), `RETRIEVAL_ALERT_WINDOW` (100),
+  `RETRIEVAL_ALERT_MIN_SAMPLES` (10). Webhook addresses come from the admin's webhooks or
+  `ATLAS_WEBHOOKS`.
+
+It is per process and in memory: a restart starts the window afresh, and with several server
+processes each has its own window.

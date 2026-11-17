@@ -29,6 +29,7 @@ from app.ratelimit import rate_limit
 from app.retrieval import gate as gating
 from app.retrieval import reranker, scoring, state
 from app.retrieval.budget import Budget, Trace, run_stage, stage_timer
+from app.retrieval.monitor import QueryRecord, RetrievalMonitor, get_monitor
 from app.retrieval.topk import adaptive_top_k
 from app.schemas import (
     AskRequest,
@@ -343,10 +344,18 @@ def ask(
 
         searched = time.monotonic()
         found_lists: list[list] = []
-        for q in queries if body.use_sources else []:
-            found_lists.append(retrieve(q, pool))
-            if budget.skip_optional():
-                break  # a stage is over its enforced budget: the other planned searches are optional
+        monitor = get_monitor()
+        try:
+            for q in queries if body.use_sources else []:
+                found_lists.append(retrieve(q, pool))
+                if budget.skip_optional():
+                    break  # a stage is over its enforced budget: the other planned searches are optional
+        except Exception:
+            # A search that fails outright is an empty retrieval for the detector: the signature
+            # of a broken index.
+            if body.use_sources:
+                monitor.finish(monitor.record(0, None, 0), "ERROR")
+            raise
         with stage_timer(budget, "fuse"):
             chunks = fuse(found_lists, pool) if body.use_sources else []
         timings["search"] = round(time.monotonic() - searched, 2)
@@ -519,7 +528,19 @@ def ask(
                 }
             ),
         )
+        # One record per query for the zero-retrieval detector: what search found, the best
+        # rerank score, what reaches the model; the answer's state is added when it is done.
+        top_rerank = (
+            float(reranking.top_score)
+            if reranking is not None and reranking.top_score is not None
+            else max((c.rerank_score for c in chunks if c.rerank_score is not None), default=None)
+        )
+        entry = (
+            monitor.record(len(fused_order), top_rerank, len(chunks)) if body.use_sources else None
+        )
         if body.retrieval_only:  # measuring the gate: no answer is written
+            if entry is not None:
+                monitor.finish(entry, "RETRIEVAL_ONLY")
             return AskResponse(
                 question=question,
                 answer="",
@@ -585,7 +606,7 @@ def ask(
                 assistant.respond(question, chunks, body.history, mode, options),
                 answers,
                 cache_key,
-                lambda data: _after(db, embedder, question, data, chat),
+                lambda data: _finished(db, embedder, question, data, chat, monitor, entry),
             )
             return StreamingResponse(
                 _event_stream(events),
@@ -597,12 +618,15 @@ def ask(
         except AssistantError as error:
             raise HTTPException(error.status_code, error.detail) from error
         _remember(response.model_dump(), answers, cache_key)
-        _after(db, embedder, question, response.model_dump(), chat)
+        _finished(db, embedder, question, response.model_dump(), chat, monitor, entry)
         return response
 
     answerer: Answerer = _resolve(request, get_answerer)
     chunks = search_symbols(db, embedder, question, body.top_k or 8, settings.snippet_max_lines)
+    plain = get_monitor()
+    found = plain.record(len(chunks), None, len(chunks))
     if not chunks:
+        plain.finish(found, "EMPTY_KNOWLEDGE_BASE")
         raise HTTPException(409, "The knowledge base is empty; add a source first.")
 
     try:
@@ -618,6 +642,21 @@ def ask(
         model=result.model,
         complete=result.complete,
     )
+
+
+def _finished(
+    db: Session,
+    embedder: Embedder,
+    question: str,
+    data: dict,
+    chat: str | None,
+    monitor: RetrievalMonitor,
+    entry: QueryRecord | None,
+) -> None:
+    """The answer is done: its records, and its state for the zero-retrieval detector."""
+    _after(db, embedder, question, data, chat)
+    if entry is not None:
+        monitor.finish(entry, data.get("answer_state"))
 
 
 def _after(db: Session, embedder: Embedder, question: str, data: dict, chat: str | None) -> None:
