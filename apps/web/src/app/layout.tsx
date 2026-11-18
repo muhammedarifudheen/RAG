@@ -21,7 +21,7 @@ const mono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-mono", displ
 
 export const metadata: Metadata = {
   title: "Atlas",
-  description: "Grounded answers. Verifiable sources. Zero guesswork.",
+  description: "Your knowledge hub and a friendly assistant: cited answers from your sources, and help with everything else.",
 };
 
 export const viewport: Viewport = { themeColor: "#000000" };

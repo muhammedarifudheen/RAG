@@ -178,7 +178,11 @@ test("every answer says where it stands, and an absent one asks what is missing"
   await expect(answers.nth(0).getByRole("note", { name: /Epistemic state: Partial/ })).toBeVisible();
 
   await ask(page, "What does verify_token_v2 do?");
-  await expect(answers.nth(1).getByRole("note", { name: /Epistemic state: Not in your sources/ })).toBeVisible();
+  // An answer with nothing found shows no "absent" or "evidence gap" chip: it says what is
+  // missing instead.
+  await expect(answers.nth(1)).toBeVisible();
+  await expect(answers.nth(1).getByRole("note", { name: /Epistemic state: Not in your sources/ })).toHaveCount(0);
+  await expect(answers.nth(1).getByRole("note", { name: /Answer state: EVIDENCE GAP/ })).toHaveCount(0);
   await expect(page.getByRole("region", { name: "What's missing" })).toContainText("verify_token_v2");
 
   await ask(page, "What is the capital of Australia?");

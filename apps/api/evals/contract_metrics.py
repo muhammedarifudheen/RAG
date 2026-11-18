@@ -53,6 +53,8 @@ _REFUSAL = re.compile(
     re.IGNORECASE,
 )
 _NOTE_STEMS = (
+    "from my own knowledge, not your sources",
+    "i couldn't find this in your sources",
     "this comes from the model's own knowledge",
     "no source states this directly",
     "reported from the web",

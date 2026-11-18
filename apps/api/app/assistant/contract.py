@@ -44,8 +44,7 @@ REGENERATE_INSTRUCTION = (
 )
 
 UNVERIFIED_NOTE = (
-    "**Unverified:** this comes from the model's own knowledge, with no source to check it "
-    "against. Treat it as a lead, not a fact."
+    "**Unverified:** from my own knowledge, not your sources. Worth double-checking if it matters."
 )
 INFERRED_NOTE = (
     "**Inference:** no source states this directly; it is derived from the evidence below, "
@@ -231,7 +230,7 @@ def evidence_gap(
     *, tools: Sequence[str], closest: dict | None, steps: Sequence[str], floor: float
 ) -> tuple[str, dict]:
     """The report and its structured form. Never a one-line "I don't know"."""
-    out = ["**Evidence gap.** Nothing I could find answers this, and I will not guess.", ""]
+    out = ["I couldn't find this in your sources, and I don't want to guess.", ""]
     out.append("**Tools tried**")
     out += [f"- {line}" for line in tools]
     out += ["", "**Closest match**"]

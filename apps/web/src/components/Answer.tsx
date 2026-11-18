@@ -58,6 +58,9 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
     ];
   }, [response.answer]);
 
+  const showState = Boolean(response.answer_state) && response.answer_state !== "EVIDENCE_GAP";
+  const showEpistemic = Boolean(response.epistemic) && response.epistemic !== "absent";
+
   const components = useMemo<Components>(() => {
     const unverified = new Set(response.citations.filter((c) => !c.verified).map((c) => c.ref));
     return {
@@ -111,8 +114,11 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
 
   return (
     <article aria-label="Answer" className="slab bg-panel/80 py-4 pl-5 pr-4">
-      {(response.epistemic ||
-        response.answer_state ||
+      {/* "Evidence gap" and "absent" are not shown as chips: when nothing was found the answer
+          itself says what was searched and what to do next, and a red badge on a friendly
+          reply only reads as a failure. */}
+      {(showEpistemic ||
+        showState ||
         response.degraded ||
         response.freshness ||
         response.challenge?.valid ||
@@ -129,10 +135,10 @@ export function Answer({ response, onCite, onFactChecked, onGapsFound, onChallen
               {response.mode}
             </span>
           )}
-          {response.answer_state && (
+          {showState && response.answer_state && (
             <AnswerStateBadge state={response.answer_state} asOf={response.as_of} />
           )}
-          {response.epistemic && <EpistemicBadge state={response.epistemic} />}
+          {showEpistemic && response.epistemic && <EpistemicBadge state={response.epistemic} />}
           {response.freshness && <FreshnessChip freshness={response.freshness} />}
           {response.degraded && <DegradedChip reasons={response.degraded_reasons ?? []} />}
           {response.uncertainty &&<UncertaintyMeter uncertainty={response.uncertainty} />}

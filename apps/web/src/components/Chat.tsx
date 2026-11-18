@@ -897,11 +897,15 @@ function EmptyState() {
     <div className="mx-auto mt-6 max-w-2xl px-4 pb-12 sm:mt-14">
       <p className="label text-signal">02 — Assistant</p>
       <h1 className="mt-5 font-display text-4xl font-semibold leading-[0.98] tracking-tight sm:text-6xl">
-        Ask about the codebase.
+        Ask me anything.
         <br />
-        <span className="text-signal">Grounded in your sources.</span>
+        <span className="text-signal">I check your sources first.</span>
       </h1>
-      <p className="label mt-6 text-faint">Grounded answers. Verifiable sources. Zero guesswork.</p>
+      <p className="mt-6 max-w-xl text-[15px] leading-relaxed text-muted">
+        Questions about your code and documents come with the exact lines they came from. For
+        anything else I use the web for today&apos;s facts and my own knowledge, and I tell you
+        which is which.
+      </p>
     </div>
   );
 }

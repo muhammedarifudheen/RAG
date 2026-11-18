@@ -13,7 +13,7 @@ test("the navigation reaches every page and marks the current one", async ({ pag
 
   await nav.getByRole("link", { name: "Chat" }).click();
   await expect(page).toHaveURL(/\/chat$/);
-  await expect(page.getByRole("heading", { name: "Ask about the codebase" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Ask me anything" })).toBeVisible();
   await expect(nav.getByRole("link", { name: "Chat" })).toHaveAttribute("aria-current", "page");
 
   await nav.getByRole("link", { name: "Graph" }).click();

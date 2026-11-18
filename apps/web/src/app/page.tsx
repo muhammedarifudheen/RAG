@@ -11,13 +11,14 @@ export default function Home() {
       <div className="max-w-xl">
         <p className="label text-signal">01 — Sources</p>
         <h1 className="mt-6 font-display text-5xl font-semibold leading-[0.95] tracking-tight sm:text-7xl">
-          Grounded answers.
+          Your knowledge hub.
           <br />
-          <span className="text-signal">Zero guesswork.</span>
+          <span className="text-signal">And a friendly assistant.</span>
         </h1>
         <p className="mt-8 max-w-md text-[15px] leading-relaxed text-muted">
-          Atlas answers from what you add here and shows the exact lines it used. Or go straight
-          to the{" "}
+          Add repositories, pages and documents, and Atlas answers from them with the exact lines
+          it used. Ask it anything else and it answers that too, from the web and its own
+          knowledge, saying which is which. Or go straight to the{" "}
           <Link href="/chat" className="text-paper underline decoration-signal underline-offset-4">
             assistant
           </Link>
