@@ -126,7 +126,9 @@ def run_one(item: dict, args: argparse.Namespace) -> dict:
                 stage_ms=data.get("stage_ms") or {},
                 degraded=bool(data.get("degraded")),
             )
-    except (urllib.error.URLError, TimeoutError, KeyError, json.JSONDecodeError) as error:
+    # OSError covers URLError, TimeoutError and ConnectionError: a dropped or reset connection is
+    # raised by the socket, not wrapped in URLError; ValueError covers bad JSON.
+    except (OSError, KeyError, ValueError) as error:
         out["error"] = f"{type(error).__name__}: {error}"
         out.setdefault("chunks", [])
     out["ms"] = (time.perf_counter() - started) * 1000
